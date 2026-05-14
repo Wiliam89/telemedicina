@@ -14,20 +14,9 @@ class FilaAtendimentoService
         // LOOP CONTROLADO → processa múltiplas consultas por execução
         while (true) {
 
-            // 1. Lock médico disponível
-            $medico = DB::table('medicos')
-                ->where('status', 'online')
-                ->where('em_atendimento', false)
-                ->lockForUpdate()
-                ->first();
-
-            if (!$medico) {
-                break;
-            }
-
             // 2. Lock próxima consulta elegível
             $consulta = DB::table('consultas')
-                ->where('status', 'aguardando')
+                ->where('status', 'fila')
                 ->where('data_inicio', '<=', now())
                 ->orderByDesc('prioridade')
                 ->orderBy('created_at')
@@ -35,6 +24,21 @@ class FilaAtendimentoService
                 ->first();
 
             if (!$consulta) {
+                break;
+            }
+
+
+            // 1. Lock médico disponível
+            $medico = DB::table('medicos')
+            ->join('medico_especialidade', 'medicos.id', '=', 'medico_especialidade.medico_id')
+            ->where('medicos.status', 'online')
+            ->where('medicos.em_atendimento', false)
+            ->where('medico_especialidade.especialidade_id', $consulta->especialidade_id)
+            ->select('medicos.*')
+            ->lockForUpdate()
+            ->first();
+
+            if (!$medico) {
                 break;
             }
 
@@ -55,14 +59,27 @@ class FilaAtendimentoService
                     'updated_at' => now()
                 ]);
 
-            // 5. Criar atendimento
+           $agora = now()->toDateTimeString();
+           // 5. Criar atendimento (ALINHADO COM SCHEMA)
             DB::table('atendimentos')->insert([
-                'consulta_id' => $consulta->id,
-                'medico_id' => $medico->id,
-                'iniciado_em' => now(),
-                'status' => 'em_andamento',
-                'created_at' => now(),
-                'updated_at' => now()
+             'consulta_id' => $consulta->id,
+             'medico_id' => $medico->id,
+
+            // CONTROLE DE ESTADO
+              'status' => 'em_andamento',
+
+            // CONTROLE TEMPORAL
+              'iniciado_em' => $agora,
+
+           // CAMPOS CLÍNICOS INICIAIS (vazios por padrão)
+               'anamnese' => null,
+               'exame_fisico' => null,
+               'diagnostico' => null,
+               'conduta' => null,
+               'observacoes' => null,
+
+               'created_at' => $agora,
+               'updated_at' => $agora,
             ]);
         }
 
