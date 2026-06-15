@@ -3,7 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Triagem extends Model
 {
@@ -11,15 +12,28 @@ class Triagem extends Model
 
     protected $fillable = [
         'paciente_id',
+        'temperatura',
         'peso',
         'altura',
-        'sintomas',
-        'pressao',
-        'temperatura'
+        'esta_em_local_seguro',
+        'esta_dirigindo',
+        'descricao_sintomas',
+        'respostas'
     ];
 
-    public function consulta(): HasOne
+    protected $casts = [
+        'esta_em_local_seguro' => 'boolean',
+        'esta_dirigindo' => 'boolean',
+        'respostas' => 'array',
+    ];
+
+    public function paciente(): BelongsTo
     {
-        return $this->hasOne(Consulta::class);
+        return $this->belongsTo(Paciente::class, 'paciente_id');
+    }
+
+    public function consultas(): HasMany
+    {
+        return $this->hasMany(Consulta::class, 'triagem_id');
     }
 }

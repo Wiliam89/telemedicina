@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -11,11 +12,21 @@ class Medico extends Model
     protected $table = 'medicos';
 
     protected $fillable = [
-        'user_id',
+        'usuario_id',
         'crm',
-        'uf',
-        'status'
+        'uf_crm',
+        'status',
+        'em_atendimento'
     ];
+
+    protected $casts = [
+        'em_atendimento' => 'boolean'
+    ];
+
+    public function usuario(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'usuario_id');
+    }
 
     public function especialidades(): BelongsToMany
     {
@@ -29,12 +40,11 @@ class Medico extends Model
 
     public function consultas(): HasMany
     {
-        return $this->hasMany(Consulta::class);
+        return $this->hasMany(Consulta::class, 'medico_id');
     }
 
-    public function consultasAtivas(): HasMany
+    public function atendimentos(): HasMany
     {
-        return $this->hasMany(Consulta::class)
-            ->where('status', 'em_atendimento');
+        return $this->hasMany(Atendimento::class, 'medico_id');
     }
 }

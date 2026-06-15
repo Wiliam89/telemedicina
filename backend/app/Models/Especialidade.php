@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Especialidade extends Model
 {
@@ -21,5 +22,10 @@ class Especialidade extends Model
             'especialidade_id',
             'medico_id'
         );
+    }
+
+    public function consultas(): HasMany
+    {
+        return $this->hasMany(Consulta::class, 'especialidade_id');
     }
 }
