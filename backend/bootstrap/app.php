@@ -16,10 +16,11 @@ $dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..');
 $dotenv->safeLoad();
 
 return $app
-    ->withRouting(
-        web: __DIR__.'/../routes/web.php',
-        commands: __DIR__.'/../routes/console.php',
-        health: '/up',
+   ->withRouting(
+       web: __DIR__.'/../routes/web.php',
+       api: __DIR__.'/../routes/api.php',
+       commands: __DIR__.'/../routes/console.php',
+       health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
         //
