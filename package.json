@@ -1,0 +1,35 @@
+{
+  "name": "telemedicina-dev",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Plataforma de telemedicina - monorepo (Next.js + Fastify + Supabase)",
+  "packageManager": "pnpm@10.15.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "configurar": "node scripts/configurar.mjs",
+    "verificar": "node scripts/verificar-ambiente.mjs",
+    "dev": "pnpm --parallel --filter ./apps/* dev",
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter @tele/api dev",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "db:testar-conexao": "pnpm --filter @tele/db testar-conexao",
+    "db:gerar": "pnpm --filter @tele/db gerar",
+    "db:migrar": "pnpm --filter @tele/db migrar",
+    "db:verificar-tabelas": "pnpm --filter @tele/db verificar-tabelas",
+    "db:studio": "pnpm --filter @tele/db studio",
+    "db:verificar-rls": "pnpm --filter @tele/db verificar-rls",
+    "api:testar-fluxo": "pnpm --filter @tele/api testar-fluxo",
+    "db:verificar-clinicas": "pnpm --filter @tele/db verificar-clinicas",
+    "db:verificar-agenda": "pnpm --filter @tele/db verificar-agenda",
+    "db:verificar-prontuario": "pnpm --filter @tele/db verificar-prontuario",
+    "db:verificar-assinatura": "pnpm --filter @tele/db verificar-assinatura",
+    "db:verificar-pagamento": "pnpm --filter @tele/db verificar-pagamento",
+    "db:verificar-fila": "pnpm --filter @tele/db verificar-fila"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

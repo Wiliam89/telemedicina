@@ -1,0 +1,139 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1787832721598,
+      "tag": "0000_tabelas_iniciais",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787832737071,
+      "tag": "0001_auth_e_gatilhos",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787844407068,
+      "tag": "0002_rls_e_politicas",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787855217859,
+      "tag": "0003_clinicas_e_vinculos",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787855251874,
+      "tag": "0004_remove_papel_de_perfis",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787855336804,
+      "tag": "0005_rls_multi_clinica",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787919718342,
+      "tag": "0006_agenda",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787919763196,
+      "tag": "0007_agenda_travas_e_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787920252086,
+      "tag": "0008_fuso_da_clinica",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788260013253,
+      "tag": "0009_prontuario_documentos_plantao_fila_pagamento",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788260076094,
+      "tag": "0010_prontuario_imutavel_e_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788264760271,
+      "tag": "0011_assinatura_do_documento",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788268366190,
+      "tag": "0012_credenciais_de_assinatura_por_clinica",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788268367564,
+      "tag": "0013_proteger_segredo_da_clinica",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788269431478,
+      "tag": "0014_precos_e_recebimento",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1788269432941,
+      "tag": "0015_consulta_aguardando_pagamento",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788269466267,
+      "tag": "0016_reserva_na_trava_de_horario",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788270284712,
+      "tag": "0017_sincronizar_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788282942001,
+      "tag": "0018_consentimento_na_fila",
+      "breakpoints": true
+    }
+  ]
+}

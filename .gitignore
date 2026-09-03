@@ -1,0 +1,19 @@
+# dependencias
+node_modules/
+
+# resultados de build
+.next/
+dist/
+out/
+
+# SEGREDOS - nunca vao para o Git
+.env
+.env.local
+.env.*.local
+apps/api/.env
+apps/web/.env.local
+
+# diversos
+*.log
+.DS_Store
+coverage/

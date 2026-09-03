@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+/*
+ * Identidade visual (Modulo 5). Os nomes viram classes do Tailwind:
+ * bg-papel, text-tinta, border-linha, bg-selo, font-titulo...
+ *
+ * A paleta vem do consultorio, nao do "site de tecnologia": papel claro e
+ * frio, tinta azul-marinho de caneta, e o verde-azulado do tubo do
+ * estetoscopio como unica cor de destaque.
+ */
+@theme {
+  --color-papel: #f6f9fb;
+  --color-superficie: #ffffff;
+  --color-tinta: #0f2a3d;
+  --color-tinta-suave: #5b6f7c;
+  --color-linha: #d6e0e6;
+  --color-selo: #1e7f74;
+  --color-selo-suave: #dcefec;
+  --color-alerta: #b4232c;
+  --color-alerta-suave: #fbe9ea;
+  --color-ok: #1e7f74;
+
+  --font-titulo: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --font-sans: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --font-mono: "Cascadia Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+}
+
+html {
+  background: var(--color-papel);
+  color: var(--color-tinta);
+}
+
+/* Foco visivel em tudo que recebe teclado. Requisito, nao enfeite. */
+:focus-visible {
+  outline: 3px solid var(--color-selo);
+  outline-offset: 2px;
+}
+
+/*
+ * O "carimbo": a assinatura visual do site. Usado so para dados que
+ * certificam identidade (CRM, CPF, papel). Borda dupla e leve inclinacao,
+ * como o carimbo no receituario.
+ */
+.carimbo {
+  display: inline-block;
+  padding: 0.35rem 0.7rem;
+  border: 2px solid var(--color-selo);
+  outline: 1px solid var(--color-selo);
+  outline-offset: 2px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-selo);
+  transform: rotate(-2deg);
+}
+
+/* Respeita quem configurou o sistema para reduzir animacoes. */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

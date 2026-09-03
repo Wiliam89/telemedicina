@@ -1,0 +1,39 @@
+{
+  "name": "@tele/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "testar-conexao": "tsx src/testar-conexao.ts",
+    "gerar": "drizzle-kit generate",
+    "migrar": "tsx src/migrar.ts",
+    "verificar-tabelas": "tsx src/verificar-tabelas.ts",
+    "studio": "drizzle-kit studio",
+    "verificar-rls": "tsx src/verificar-rls.ts",
+    "verificar-clinicas": "tsx src/verificar-clinicas.ts",
+    "verificar-agenda": "tsx src/verificar-agenda.ts",
+    "verificar-prontuario": "tsx src/verificar-prontuario.ts",
+    "verificar-assinatura": "tsx src/verificar-assinatura.ts",
+    "verificar-pagamento": "tsx src/verificar-pagamento.ts",
+    "verificar-fila": "tsx src/verificar-fila.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.5",
+    "postgres": "^3.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.1",
+    "dotenv": "^17.2.1",
+    "tsx": "^4.20.5",
+    "typescript": "^5.7.3",
+    "drizzle-kit": "^0.31.4",
+    "vitest": "^3.2.4"
+  }
+}

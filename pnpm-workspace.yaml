@@ -1,0 +1,10 @@
+# Diz ao pnpm: "tudo dentro de apps/ e packages/ faz parte deste mesmo projeto".
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Pacotes que podem rodar scripts de instalacao (o pnpm bloqueia por padrao).
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - "@tailwindcss/oxide"
