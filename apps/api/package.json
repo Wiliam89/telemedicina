@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch --env-file=.env src/servidor.ts",
-    "build": "tsc -p tsconfig.build.json",
-    "start": "node --env-file=.env dist/servidor.js",
+    "build": "tsup",
+    "start": "node dist/servidor.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "testar-fluxo": "tsx --env-file=.env src/testar-fluxo.ts"
+    "testar-fluxo": "tsx --env-file=.env src/testar-fluxo.ts",
+    "start:local": "node --env-file=.env dist/servidor.js"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
@@ -31,6 +32,7 @@
     "@types/node": "^22.17.0",
     "@types/node-forge": "^1.3.14",
     "dotenv": "^17.2.1",
+    "tsup": "^8.5.1",
     "tsx": "^4.20.5",
     "typescript": "^5.7.3",
     "vitest": "^3.2.4"

@@ -16,6 +16,7 @@ const AMBIENTE_TESTE = {
   DATABASE_URL: "postgresql://postgres.abc:senha@aws-0-sa-east-1.pooler.supabase.com:5432/postgres",
   ORIGEM_PERMITIDA: "http://localhost:3000",
     ASSINATURA_PROVEDOR: "local_teste" as const,
+    PERMITIR_ASSINATURA_SEM_VALOR_LEGAL: false,
 };
 
 /** Autenticador falso: so o token "token-bom" e aceito. */

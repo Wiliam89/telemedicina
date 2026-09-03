@@ -105,6 +105,7 @@ describe("escolha do provedor", () => {
     SUPABASE_URL: "https://x.supabase.co", SUPABASE_SECRET_KEY: "sb_secret_x",
     DATABASE_URL: "postgresql://a:b@c:5432/d", ORIGEM_PERMITIDA: "http://localhost:3000",
     ASSINATURA_PROVEDOR: "local_teste" as const,
+    PERMITIR_ASSINATURA_SEM_VALOR_LEGAL: false,
   };
 
   it("10. em desenvolvimento, o provedor local e aceito", () => {
@@ -113,6 +114,13 @@ describe("escolha do provedor", () => {
 
   it("11. em PRODUCAO, o provedor local e recusado: ele nao tem valor legal", () => {
     expect(() => criarProvedorDaPlataforma({ ...base, NODE_ENV: "production" })).toThrow(/nao tem valor legal|producao/i);
+  });
+
+  it("11b. em producao com PERMITIR_ASSINATURA_SEM_VALOR_LEGAL, sobe (demonstracao)", () => {
+    // O caso legitimo: plataforma publicada para demonstracao, sem
+    // paciente real. Tem de ser declarado de proposito.
+    const p = criarProvedorDaPlataforma({ ...base, NODE_ENV: "production", PERMITIR_ASSINATURA_SEM_VALOR_LEGAL: true });
+    expect(p.nome).toBe("local_teste");
   });
 
   it("12. birdid sem credenciais completas e recusado", () => {

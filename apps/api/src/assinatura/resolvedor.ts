@@ -97,10 +97,20 @@ export function criarProvedorDaPlataforma(ambiente: Ambiente): ProvedorDeAssinat
     });
   }
 
-  if (ambiente.NODE_ENV === "production") {
+  if (ambiente.NODE_ENV === "production" && !ambiente.PERMITIR_ASSINATURA_SEM_VALOR_LEGAL) {
     throw new Error(
-      "O provedor de assinatura local NAO tem valor legal e nao pode ser usado em producao. " +
-        "Configure ASSINATURA_PROVEDOR=birdid com as credenciais, ou cadastre credenciais por clinica.",
+      "O provedor de assinatura local NAO tem valor legal e nao pode ser usado em producao.\n" +
+        "  - Para valer: ASSINATURA_PROVEDOR=birdid com as credenciais (ver o guia de credenciais).\n" +
+        "  - Para um ambiente de DEMONSTRACAO, sem paciente real: PERMITIR_ASSINATURA_SEM_VALOR_LEGAL=sim",
+    );
+  }
+
+  if (ambiente.NODE_ENV === "production") {
+    // Aviso a cada inicializacao: e facil esquecer que um ambiente subiu
+    // assim e depois trata-lo como se fosse producao de verdade.
+    console.warn(
+      "\n  ATENCAO: assinatura sem valor legal ligada (PERMITIR_ASSINATURA_SEM_VALOR_LEGAL=sim).\n" +
+        "  Os documentos assinados aqui NAO valem na farmacia. Nao use com paciente real.\n",
     );
   }
   return new ProvedorLocalDeTeste();

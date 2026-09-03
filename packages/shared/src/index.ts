@@ -31,6 +31,11 @@ export type Resposta<T> = RespostaOk<T> | RespostaErro;
 
 /** O que a rota GET /saude devolve. O site usa isto para acender as luzes. */
 export interface StatusSaude {
+  /**
+   * Este ambiente produz documento com valor legal? Falso quando a
+   * assinatura esta em modo de teste - o site mostra tarja avisando.
+   */
+  documentosComValorLegal?: boolean;
   api: "no_ar";
   supabase: "conectado" | "falhou";
   /** Modulo 3: o Postgres responde e as migracoes estao aplicadas? */

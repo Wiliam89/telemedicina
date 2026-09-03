@@ -1,3 +1,4 @@
+import { TarjaDeAmbiente } from "@/componentes/TarjaDeAmbiente";
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -26,6 +27,7 @@ export default async function LayoutRaiz({ children }: { children: ReactNode }) 
   return (
     <html lang="pt-BR">
       <body className="min-h-screen bg-papel font-sans text-tinta antialiased">
+        <TarjaDeAmbiente />
         <a href="#conteudo" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:rounded focus:bg-superficie focus:px-3 focus:py-2">
           Pular para o conteudo
         </a>

@@ -82,6 +82,8 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
    *    aplicadas (Modulo 3) e se o RLS esta ligado com as politicas (Modulo 4).
    */
   app.get("/saude", async (): Promise<Resposta<StatusSaude>> => {
+    // Quem consome precisa saber se o que sai daqui vale de verdade.
+    const documentosComValorLegal = ambiente.ASSINATURA_PROVEDOR !== "local_teste";
     let supabase: StatusSaude["supabase"] = "falhou";
     let estadoBanco: StatusSaude["banco"] = { estado: "falhou", migracoesAplicadas: 0, migracoesEsperadas: 0, tabelas: [] };
     let seguranca: StatusSaude["seguranca"] = { estado: "desconhecido", tabelasSemRls: [], politicas: 0 };
@@ -119,7 +121,7 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
 
     return {
       ok: true,
-      dados: { api: "no_ar", supabase, banco: estadoBanco, seguranca, versao: "0.1.0", horario: new Date().toISOString() },
+      dados: { api: "no_ar", supabase, banco: estadoBanco, seguranca, documentosComValorLegal, versao: "0.1.0", horario: new Date().toISOString() },
     };
   });
 

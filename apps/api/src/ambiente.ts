@@ -41,6 +41,29 @@ const esquema = z.object({
    */
   ASSINATURA_PROVEDOR: z.enum(["local_teste", "birdid"]).default("local_teste"),
   /**
+   * AMBIENTE DE HOMOLOGACAO.
+   *
+   * A API se recusa a subir em producao com o provedor de assinatura de
+   * teste - e faz isso de proposito: documento assinado por ele NAO tem
+   * valor legal, e a farmacia recusaria a receita.
+   *
+   * Mas existe um caso legitimo no meio: a plataforma publicada na
+   * internet para demonstracao, treinamento ou homologacao, onde nao ha
+   * paciente real. Para esse caso, declare aqui - EXPLICITAMENTE:
+   *
+   *   PERMITIR_ASSINATURA_SEM_VALOR_LEGAL=sim
+   *
+   * Com isso a API sobe, avisa no log a cada inicializacao, e informa em
+   * /saude que este ambiente nao produz documento com valor legal - para
+   * o site exibir a tarja.
+   *
+   * NUNCA use isto num ambiente com paciente de verdade.
+   */
+  PERMITIR_ASSINATURA_SEM_VALOR_LEGAL: z
+    .enum(["sim", "nao"])
+    .default("nao")
+    .transform((v) => v === "sim"),
+  /**
    * Chave para cifrar segredos que precisam voltar em claro (hoje: o
    * client secret que cada clinica pode ter no provedor de assinatura).
    * 32 bytes em base64. Gere com:
