@@ -36,6 +36,11 @@ export interface StatusSaude {
    * assinatura esta em modo de teste - o site mostra tarja avisando.
    */
   documentosComValorLegal?: boolean;
+  /**
+   * Este ambiente faz videochamada de verdade? Falso quando o provedor de
+   * video esta simulado - o site mostra tarja avisando (Modulo 12).
+   */
+  videoReal?: boolean;
   api: "no_ar";
   supabase: "conectado" | "falhou";
   /** Modulo 3: o Postgres responde e as migracoes estao aplicadas? */
@@ -81,6 +86,13 @@ export type {
   ResultadoValidacao,
   TipoDocumento,
 } from "./documentos.js";
+
+/**
+ * Os tipos da sala de video ficam aqui; a REGRA de quando a sala abre vive
+ * em "@tele/shared/video", usada pela API e pela tela - mesmo motivo da
+ * agenda e dos documentos.
+ */
+export type { DecisaoDeEntrada, EntradaNaSala, MotivoDeRecusa, StatusParaVideo } from "./video.js";
 
 /** O que a pessoa e DENTRO de uma clinica (Modulo 6). Espelha o enum papel_vinculo. */
 export type PapelVinculo = "paciente" | "medico" | "recepcao" | "admin_clinica";

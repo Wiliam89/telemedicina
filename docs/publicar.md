@@ -61,6 +61,8 @@ temporariamente e rode `pnpm db:migrar` uma vez, para criar o schema.
 | `PERMITIR_ASSINATURA_SEM_VALOR_LEGAL` | `sim` — ver o aviso abaixo |
 | `CHAVE_CRIPTOGRAFIA` | gere: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
 | `PAGAMENTO_WEBHOOK_SEGREDO` | qualquer segredo longo, por enquanto |
+| `VIDEO_PROVEDOR` | `local_teste` |
+| `PERMITIR_VIDEO_SIMULADO` | `sim` — ver o aviso abaixo |
 
 > **Sobre `PERMITIR_ASSINATURA_SEM_VALOR_LEGAL=sim`**
 >
@@ -72,6 +74,21 @@ temporariamente e rode `pnpm db:migrar` uma vez, para criar o schema.
 >
 > Quando houver certificado de verdade, troque por
 > `ASSINATURA_PROVEDOR=birdid` com as credenciais e **remova** esta linha.
+
+> **Sobre `PERMITIR_VIDEO_SIMULADO=sim`** (Módulo 12)
+>
+> Pelo mesmo motivo: a API se recusa a subir em produção com o provedor de
+> vídeo simulado, porque ele **não faz videochamada nenhuma**. Esta variável
+> declara que aqui é demonstração. A própria sala avisa na tela, no lugar da
+> imagem, que não há vídeo — ninguém fica esperando uma câmera que não vai
+> abrir.
+>
+> Para ter vídeo de verdade: crie uma conta em
+> [dashboard.daily.co](https://dashboard.daily.co), clique em **Developers**
+> no menu da esquerda, copie a **API key**, e no Render troque por
+> `VIDEO_PROVEDOR=daily` + `VIDEO_API_KEY=<a chave>`, **removendo**
+> `PERMITIR_VIDEO_SIMULADO`. O plano gratuito do Daily dá minutos por mês,
+> suficientes para testar.
 
 ## Parte 2 — O site na Vercel
 

@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ConsultaResumo, PapelVinculo } from "@tele/shared";
+import { decidirEntrada } from "@tele/shared/video";
 import Link from "next/link";
 import { Botao } from "@/componentes/Botao";
 import { chamarApi } from "@/lib/api";
@@ -29,6 +30,14 @@ export function AcoesDaConsulta({
   const [ocupado, setOcupado] = useState(false);
 
   const encerrada = consulta.status === "cancelada" || consulta.status === "concluida";
+
+  /** A janela da sala de video desta consulta (Modulo 12). */
+  const entrada = decidirEntrada({
+    status: consulta.status,
+    inicio: new Date(consulta.inicio),
+    fim: new Date(consulta.fim),
+    agora: new Date(),
+  });
 
   async function chamar(rota: string, corpo?: unknown) {
     setErro(null);
@@ -88,6 +97,33 @@ export function AcoesDaConsulta({
         <Link href={`/c/${slug}/atendimento/${consulta.id}`} className="text-sm text-selo underline-offset-4 hover:underline">
           Atender
         </Link>
+      ) : null}
+
+      {/*
+        O CAMINHO DO PACIENTE PARA A SALA (Modulo 12).
+
+        A mesma regra que a API usa para liberar a entrada decide o que
+        aparece aqui - ela vive em @tele/shared/video justamente para os dois
+        lados concordarem. Fora da janela, em vez de um botao que responde
+        erro, a tela diz a que horas a sala abre.
+
+        O relogio usado aqui e o do computador da pessoa, que pode estar
+        errado; por isso quem decide de verdade continua sendo a API. Esta
+        checagem e so para nao oferecer o que vai ser recusado.
+      */}
+      {papel === "paciente" ? (
+        entrada.pode ? (
+          <Link
+            href={`/c/${slug}/consulta/${consulta.id}`}
+            className="rounded-md bg-selo px-3 py-1.5 text-sm font-medium text-white hover:bg-selo/90"
+          >
+            Entrar na consulta
+          </Link>
+        ) : entrada.motivo === "cedo_demais" ? (
+          <span className="text-sm text-tinta-suave">
+            A sala abre as {new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(entrada.abreEm)}
+          </span>
+        ) : null
       ) : null}
       {souOMedico && consulta.status === "em_andamento" ? (
         <Botao carregando={ocupado} onClick={() => chamar(`/consultas/${consulta.id}/status`, { status: "concluida" })} className="px-3 py-1.5 text-sm">

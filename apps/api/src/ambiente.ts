@@ -96,6 +96,36 @@ const esquema = z.object({
    */
   PAGAMENTO_WEBHOOK_SEGREDO: z.string().min(8, "use um segredo com ao menos 8 caracteres").optional(),
 
+  /**
+   * Provedor da videochamada (Modulo 12). "local_teste" NAO faz
+   * videochamada nenhuma: ele deixa o fluxo rodar na sua maquina sem conta
+   * em servico nenhum, e mostra um aviso no lugar da imagem.
+   */
+  VIDEO_PROVEDOR: z.enum(["local_teste", "daily"]).default("local_teste"),
+  /**
+   * Chave da API do Daily (painel do Daily > Developers). Fica no servidor
+   * e NUNCA vai para o navegador: com ela se cria sala na conta inteira. O
+   * que o navegador recebe e um token de entrada, de uma pessoa, por
+   * poucos minutos.
+   */
+  VIDEO_API_KEY: z.string().min(10, "VIDEO_API_KEY esta vazia ou curta demais").optional(),
+  /**
+   * O mesmo caso da assinatura sem valor legal: a plataforma publicada para
+   * DEMONSTRACAO, sem paciente real, precisa subir sem conta de video. Para
+   * esse caso, declare - EXPLICITAMENTE:
+   *
+   *   PERMITIR_VIDEO_SIMULADO=sim
+   *
+   * Com isso a API sobe, avisa no log a cada inicializacao, e informa em
+   * /saude que aqui nao ha videochamada - para o site exibir a tarja.
+   *
+   * NUNCA use isto num ambiente com paciente de verdade.
+   */
+  PERMITIR_VIDEO_SIMULADO: z
+    .enum(["sim", "nao"])
+    .default("nao")
+    .transform((v) => v === "sim"),
+
   ORIGEM_PERMITIDA: z.string().default("http://localhost:3000"),
 });
 

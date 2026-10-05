@@ -11,6 +11,7 @@ interface EstadoDaFila {
   totalAguardando: number;
   medicosDePlantao: number;
   minhaPosicao: number | null;
+  minhaConsultaId: string | null;
   minhaSituacao: string | null;
   esperaEstimadaMinutos: number | null;
 }
@@ -43,7 +44,7 @@ export default async function PaginaProntoAtendimento({ params }: { params: Prom
 
       <ProntoAtendimento
         slug={slug}
-        estado={fila.ok ? fila.dados : { totalAguardando: 0, medicosDePlantao: 0, minhaPosicao: null, minhaSituacao: null, esperaEstimadaMinutos: null }}
+        estado={fila.ok ? fila.dados : { totalAguardando: 0, medicosDePlantao: 0, minhaPosicao: null, minhaConsultaId: null, minhaSituacao: null, esperaEstimadaMinutos: null }}
         valorCentavos={preco?.valorCentavos ?? null}
       />
     </div>

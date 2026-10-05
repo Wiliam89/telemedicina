@@ -79,6 +79,8 @@ describe("portaria das rotas da agenda", () => {
     ORIGEM_PERMITIDA: "http://localhost:3000",
     ASSINATURA_PROVEDOR: "local_teste" as const,
     PERMITIR_ASSINATURA_SEM_VALOR_LEGAL: false,
+    VIDEO_PROVEDOR: "local_teste" as const,
+    PERMITIR_VIDEO_SIMULADO: false,
   };
   let app: Awaited<ReturnType<typeof criarServidor>>["app"];
 

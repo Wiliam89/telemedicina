@@ -19,6 +19,9 @@ import { rotasPagamentos } from "./rotas/pagamentos.js";
 import { rotasEquipe } from "./rotas/equipe.js";
 import { rotasProntuario } from "./rotas/prontuario.js";
 import { rotasPerfis } from "./rotas/perfis.js";
+import { rotasVideo } from "./rotas/video.js";
+import { criarProvedorDeVideo } from "./video/resolvedor.js";
+import type { ProvedorDeVideo } from "./video/provedor.js";
 
 /**
  * =====================================================================
@@ -46,6 +49,8 @@ export interface OpcoesServidor {
   ambiente?: Ambiente;
   /** Padrao: pergunta ao Supabase Auth. Os testes passam um falso. */
   autenticar?: Autenticador;
+  /** Padrao: decidido por VIDEO_PROVEDOR. Os testes passam um dublê. */
+  provedorDeVideo?: ProvedorDeVideo;
 }
 
 export async function criarServidor(opcoes: OpcoesServidor = {}) {
@@ -54,6 +59,15 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
 
   // Uma unica conexao com o banco para a API inteira (Modulo 3).
   const banco = criarBanco(ambiente.DATABASE_URL);
+
+  /**
+   * O provedor de video e escolhido UMA VEZ, aqui. Se a configuracao
+   * estiver errada (ou for o simulado em producao sem autorizacao
+   * explicita), esta linha lanca e a API nao sobe - que e exatamente o que
+   * se quer: melhor quebrar no terminal agora do que no meio de uma
+   * consulta (Modulo 12).
+   */
+  const provedorDeVideo = opcoes.provedorDeVideo ?? criarProvedorDeVideo(ambiente);
 
   const app = Fastify({
     logger: {
@@ -84,6 +98,8 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
   app.get("/saude", async (): Promise<Resposta<StatusSaude>> => {
     // Quem consome precisa saber se o que sai daqui vale de verdade.
     const documentosComValorLegal = ambiente.ASSINATURA_PROVEDOR !== "local_teste";
+    // E se ha videochamada de verdade. O site mostra tarja quando nao ha.
+    const videoReal = provedorDeVideo.videoReal;
     let supabase: StatusSaude["supabase"] = "falhou";
     let estadoBanco: StatusSaude["banco"] = { estado: "falhou", migracoesAplicadas: 0, migracoesEsperadas: 0, tabelas: [] };
     let seguranca: StatusSaude["seguranca"] = { estado: "desconhecido", tabelasSemRls: [], politicas: 0 };
@@ -121,7 +137,7 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
 
     return {
       ok: true,
-      dados: { api: "no_ar", supabase, banco: estadoBanco, seguranca, documentosComValorLegal, versao: "0.1.0", horario: new Date().toISOString() },
+      dados: { api: "no_ar", supabase, banco: estadoBanco, seguranca, documentosComValorLegal, videoReal, versao: "0.1.0", horario: new Date().toISOString() },
     };
   });
 
@@ -142,6 +158,7 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
   });
   await app.register(rotasProntuario, { banco, autenticar });
   await app.register(rotasDocumentos, { banco, autenticar });
+  await app.register(rotasVideo, { banco, autenticar, provedor: provedorDeVideo });
   await app.register(rotasAssinatura, {
     banco,
     autenticar,

@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./agenda": "./src/agenda.ts",
     "./documentos": "./src/documentos.ts",
-    "./consentimento": "./src/consentimento.ts"
+    "./consentimento": "./src/consentimento.ts",
+    "./video": "./src/video.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

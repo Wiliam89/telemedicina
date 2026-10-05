@@ -2,7 +2,8 @@
 
 Monorepo: Next.js (site) + Fastify (API) + Supabase (banco, auth, arquivos).
 Acompanha o curso "Plataforma de Telemedicina"; este estado corresponde ao
-fim do **Modulo 11** (plantao e fila de pronto atendimento, com consentimento e chamada concorrente).
+fim do **Modulo 12** (videochamada da consulta: sala por consulta, token de
+entrada por pessoa, sem gravacao).
 
 ## Primeira vez na maquina
 
@@ -30,13 +31,14 @@ pnpm dev                # site em http://localhost:3000, API em http://localhost
 | `/c/<clinica>/agenda`      | vinculo | consultas do periodo, com acoes por papel        |
 | `/c/<clinica>/marcar`      | paciente/recepcao | escolher medico, dia e horario         |
 | `/c/<clinica>/grade`       | medico | grade semanal de atendimento                    |
-| `/c/<clinica>/atendimento/<consulta>` | medico | prontuario SOAP e emissao de documentos |
+| `/c/<clinica>/atendimento/<consulta>` | medico | video + prontuario SOAP + documentos  |
 | `/c/<clinica>/documentos`  | vinculo | documentos recebidos ou emitidos                 |
 | `/c/<clinica>/pagamento/<consulta>` | paciente | pagar com Pix, com QR e copia e cola  |
 | `/c/<clinica>/precos`      | admin | valores da clinica                                 |
 | `/entrar-na-clinica/<slug>`| semi-publica | porta de entrada do paciente                |
 | `/c/<clinica>/pronto-atendimento` | paciente | queixa, termo, pagamento e sala de espera |
 | `/c/<clinica>/plantao`     | equipe | escala, fila e chamada do proximo                 |
+| `/c/<clinica>/consulta/<consulta>` | paciente | a sala de video do paciente              |
 | `/validar`                 | **publica** | conferir um documento pelo codigo            |
 | `/c/<clinica>/equipe`      | admin | membros e convites                                 |
 | `/c/<clinica>/diagnostico` | vinculo | o painel de luzes                                |
@@ -113,7 +115,20 @@ Rotas de dentro de uma clinica exigem tambem `X-Clinica: <endereco>`.
 | `GET /fila`                 | vinculo          | minha posicao / a fila (equipe)             |
 | `POST /fila/proximo`        | medico de plantao | chama o proximo (SKIP LOCKED)              |
 | `POST /fila/:id/desistir`   | paciente ou recepcao | sair da fila                            |
+| `POST /consultas/:id/sala`  | **so os dois da consulta** | entra: devolve o token de entrada |
+| `GET /consultas/:id/sala`   | **so os dois da consulta** | a sala esta aberta? (sem token)   |
+| `POST /consultas/:id/sala/encerrar` | medico da consulta | fecha a sala e conclui        |
 | `GET /validar/:codigo`      | **publica**      | confere autenticidade sem login            |
+
+Nas tres rotas da sala, "os dois da consulta" e literal: o paciente e o medico
+daquela consulta, e mais ninguem - nem a recepcao, nem a administracao da
+clinica. E a unica regra de acesso da plataforma que nao olha o papel na
+clinica (ADR-0014).
+
+Sem conta de video configurada, o projeto roda inteiro com
+`VIDEO_PROVEDOR=local_teste`: a sala abre e avisa na tela que nao ha
+videochamada neste ambiente. Para ter video de verdade, ver a secao 7 de
+`apps/api/.env.example`.
 
 Prova de ponta a ponta (cria usuarios e clinica, testa o isolamento, apaga tudo):
 
@@ -130,7 +145,7 @@ mudanca e um arquivo em `packages/db/drizzle/`, gerado a partir de
 
 ```bash
 pnpm typecheck          # tipos nos 4 pacotes
-pnpm test               # 67 da API + 5 do banco + 30 do shared + 4 do site
+pnpm test               # 82 da API + 5 do banco + 41 do shared + 4 do site
 ```
 
 ## Onde fica cada coisa

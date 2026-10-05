@@ -106,6 +106,8 @@ describe("escolha do provedor", () => {
     DATABASE_URL: "postgresql://a:b@c:5432/d", ORIGEM_PERMITIDA: "http://localhost:3000",
     ASSINATURA_PROVEDOR: "local_teste" as const,
     PERMITIR_ASSINATURA_SEM_VALOR_LEGAL: false,
+    VIDEO_PROVEDOR: "local_teste" as const,
+    PERMITIR_VIDEO_SIMULADO: false,
   };
 
   it("10. em desenvolvimento, o provedor local e aceito", () => {

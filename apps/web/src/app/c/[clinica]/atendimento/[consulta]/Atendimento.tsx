@@ -6,6 +6,7 @@ import type { DocumentoResumo, EvolucaoResumo } from "@tele/shared";
 import { Aviso } from "@/componentes/Aviso";
 import { Botao } from "@/componentes/Botao";
 import { chamarApi } from "@/lib/api";
+import { SalaDeVideo } from "@/componentes/SalaDeVideo";
 import { criarClienteNavegador } from "@/lib/supabase-navegador";
 import { EmitirDocumento } from "./EmitirDocumento";
 
@@ -178,7 +179,22 @@ export function Atendimento({
         ) : null}
       </section>
 
-      <EmitirDocumento slug={slug} consultaId={consultaId} emitidos={documentos} />
+      {/*
+        A COLUNA DA DIREITA: video em cima, documentos embaixo.
+
+        Por que o video fica AQUI, e nao numa tela separada: o medico escreve
+        o prontuario enquanto conversa. Mandar ele trocar de aba para ver o
+        paciente significa que ou ele para de escrever, ou para de olhar - e
+        nas plataformas do setor a consulta e uma tela so, por isso mesmo.
+
+        `sticky` mantem o paciente a vista enquanto o medico desce pelo
+        historico. Perder o rosto da pessoa de vista no meio da consulta para
+        ler uma evolucao antiga e exatamente o que nao pode acontecer.
+      */}
+      <div className="space-y-8 lg:sticky lg:top-6">
+        <SalaDeVideo slug={slug} consultaId={consultaId} comoMedico aoEncerrar={() => router.push(`/c/${slug}/agenda`)} />
+        <EmitirDocumento slug={slug} consultaId={consultaId} emitidos={documentos} />
+      </div>
     </div>
   );
 }

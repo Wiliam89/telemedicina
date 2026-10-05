@@ -17,7 +17,8 @@ export function TarjaDeAmbiente() {
   return (
     <div role="status" className="bg-alerta px-4 py-2 text-center text-sm text-white">
       <strong>{rotulo}.</strong> Os documentos emitidos aqui <strong>não têm valor legal</strong> e não devem ser usados
-      em farmácia ou apresentados como atestado. Não cadastre dados de paciente real.
+      em farmácia ou apresentados como atestado. A videochamada pode estar <strong>simulada</strong> — a própria sala
+      avisa quando não há vídeo. Não cadastre dados de paciente real.
     </div>
   );
 }

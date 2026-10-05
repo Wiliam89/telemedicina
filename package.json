@@ -27,7 +27,8 @@
     "db:verificar-prontuario": "pnpm --filter @tele/db verificar-prontuario",
     "db:verificar-assinatura": "pnpm --filter @tele/db verificar-assinatura",
     "db:verificar-pagamento": "pnpm --filter @tele/db verificar-pagamento",
-    "db:verificar-fila": "pnpm --filter @tele/db verificar-fila"
+    "db:verificar-fila": "pnpm --filter @tele/db verificar-fila",
+    "db:verificar-video": "pnpm --filter @tele/db verificar-video"
   },
   "devDependencies": {
     "typescript": "^5.7.3"

@@ -22,7 +22,8 @@
     "verificar-prontuario": "tsx src/verificar-prontuario.ts",
     "verificar-assinatura": "tsx src/verificar-assinatura.ts",
     "verificar-pagamento": "tsx src/verificar-pagamento.ts",
-    "verificar-fila": "tsx src/verificar-fila.ts"
+    "verificar-fila": "tsx src/verificar-fila.ts",
+    "verificar-video": "tsx src/verificar-video.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.44.5",

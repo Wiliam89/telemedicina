@@ -14,6 +14,8 @@ interface Estado {
   medicosDePlantao: number;
   minhaPosicao: number | null;
   minhaSituacao: string | null;
+  /** Modulo 12: a consulta que nasceu da chamada - o destino da sala de video. */
+  minhaConsultaId: string | null;
   esperaEstimadaMinutos: number | null;
 }
 
@@ -49,7 +51,18 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
       if (r.ok) {
         setAtual(r.dados);
         // Chamado: a consulta comecou, a tela do atendimento assume.
-        if (r.dados.minhaSituacao === "em_atendimento") router.push(`/c/${slug}/agenda`);
+        /**
+         * CHAMADO. Daqui o paciente vai DIRETO para a sala de video - nao
+         * para a agenda, como era antes do Modulo 12.
+         *
+         * Essa diferenca e o atendimento acontecer ou nao: o medico esta na
+         * sala esperando, e mandar o paciente para uma lista de consultas
+         * significa ele ter que entender sozinho, com pressa, onde clicar.
+         * Quem foi chamado cai onde foi chamado.
+         */
+        if (r.dados.minhaSituacao === "em_atendimento" && r.dados.minhaConsultaId) {
+          router.push(`/c/${slug}/consulta/${r.dados.minhaConsultaId}`);
+        }
       }
     }, 5000);
     return () => clearInterval(t);

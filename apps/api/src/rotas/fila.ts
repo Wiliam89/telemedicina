@@ -239,6 +239,9 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       .select({
         id: filaAtendimento.id, pacienteId: filaAtendimento.pacienteId, entrouEm: filaAtendimento.entrouEm,
         prioridade: filaAtendimento.prioridade, queixa: filaAtendimento.queixa, status: filaAtendimento.status,
+        // Modulo 12: quando o paciente e chamado, e por este id que a sala
+        // de espera sabe para qual sala de video mandar ele.
+        consultaId: filaAtendimento.consultaId,
         nome: perfis.nomeCompleto,
       })
       .from(filaAtendimento)
@@ -263,6 +266,8 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
         medicosDePlantao: medicosDisponiveis?.n ?? 0,
         minhaPosicao: minha >= 0 ? minha + 1 : null,
         minhaSituacao: minha >= 0 ? aguardando[minha]!.status : null,
+        /** A consulta que nasceu da chamada. Nula enquanto ninguem chamou. */
+        minhaConsultaId: minha >= 0 ? aguardando[minha]!.consultaId : null,
         esperaEstimadaMinutos:
           minha >= 0 && (medicosDisponiveis?.n ?? 0) > 0
             ? Math.max(0, Math.round((minha * MINUTOS_DO_ATENDIMENTO) / (medicosDisponiveis?.n ?? 1)))
@@ -270,7 +275,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
         // A lista completa e so para quem trabalha na clinica.
         lista: souEquipe
           ? aguardando.map((f, i) => ({
-              id: f.id, posicao: i + 1, nome: f.nome, queixa: f.queixa, status: f.status,
+              id: f.id, posicao: i + 1, nome: f.nome, queixa: f.queixa, status: f.status, consultaId: f.consultaId,
               entrouEm: f.entrouEm.toISOString(),
               esperandoMinutos: Math.round((Date.now() - f.entrouEm.getTime()) / 60000),
             }))

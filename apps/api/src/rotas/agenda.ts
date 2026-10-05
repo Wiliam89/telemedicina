@@ -363,14 +363,48 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
       throw new ErroHttp(400, "JANELA_GRANDE_DEMAIS", `Peca no maximo ${JANELA_MAXIMA_DIAS} dias por vez.`);
     }
 
-    // O RLS ja limita ao que a pessoa pode ver; o filtro por clinica aqui
-    // e o que permite ao Postgres usar o indice.
+    /**
+     * =================================================================
+     * QUEM VE O QUE - E POR QUE ESTE FILTRO TEM QUE ESTAR AQUI
+     * =================================================================
+     *
+     * Havia um comentario nesta linha dizendo "o RLS ja limita ao que a
+     * pessoa pode ver". ESTAVA ERRADO, e o erro era grave: um paciente
+     * logado recebia a agenda inteira da clinica - nome, horario e motivo
+     * da consulta de todos os outros pacientes. Dado de saude de terceiro.
+     *
+     * A confusao vale ser entendida, porque ela se repete em todo projeto
+     * que usa Supabase:
+     *
+     *   O RLS protege o acesso DIRETO ao banco - o navegador falando com o
+     *   Postgres com a chave publicavel. Ali o Postgres sabe quem e a
+     *   pessoa (auth.uid()) e aplica as politicas.
+     *
+     *   A API nao entra por essa porta. Ela conecta com a credencial dona
+     *   do banco, exatamente para poder fazer o que o paciente nao pode:
+     *   criar consulta, mexer em pagamento, gravar auditoria. Para o
+     *   Postgres, ela e o dono - e dono nao e limitado por RLS.
+     *
+     * Ou seja: RLS e a segunda tranca, nao a primeira. Toda consulta feita
+     * pela API precisa filtrar por quem esta pedindo. E o que este bloco
+     * faz, e e por isso que ele nao e um detalhe de otimizacao.
+     */
+    const souEquipe = req.contexto.papel === "recepcao" || req.contexto.papel === "admin_clinica";
+    const soMinhas = souEquipe
+      ? undefined
+      : req.contexto.papel === "medico"
+        ? // O medico ve o que ele atende. O `or` cobre o caso de ele tambem
+          // ser paciente nesta clinica: o papel mais forte manda no acesso,
+          // mas as consultas dele como paciente continuam sendo dele.
+          or(eq(consultas.medicoId, req.usuario.id), eq(consultas.pacienteId, req.usuario.id))
+        : eq(consultas.pacienteId, req.usuario.id);
+
     const linhas = await banco
       .select(colunasDaConsulta())
       .from(consultas)
       .innerJoin(perfis, eq(perfis.id, consultas.pacienteId))
       .innerJoin(medicos, eq(medicos.perfilId, consultas.medicoId))
-      .where(and(eq(consultas.clinicaId, req.contexto.clinicaId), between(consultas.inicio, inicio, fim)))
+      .where(and(eq(consultas.clinicaId, req.contexto.clinicaId), between(consultas.inicio, inicio, fim), soMinhas))
       .orderBy(asc(consultas.inicio));
 
     return { ok: true, dados: linhas.map(formatarConsulta) };

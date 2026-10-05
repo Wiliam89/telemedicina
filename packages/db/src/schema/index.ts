@@ -21,4 +21,5 @@ export * from "./pagamentos.js";
 export * from "./fila.js";
 export * from "./evolucoes.js";
 export * from "./documentos.js";
+export * from "./salas-video.js";
 export * from "./auditoria.js";

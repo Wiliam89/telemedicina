@@ -15,7 +15,7 @@ describe("schema e migracoes", () => {
       schema.clinicas, schema.perfis, schema.vinculos, schema.convites,
       schema.medicos, schema.pacientes, schema.disponibilidades, schema.bloqueios,
       schema.consultas, schema.plantoes, schema.precos, schema.pagamentos, schema.filaAtendimento,
-      schema.evolucoes, schema.documentos, schema.auditoria,
+      schema.evolucoes, schema.documentos, schema.salasDeVideo, schema.auditoria,
     ].map(getTableName);
     expect(nomes.sort()).toEqual([...TABELAS_ESPERADAS].sort());
   });

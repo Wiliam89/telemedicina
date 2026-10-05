@@ -52,7 +52,7 @@ console.log("\n== Verificando o ambiente ==\n");
 /* ---------------------------------------------------------------- */
 /* 1. Ferramentas                                                    */
 /* ---------------------------------------------------------------- */
-console.log("[1/14] Ferramentas");
+console.log("[1/15] Ferramentas");
 
 const major = Number(process.versions.node.split(".")[0]);
 if (major >= 22) ok(`Node ${process.versions.node}`);
@@ -69,7 +69,7 @@ else erro("git nao encontrado", "Instale em https://git-scm.com");
 /* ---------------------------------------------------------------- */
 /* 2. Estrutura de pastas                                            */
 /* ---------------------------------------------------------------- */
-console.log("\n[2/14] Estrutura do projeto");
+console.log("\n[2/15] Estrutura do projeto");
 
 for (const p of ["pnpm-workspace.yaml", "apps/web/package.json", "apps/api/package.json",
                  "packages/shared/package.json", "packages/db/package.json", "docs"]) {
@@ -83,7 +83,7 @@ else erro("node_modules nao existe", "Rode: pnpm install  (na raiz do projeto)")
 /* ---------------------------------------------------------------- */
 /* 3. Arquivos .env                                                  */
 /* ---------------------------------------------------------------- */
-console.log("\n[3/14] Arquivos de ambiente");
+console.log("\n[3/15] Arquivos de ambiente");
 
 const ESPERADO = {
   "apps/api/.env": {
@@ -142,7 +142,7 @@ for (const [arquivo, vars] of Object.entries(ESPERADO)) {
 /* ---------------------------------------------------------------- */
 /* 4. Seguranca                                                      */
 /* ---------------------------------------------------------------- */
-console.log("\n[4/14] Seguranca das chaves");
+console.log("\n[4/15] Seguranca das chaves");
 
 const web = lidos["apps/web/.env.local"];
 if (web) {
@@ -179,7 +179,7 @@ else erro(".gitignore nao cobre os arquivos .env", "Adicione as linhas .env e .e
 /* ---------------------------------------------------------------- */
 /* 5. Regiao                                                         */
 /* ---------------------------------------------------------------- */
-console.log("\n[5/14] Regiao dos dados (exigencia juridica)");
+console.log("\n[5/15] Regiao dos dados (exigencia juridica)");
 
 if (api?.DATABASE_URL) {
   if (api.DATABASE_URL.includes("sa-east-1")) ok("DATABASE_URL aponta para sa-east-1 (Sao Paulo)");
@@ -193,7 +193,7 @@ else aviso("docs/adr-0001-regiao-sao-paulo.md nao existe", "Registre a decisao (
 /* ---------------------------------------------------------------- */
 /* 6. Banco (Modulo 3)                                               */
 /* ---------------------------------------------------------------- */
-console.log("\n[6/14] Tabelas e migracoes do banco (Modulo 3)");
+console.log("\n[6/15] Tabelas e migracoes do banco (Modulo 3)");
 
 const pastaMigracoes = resolve(raiz, "packages/db/drizzle");
 if (existsSync(resolve(pastaMigracoes, "meta/_journal.json"))) {
@@ -223,7 +223,7 @@ if (!urlValida) {
 /* ---------------------------------------------------------------- */
 /* 7. RLS (Modulo 4)                                                 */
 /* ---------------------------------------------------------------- */
-console.log("\n[7/14] Seguranca por linha - RLS (Modulo 4)");
+console.log("\n[7/15] Seguranca por linha - RLS (Modulo 4)");
 
 if (!urlValida) {
   aviso("DATABASE_URL vazia ou invalida: o RLS sera conferido quando ela estiver certa");
@@ -243,7 +243,7 @@ if (!urlValida) {
 /* ---------------------------------------------------------------- */
 /* 8. Site: login e telas (Modulo 5)                                 */
 /* ---------------------------------------------------------------- */
-console.log("\n[8/14] Site: login, sessao e telas (Modulo 5)");
+console.log("\n[8/15] Site: login, sessao e telas (Modulo 5)");
 
 const TELAS = ["src/middleware.ts", "src/app/entrar/page.tsx", "src/app/criar-conta/page.tsx",
                "src/app/completar-perfil/page.tsx", "src/app/clinicas/page.tsx", "src/app/clinicas/nova/page.tsx",
@@ -283,7 +283,7 @@ if (api?.ORIGEM_PERMITIDA && web?.NEXT_PUBLIC_API_URL) {
 /* ---------------------------------------------------------------- */
 /* 9. Multi-clinica (Modulo 6)                                       */
 /* ---------------------------------------------------------------- */
-console.log("\n[9/14] Isolamento entre clinicas (Modulo 6)");
+console.log("\n[9/15] Isolamento entre clinicas (Modulo 6)");
 
 if (!urlValida || !existsSync(resolve(raiz, "node_modules"))) {
   aviso("sem DATABASE_URL valida ou sem node_modules: o isolamento sera conferido depois");
@@ -301,7 +301,7 @@ if (!urlValida || !existsSync(resolve(raiz, "node_modules"))) {
 /* ---------------------------------------------------------------- */
 /* 10. Agenda (Modulo 7)                                             */
 /* ---------------------------------------------------------------- */
-console.log("\n[10/14] Agenda e travas de marcacao (Modulo 7)");
+console.log("\n[10/15] Agenda e travas de marcacao (Modulo 7)");
 
 if (!urlValida || !existsSync(resolve(raiz, "node_modules"))) {
   aviso("sem DATABASE_URL valida ou sem node_modules: a agenda sera conferida depois");
@@ -319,7 +319,7 @@ if (!urlValida || !existsSync(resolve(raiz, "node_modules"))) {
 /* ---------------------------------------------------------------- */
 /* 11. Prontuario e documentos (Modulo 8)                            */
 /* ---------------------------------------------------------------- */
-console.log("\n[11/14] Prontuario imutavel e documentos (Modulo 8)");
+console.log("\n[11/15] Prontuario imutavel e documentos (Modulo 8)");
 
 if (!urlValida || !existsSync(resolve(raiz, "node_modules"))) {
   aviso("sem DATABASE_URL valida ou sem node_modules: o prontuario sera conferido depois");
@@ -337,7 +337,7 @@ if (!urlValida || !existsSync(resolve(raiz, "node_modules"))) {
 /* ---------------------------------------------------------------- */
 /* 12. Assinatura ICP-Brasil (Modulo 9)                              */
 /* ---------------------------------------------------------------- */
-console.log("\n[12/14] Assinatura digital dos documentos (Modulo 9)");
+console.log("\n[12/15] Assinatura digital dos documentos (Modulo 9)");
 
 const provedorAssinatura = api?.ASSINATURA_PROVEDOR ?? "local_teste";
 if (provedorAssinatura === "local_teste") {
@@ -365,7 +365,7 @@ if (!urlValida || !existsSync(resolve(raiz, "node_modules"))) {
 /* ---------------------------------------------------------------- */
 /* 13. Pagamento (Modulo 10)                                         */
 /* ---------------------------------------------------------------- */
-console.log("\n[13/14] Pagamento e split (Modulo 10)");
+console.log("\n[13/15] Pagamento e split (Modulo 10)");
 
 if (!api?.PAGAMENTO_WEBHOOK_SEGREDO) {
   aviso("PAGAMENTO_WEBHOOK_SEGREDO nao definido: o webhook usa um segredo de desenvolvimento",
@@ -392,7 +392,7 @@ if (!urlValida || !existsSync(resolve(raiz, "node_modules"))) {
 /* ---------------------------------------------------------------- */
 /* 14. Plantao e fila (Modulo 11)                                    */
 /* ---------------------------------------------------------------- */
-console.log("\n[14/14] Plantao e fila de pronto atendimento (Modulo 11)");
+console.log("\n[14/15] Plantao e fila de pronto atendimento (Modulo 11)");
 
 if (!urlValida || !existsSync(resolve(raiz, "node_modules"))) {
   aviso("sem DATABASE_URL valida ou sem node_modules: a fila sera conferida depois");
@@ -404,6 +404,21 @@ if (!urlValida || !existsSync(resolve(raiz, "node_modules"))) {
   if (r.status !== 0) {
     falhas++;
     if (!(r.stdout ?? "").includes("ERRO")) console.log(`  ERRO nao foi possivel conferir a fila\n${r.stderr ?? ""}`);
+  }
+}
+
+console.log("\n[15/15] Sala de video da consulta (Modulo 12)");
+
+if (!urlValida || !existsSync(resolve(raiz, "node_modules"))) {
+  aviso("sem DATABASE_URL valida ou sem node_modules: as salas de video serao conferidas depois");
+} else {
+  const r = spawnSync("pnpm", ["--silent", "--filter", "@tele/db", "verificar-video"], {
+    cwd: raiz, encoding: "utf8", shell: process.platform === "win32",
+  });
+  process.stdout.write(r.stdout ?? "");
+  if (r.status !== 0) {
+    falhas++;
+    if (!(r.stdout ?? "").includes("ERRO")) console.log(`  ERRO nao foi possivel conferir as salas de video\n${r.stderr ?? ""}`);
   }
 }
 

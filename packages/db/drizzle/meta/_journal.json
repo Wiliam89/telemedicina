@@ -134,6 +134,13 @@
       "when": 1788282942001,
       "tag": "0018_consentimento_na_fila",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791224752694,
+      "tag": "0019_sala_de_video",
+      "breakpoints": true
     }
   ]
 }
