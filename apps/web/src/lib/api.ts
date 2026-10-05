@@ -35,10 +35,30 @@ export async function chamarApi<T>(
     const json = (await r.json()) as Resposta<T>;
     return { status: r.status, ...json };
   } catch {
+    /**
+     * Cair aqui NAO quer dizer, necessariamente, que a API esta fora do ar.
+     * O `fetch` lanca do mesmo jeito em tres casos bem diferentes, e a
+     * primeira versao desta mensagem dizia sempre "rode pnpm dev" - o que
+     * manda a pessoa procurar no lugar errado quando a plataforma esta
+     * publicada. Por isso a mensagem agora depende de onde estamos.
+     *
+     *   1. a API realmente nao esta no ar (tipico em desenvolvimento);
+     *   2. o navegador BLOQUEOU a resposta por CORS - a API respondeu, mas
+     *      sem autorizar este endereco (ORIGEM_PERMITIDA errada no servidor);
+     *   3. a resposta demorou mais que o tempo limite acima - comum quando a
+     *      API esta hospedada em plano gratuito e "dorme" por inatividade:
+     *      a primeira chamada depois de um tempo parado leva quase um minuto.
+     */
+    const local = ambiente.apiUrl.includes("localhost") || ambiente.apiUrl.includes("127.0.0.1");
     return {
       status: 0,
       ok: false,
-      erro: { codigo: "API_FORA_DO_AR", mensagem: `A API em ${ambiente.apiUrl} nao respondeu. Ela esta rodando? (pnpm dev)` },
+      erro: {
+        codigo: "API_FORA_DO_AR",
+        mensagem: local
+          ? `A API em ${ambiente.apiUrl} nao respondeu. Ela esta rodando? (pnpm dev)`
+          : `Nao foi possivel falar com a API em ${ambiente.apiUrl}. Se ela estiver no ar, as causas mais comuns sao o endereco deste site nao estar em ORIGEM_PERMITIDA no servidor da API, ou a API ter demorado a acordar depois de um tempo parada - neste caso, tente de novo em alguns segundos.`,
+      },
     };
   }
 }
