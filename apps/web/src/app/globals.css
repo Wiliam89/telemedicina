@@ -56,6 +56,41 @@ html {
   transform: rotate(-2deg);
 }
 
+/*
+ * ANIMACAO DA TELA DE ENTRADA
+ *
+ * O estado FINAL e o padrao (visivel, no lugar); a animacao parte do
+ * estado inicial com `backwards`. Isso importa: a regra de
+ * prefers-reduced-motion la embaixo desliga as animacoes, e se o padrao
+ * fosse "invisivel" o texto sumiria para quem reduz movimento.
+ *
+ * O ritmo imita o carimbo sendo pressionado: as palavras assentam de
+ * baixo para cima e a linha e tracada da esquerda para a direita.
+ */
+@keyframes surgir {
+  from {
+    opacity: 0;
+    transform: translateY(0.5em);
+  }
+}
+
+@keyframes tracar {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.surge {
+  animation: surgir 0.8s cubic-bezier(0.22, 0.7, 0.3, 1) backwards;
+  animation-delay: var(--atraso, 0s);
+}
+
+.traca {
+  transform-origin: left;
+  animation: tracar 0.9s cubic-bezier(0.22, 0.7, 0.3, 1) backwards;
+  animation-delay: var(--atraso, 0s);
+}
+
 /* Respeita quem configurou o sistema para reduzir animacoes. */
 @media (prefers-reduced-motion: reduce) {
   * {

@@ -4,14 +4,44 @@
  * existem? Usado por `pnpm db:verificar-tabelas`, pelo `pnpm verificar`
  * ([6/6]) e pela rota GET /saude da API (quarta luz do painel).
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Sql } from "postgres";
 
 /** As tabelas que a migracao 0000 cria. Se mudar o schema, atualize aqui. */
 export const TABELAS_ESPERADAS = ["clinicas", "perfis", "vinculos", "convites", "medicos", "pacientes", "disponibilidades", "bloqueios", "consultas", "plantoes", "precos", "pagamentos", "fila_atendimento", "evolucoes", "documentos", "auditoria"] as const;
 
-export const PASTA_MIGRACOES = resolve(import.meta.dirname, "../drizzle");
+/**
+ * Onde fica a pasta das migracoes.
+ *
+ * Em desenvolvimento e sempre `packages/db/drizzle`, ao lado deste
+ * arquivo. Mas a API vai EMPACOTADA para o servidor (tsup junta tudo em
+ * apps/api/dist/servidor.js), e ali o "ao lado deste arquivo" aponta para
+ * outro lugar - foi por isso que o /saude da API publicada mostrava
+ * `migracoesEsperadas: 0`, como se nao houvesse migracao nenhuma.
+ *
+ * Por isso procuramos em mais de um lugar e ficamos com o primeiro que
+ * tiver o journal do Drizzle dentro.
+ */
+const CANDIDATOS_DE_PASTA = [
+  // desenvolvimento: packages/db/src -> packages/db/drizzle
+  resolve(import.meta.dirname, "../drizzle"),
+  // empacotado: a raiz do repositorio e o diretorio de trabalho
+  resolve(process.cwd(), "packages/db/drizzle"),
+  // empacotado em apps/api/dist, subindo ate a raiz
+  resolve(import.meta.dirname, "../../../packages/db/drizzle"),
+];
+
+function acharPastaDeMigracoes(): string {
+  for (const caminho of CANDIDATOS_DE_PASTA) {
+    if (existsSync(resolve(caminho, "meta/_journal.json"))) return caminho;
+  }
+  // Nenhum serviu: devolve o primeiro, para a mensagem de erro citar o
+  // caminho que a pessoa espera ver.
+  return CANDIDATOS_DE_PASTA[0]!;
+}
+
+export const PASTA_MIGRACOES = acharPastaDeMigracoes();
 
 export interface EstadoBanco {
   tabelasEncontradas: string[];

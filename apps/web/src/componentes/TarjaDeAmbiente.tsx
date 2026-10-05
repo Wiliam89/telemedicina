@@ -12,12 +12,12 @@ export function TarjaDeAmbiente() {
   const ambiente = process.env.NEXT_PUBLIC_AMBIENTE ?? "desenvolvimento";
   if (ambiente === "producao") return null;
 
-  const rotulo = ambiente === "homologacao" ? "Ambiente de demonstracao" : "Ambiente de desenvolvimento";
+  const rotulo = ambiente === "homologacao" ? "Ambiente de demonstração" : "Ambiente de desenvolvimento";
 
   return (
     <div role="status" className="bg-alerta px-4 py-2 text-center text-sm text-white">
-      <strong>{rotulo}.</strong> Os documentos emitidos aqui <strong>nao tem valor legal</strong> e nao devem ser usados
-      em farmacia ou apresentados como atestado. Nao cadastre dados de paciente real.
+      <strong>{rotulo}.</strong> Os documentos emitidos aqui <strong>não têm valor legal</strong> e não devem ser usados
+      em farmácia ou apresentados como atestado. Não cadastre dados de paciente real.
     </div>
   );
 }
