@@ -36,7 +36,7 @@ export default async function PaginaProntoAtendimento({ params }: { params: Prom
       <div className="space-y-1">
         <h1 className="text-2xl text-tinta sm:text-[1.75rem]">Pronto atendimento</h1>
         <p className="text-tinta-suave">
-          Sem agendamento: você entra na fila e e atendido pelo próximo profissional disponível.
+          Sem agendamento: você entra na fila e é atendido pelo próximo profissional disponível.
         </p>
       </div>
 

@@ -64,7 +64,7 @@ export default async function PaginaDaConsulta({
 
       {consulta.status === "aguardando_pagamento" ? (
         <Aviso tipo="info">
-          Esta consulta ainda esta aguardando o pagamento. A sala abre depois que o pagamento for confirmado.{" "}
+          Esta consulta ainda está aguardando o pagamento. A sala abre depois que o pagamento for confirmado.{" "}
           <Link href={`/c/${slug}/pagamento/${consultaId}`} className="underline">
             Pagar agora
           </Link>
@@ -88,9 +88,9 @@ export default async function PaginaDaConsulta({
           <section className="space-y-2 border-t border-linha pt-6 text-sm text-tinta-suave">
             <h2 className="font-medium text-tinta">Antes de entrar</h2>
             <ul className="list-inside list-disc space-y-1">
-              <li>O navegador vai pedir permissao para usar a câmera e o microfone. Precisa autorizar as duas.</li>
+              <li>O navegador vai pedir permissão para usar a câmera e o microfone. Precisa autorizar as duas.</li>
               <li>Prefira fones de ouvido: sem eles, o som do médico volta pelo seu microfone e vira eco.</li>
-              <li>Escolha um lugar fechado. A consulta e sua, e o que for falado ali e sobre a sua saúde.</li>
+              <li>Escolha um lugar fechado. A consulta é sua, e o que for falado ali é sobre a sua saúde.</li>
               <li>Esta chamada não é gravada.</li>
             </ul>
           </section>

@@ -114,7 +114,7 @@ export default async function PaginaDiagnostico({ params }: { params: Promise<{ 
           detalhe={
             api.estado === "ok"
               ? api.dados.supabase === "conectado"
-                ? "A chave secreta em apps/api/.env esta correta."
+                ? "A chave secreta em apps/api/.env está correta."
                 : "A API subiu, mas SUPABASE_URL ou SUPABASE_SECRET_KEY em apps/api/.env estao errados."
               : "Depende da API estar no ar."
           }

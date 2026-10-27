@@ -70,8 +70,8 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
 
   const emergencia = (
     <div role="alert" className="rounded-lg border-2 border-alerta bg-alerta-suave px-4 py-3 text-sm text-alerta">
-      <strong>Não use este servico em emergência.</strong> Dor no peito, falta de ar intensa, desmaio, sangramento que
-      nao para ou sinais de AVC: ligue <strong>192</strong> (SAMU) ou vá ao pronto-socorro mais próximo agora.
+      <strong>Não use este serviço em emergência.</strong> Dor no peito, falta de ar intensa, desmaio, sangramento que
+      não para ou sinais de AVC: ligue <strong>192</strong> (SAMU) ou vá ao pronto-socorro mais próximo agora.
     </div>
   );
 

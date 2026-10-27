@@ -125,7 +125,7 @@ export function EditorDePrecos({
       </div>
       <p className="text-sm text-tinta-suave">
         O valor de um profissional especifico tem preferencia sobre o valor padrao. Consultas já marcadas não mudam de
-        preço: o valor e congelado no momento da cobrança.
+        preço: o valor é congelado no momento da cobrança.
       </p>
     </div>
   );

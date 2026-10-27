@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Manual de uso e de testes - TeleSaúde</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  :root { --selo: #0b7f7a; --selo-suave: #e3f3f2; --marinho: #0c2a43; --tinta: #0f172a; --suave: #5b6779; --linha: #e3e8ef; --alerta: #c0262d; --espera: #a35a00; --espera-suave: #fff4e0; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", system-ui, Arial, sans-serif; color: var(--tinta); font-size: 10.5pt; line-height: 1.55; margin: 0; }
+  h1, h2, h3 { color: var(--marinho); line-height: 1.25; margin: 0; }
+  h1 { font-size: 22pt; margin-bottom: 4mm; }
+  h2 { font-size: 15pt; margin: 7mm 0 3mm; padding-bottom: 1.5mm; border-bottom: 2px solid var(--selo); }
+  h2, h3 { break-after: avoid; page-break-after: avoid; }
+  table, .passos, ul { break-inside: auto; }
+  tr { break-inside: avoid; }
+  h3 { font-size: 12pt; margin: 5mm 0 2mm; color: var(--selo); }
+  p { margin: 0 0 2.5mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 6mm; }
+  li { margin-bottom: 1mm; }
+  code, .mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 9.5pt; background: #f1f5f9; padding: 0 1.2mm; border-radius: 1mm; }
+  pre { font-family: Consolas, monospace; font-size: 9.5pt; background: var(--marinho); color: #e2f1f0; padding: 3mm 4mm; border-radius: 2mm; white-space: pre-wrap; margin: 0 0 3mm; }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 9.5pt; page-break-inside: avoid; }
+  th { background: var(--selo-suave); color: var(--marinho); text-align: left; }
+  th, td { border: 1px solid var(--linha); padding: 1.8mm 2.5mm; vertical-align: top; }
+  .quebra { page-break-before: always; }
+  .capa { height: 255mm; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(160deg, var(--marinho), #123d5e 70%, var(--selo)); color: #fff; padding: 22mm 18mm; border-radius: 4mm; }
+  .capa h1 { color: #fff; font-size: 34pt; margin: 0; }
+  .capa .marca { display: flex; align-items: center; gap: 4mm; font-size: 16pt; font-weight: 700; }
+  .capa .simbolo { width: 14mm; height: 14mm; border-radius: 4mm; background: var(--selo); display: grid; place-items: center; font-size: 13pt; }
+  .capa p { color: #cfe7ea; font-size: 12pt; }
+  .capa .rodape { font-size: 10pt; color: #b8d4da; }
+  .aviso { border-left: 4px solid var(--espera); background: var(--espera-suave); padding: 3mm 4mm; border-radius: 1.5mm; margin: 0 0 4mm; page-break-inside: avoid; }
+  .dica { border-left: 4px solid var(--selo); background: var(--selo-suave); padding: 3mm 4mm; border-radius: 1.5mm; margin: 0 0 4mm; page-break-inside: avoid; }
+  .perigo { border-left: 4px solid var(--alerta); background: #fdecec; padding: 3mm 4mm; border-radius: 1.5mm; margin: 0 0 4mm; page-break-inside: avoid; }
+  figure { margin: 2mm 0 5mm; page-break-inside: avoid; text-align: center; }
+  figure img { max-width: 150mm; border: 1px solid var(--linha); border-radius: 2mm; box-shadow: 0 1mm 3mm rgba(15,23,42,.08); }
+  figure.celular img { max-width: 92mm; }
+  figure.duas { display: flex; gap: 4mm; justify-content: center; align-items: flex-start; }
+  figure.duas img { max-width: 74mm; }
+  figcaption { font-size: 8.5pt; color: var(--suave); margin-top: 1.5mm; }
+  /* Fotos com margem vazia: mostra so a parte da tela (canto superior esquerdo). */
+  .recorte { display: block; position: relative; overflow: hidden; margin: 0 auto; border: 1px solid var(--linha); border-radius: 2mm; width: 150mm; max-width: 100%; aspect-ratio: 440 / 343; box-shadow: 0 1mm 3mm rgba(15,23,42,.08); }
+  .recorte img { position: absolute; top: 0; left: 0; width: 181.8%; max-width: none; border: 0; border-radius: 0; box-shadow: none; }
+  .sumario { columns: 2; column-gap: 10mm; font-size: 10pt; }
+  .sumario li { break-inside: avoid; }
+  .passos { counter-reset: p; list-style: none; padding-left: 0; }
+  .passos { break-inside: avoid; }
+  .passos > li { counter-increment: p; position: relative; padding-left: 9mm; margin-bottom: 2.2mm; }
+  .passos > li::before { content: counter(p); position: absolute; left: 0; top: 0; width: 6mm; height: 6mm; border-radius: 50%; background: var(--marinho); color: #fff; font-size: 8.5pt; font-weight: 700; display: grid; place-items: center; }
+  .check td:first-child { width: 7mm; text-align: center; color: var(--suave); }
+  .etiqueta { display: inline-block; border-radius: 10mm; padding: 0 2.5mm; font-size: 8.5pt; font-weight: 600; background: var(--selo-suave); color: var(--selo); }
+</style>
+</head>
+<body>
+
+<!-- ============================== CAPA ============================== -->
+<section class="capa">
+  <div class="marca"><span class="simbolo">✚</span> TeleSaúde</div>
+  <div>
+    <h1>Manual de uso<br>e de testes</h1>
+    <p style="margin-top:6mm">Plataforma de telemedicina para clínicas e médicos: agenda, teleconsulta, prontuário eletrônico, documentos com assinatura digital ICP-Brasil, pagamento e conformidade com a LGPD.</p>
+    <p>Para quem vai usar, testar, implantar e publicar a plataforma.</p>
+  </div>
+  <div class="rodape">Versão 1.0 · outubro de 2026 · branch <span class="mono" style="background:rgba(255,255,255,.12);color:#fff">evolucao-plataforma</span><br>Nome da plataforma configurável (NEXT_PUBLIC_NOME_PLATAFORMA).</div>
+</section>
+
+<!-- ============================== SUMARIO ============================== -->
+<section class="quebra">
+  <h1>Sumário</h1>
+  <ol class="sumario">
+    <li>Visão geral e papéis</li>
+    <li>Preparar o ambiente de testes</li>
+    <li>Primeiro acesso: capa, cadastro e login</li>
+    <li>Paciente</li>
+    <li>Médico</li>
+    <li>Recepção</li>
+    <li>Administração da clínica</li>
+    <li>Validação pública de documentos</li>
+    <li>Privacidade e LGPD na prática</li>
+    <li>Roteiro de testes (checklist)</li>
+    <li>Testes automáticos</li>
+    <li>Configuração para produção</li>
+    <li>Publicar (Vercel + Render + Supabase)</li>
+    <li>Solução de problemas</li>
+    <li>Referência rápida de comandos</li>
+  </ol>
+
+  <h2>1. Visão geral e papéis</h2>
+  <p>A plataforma atende <strong>várias clínicas na mesma instalação</strong>, cada uma isolada das outras (agenda, equipe e prontuários não se misturam; o isolamento é garantido pelo próprio banco de dados). Uma mesma pessoa pode ter papéis diferentes em clínicas diferentes, e até mais de um papel na mesma clínica (por exemplo, a médica dona do consultório é <em>médica</em> e <em>administração</em>).</p>
+  <table>
+    <tr><th style="width:24%">Papel</th><th>O que faz</th><th style="width:30%">O que NÃO vê</th></tr>
+    <tr><td><strong>Paciente</strong></td><td>Marca consulta, paga, entra no pronto atendimento, faz a teleconsulta, vê o próprio prontuário (Minha saúde), envia exames, baixa documentos, exerce direitos da LGPD.</td><td>Dados de outros pacientes.</td></tr>
+    <tr><td><strong>Médico(a)</strong></td><td>Define horários, atende por vídeo, escreve o prontuário (SOAP), mantém a ficha clínica e sinais vitais, emite e assina receitas, atestados e pedidos de exame, faz plantão.</td><td>Prontuário de quem nunca atendeu na clínica.</td></tr>
+    <tr><td><strong>Recepção</strong></td><td>Marca consultas para pacientes, acompanha a agenda da clínica e a fila.</td><td>Prontuário e dados clínicos (LGPD, art. 6º, III).</td></tr>
+    <tr><td><strong>Administração</strong></td><td>Abre a clínica, convida a equipe, <strong>verifica o CRM</strong> dos médicos, define valores, vê indicadores e responde pedidos LGPD.</td><td>Prontuário e dados clínicos.</td></tr>
+  </table>
+  <div class="dica"><strong>Conformidade embutida:</strong> dados no Brasil (São Paulo), Resolução CFM 2.314/2022 (telemedicina), prontuário imutável com adendo (CFM 1.821/2007), guarda de 20 anos (Lei 13.787/2018), trilha de auditoria que não pode ser apagada, consentimento versionado e área do titular (LGPD).</div>
+</section>
+
+<!-- ============================== AMBIENTE ============================== -->
+<section class="quebra">
+  <h2>2. Preparar o ambiente de testes</h2>
+  <p>Pré-requisitos: Node.js 22+, pnpm 10 (<span class="mono">npm install -g pnpm@10.15.0</span>) e os arquivos <span class="mono">apps/api/.env</span> e <span class="mono">apps/web/.env.local</span> preenchidos (cada linha do <span class="mono">.env.example</span> explica onde pegar o valor).</p>
+  <ol class="passos">
+    <li>Na pasta do projeto, instale as dependências: <span class="mono">pnpm install</span></li>
+    <li>Confira a configuração: <span class="mono">pnpm verificar</span> (aponta o que falta).</li>
+    <li>Crie ou atualize as tabelas do banco: <span class="mono">pnpm db:migrar</span></li>
+    <li>Suba o site e a API: <span class="mono">pnpm dev</span> → site em <span class="mono">http://localhost:3000</span>, API em <span class="mono">http://localhost:3333/saude</span></li>
+    <li>Em outro terminal, crie a clínica de demonstração: <span class="mono">pnpm demo:criar</span></li>
+  </ol>
+  <h3>A clínica de demonstração</h3>
+  <p>O comando <span class="mono">pnpm demo:criar</span> monta a <strong>Clínica Demonstração</strong> passando pelas mesmas regras de um uso real (convites, conferência de CRM, abertura da clínica, marcação de consultas, prontuário e receita). Pode ser rodado de novo sem duplicar nada.</p>
+  <table>
+    <tr><th>Papel</th><th>Nome</th><th>E-mail</th></tr>
+    <tr><td>Administração</td><td>Ana Paula Souza</td><td class="mono">demo.admin@exemplo.com</td></tr>
+    <tr><td>Médico</td><td>Carlos Eduardo Mendes (CRM 123456-SP)</td><td class="mono">demo.medico@exemplo.com</td></tr>
+    <tr><td>Recepção</td><td>Juliana Lima Rocha</td><td class="mono">demo.recepcao@exemplo.com</td></tr>
+    <tr><td>Paciente</td><td>Maria Fernanda Oliveira (com 6 meses de sinais vitais e ficha)</td><td class="mono">demo.paciente@exemplo.com</td></tr>
+    <tr><td>Paciente</td><td>João Pedro Almeida</td><td class="mono">demo.paciente2@exemplo.com</td></tr>
+  </table>
+  <div class="aviso"><strong>A senha</strong> (a mesma para todos) fica no arquivo <span class="mono">demo-acessos.local.md</span>, na pasta principal do projeto, que <strong>não vai para o Git</strong>. Rodar o comando de novo mantém a senha; para gerar outra, apague o arquivo e rode de novo. Para testar vários papéis ao mesmo tempo, use uma janela anônima ou outro navegador para cada pessoa.</div>
+  <div class="perigo"><strong>Nunca</strong> rode a demonstração num banco com paciente real. O comando se recusa a rodar com <span class="mono">NODE_ENV=production</span>, e a tarja amarela no topo de todas as telas lembra que o ambiente não tem valor legal.</div>
+</section>
+
+<!-- ============================== ACESSO ============================== -->
+<section class="quebra">
+  <h2>3. Primeiro acesso: capa, cadastro e login</h2>
+  <p>Quem abre o endereço da plataforma sem estar conectado vê primeiro a <strong>capa</strong>: apresentação, recursos, como funciona e segurança. De lá a pessoa escolhe <strong>Começar agora</strong> (cadastro), <strong>Já tenho conta</strong> (login) ou <strong>Validar documento</strong>. Quem já está conectado vai direto para as suas clínicas.</p>
+  <figure><img src="imagens/01-capa.jpg" alt="Capa"><figcaption>Capa da plataforma (tela de entrada).</figcaption></figure>
+  <h3>Criar conta</h3>
+  <ol class="passos">
+    <li>Em <strong>Criar conta</strong>, informe e-mail e senha (mínimo de 8 caracteres, com letras e números).</li>
+    <li>Na tela <strong>Seus dados</strong>, preencha nome, data de nascimento, telefone e CPF. Médico marca <em>“Sou médico(a)”</em> e informa CRM, UF e especialidade.</li>
+    <li>Marque os três aceites: Termos de uso, Política de privacidade e Consentimento para telemedicina. Nenhum vem marcado e cada aceite é registrado com a versão do texto, data e IP.</li>
+    <li>Pronto: a pessoa entra numa clínica pelo link que a clínica divulga, por convite, ou abre a própria clínica.</li>
+  </ol>
+  <figure><span class="recorte" style="width:110mm"><img src="imagens/03-aceitar-termos.jpg" alt="Aceite dos termos"></span><figcaption>Tela de aceite: aparece no cadastro e sempre que os termos mudam de versão.</figcaption></figure>
+</section>
+
+<!-- ============================== PACIENTE ============================== -->
+<section>
+  <h2 style="margin-top:4mm">4. Paciente</h2>
+  <p>As telas do paciente funcionam no celular e no computador. As imagens abaixo estão no formato de celular.</p>
+  <figure class="duas"><img src="imagens/10-paciente-painel.jpg" alt="Painel"><img src="imagens/11-paciente-marcar.jpg" alt="Marcar"></figure>
+  <figure style="margin-top:-3mm"><figcaption>Painel do paciente e marcação de consulta.</figcaption></figure>
+  <h3>4.1 Entrar numa clínica</h3>
+  <p>A clínica divulga um link do tipo <span class="mono">/entrar-na-clinica/clinica-demo</span> (site, QR Code, WhatsApp). O paciente cria a conta (ou entra) e passa a ser paciente daquela clínica.</p>
+  <h3>4.2 Marcar consulta</h3>
+  <ol class="passos">
+    <li>No menu, <strong>Marcar consulta</strong>. Escolha o médico (só aparecem médicos com CRM verificado), o dia e o horário livre.</li>
+    <li>Escreva em uma linha o motivo (opcional) e confirme.</li>
+    <li>Se a clínica cobra pela consulta, o horário fica <strong>reservado</strong> e a tela de pagamento abre (Pix com QR Code e copia e cola, ou cartão). Sem pagamento no prazo, a reserva expira.</li>
+    <li>Paciente e médico recebem um aviso (no sino e por e-mail, se configurado) e lembretes 24 h e 1 h antes.</li>
+  </ol>
+  <h3>4.3 Teleconsulta</h3>
+  <p>Na <strong>Agenda</strong>, o botão <strong>Entrar na consulta</strong> aparece perto do horário. O navegador pede câmera e microfone. A sala é exclusiva dos dois e <strong>não é gravada</strong>.</p>
+  <div class="aviso">Sem uma conta de vídeo configurada (<span class="mono">VIDEO_PROVEDOR=local_teste</span>), a sala abre e mostra um aviso no lugar da imagem; todo o resto do fluxo funciona. Para vídeo real, veja a seção 12.</div>
+  <h3>4.4 Pronto atendimento</h3>
+  <p>Sem agendamento: o paciente descreve o que sente, aceita o termo, paga (se houver valor) e entra na fila. A tela mostra a posição e a estimativa de espera, e leva o paciente para a sala quando um médico de plantão o chama. Há um alerta claro para emergências (SAMU 192).</p>
+</section>
+
+<section>
+  <figure class="duas"><img src="imagens/12-paciente-pronto-atendimento.jpg" alt="Pronto atendimento"><img src="imagens/13-paciente-minha-saude.jpg" alt="Minha saúde"></figure>
+  <figure style="margin-top:-3mm"><figcaption>Pronto atendimento e “Minha saúde” (com o alerta de alergia).</figcaption></figure>
+  <h3>4.5 Minha saúde (o próprio prontuário)</h3>
+  <ul>
+    <li><strong>Resumo:</strong> ficha clínica (alergias, remédios em uso, doenças, antecedentes, hábitos, tipo sanguíneo) e os últimos sinais vitais.</li>
+    <li><strong>Linha do tempo:</strong> consultas, evoluções, documentos, medidas e exames, do mais recente ao mais antigo.</li>
+    <li><strong>Sinais vitais:</strong> gráficos de pressão, peso, glicemia e frequência cardíaca. O paciente pode <strong>registrar medidas feitas em casa</strong>, que ficam marcadas como “informado pelo paciente”.</li>
+    <li><strong>Exames e anexos:</strong> envio de resultados em PDF, JPG, PNG ou WEBP (até 15 MB). Arquivos disfarçados (um executável renomeado para .pdf) são recusados.</li>
+  </ul>
+  <figure class="duas"><img src="imagens/14-paciente-sinais.jpg" alt="Sinais vitais"><img src="imagens/15-paciente-exames.jpg" alt="Exames"></figure>
+  <figure style="margin-top:-3mm"><figcaption>Gráficos de evolução e envio de exames.</figcaption></figure>
+</section>
+
+<section>
+  <h3>4.6 Documentos</h3>
+  <p>Receitas, atestados e pedidos de exame aparecem em <strong>Documentos</strong>. Depois que o médico assina, o paciente baixa o PDF assinado. Cada documento tem um <strong>código de validação</strong> que a farmácia confere em <span class="mono">/validar</span>.</p>
+  <figure class="duas"><img src="imagens/16-paciente-documentos.jpg" alt="Documentos"><img src="imagens/17-conta.jpg" alt="Minha conta"></figure>
+  <figure style="margin-top:-3mm"><figcaption>Documentos do paciente e “Minha conta e privacidade”.</figcaption></figure>
+  <h3>4.7 Minha conta e privacidade</h3>
+  <p>Pelo link <strong>Minha conta</strong> (no menu ou no topo), qualquer pessoa: corrige nome e telefone; <strong>baixa uma cópia de todos os seus dados</strong> (JSON); vê <strong>quem acessou</strong> seu prontuário e quando; vê e revoga consentimentos; e faz pedidos ao encarregado de dados, com prazo de 15 dias. Detalhes na seção 9.</p>
+</section>
+
+<!-- ============================== MEDICO ============================== -->
+<section class="quebra">
+  <h2>5. Médico</h2>
+  <div class="aviso"><strong>CRM pendente:</strong> até a administração da clínica conferir o CRM no Conselho, um aviso aparece no topo e o médico <strong>não emite documentos, não abre plantão e não recebe marcações</strong>. Consultas já marcadas continuam.</div>
+  <h3>5.1 Meus horários</h3>
+  <p>Em <strong>Meus horários</strong>, monte a semana: dia, início, fim e duração da consulta. Os horários livres que o paciente vê são calculados a partir daqui, menos o que já está marcado e os bloqueios.</p>
+  <h3>5.2 Agenda</h3>
+  <figure><img src="imagens/20-medico-agenda.jpg" alt="Agenda do médico"><figcaption>Agenda do médico: Iniciar, Atender, Cancelar e acesso ao prontuário das consultas concluídas.</figcaption></figure>
+  <h3>5.3 Atendimento</h3>
+  <ol class="passos">
+    <li>Clique em <strong>Atender</strong>. No topo ficam <strong>alergias</strong>, <strong>remédios em uso</strong> e <strong>últimos sinais vitais</strong>, e o médico pode atualizar a ficha e registrar os sinais da consulta ali mesmo.</li>
+    <li>Entre na sala de vídeo pelo painel “Atendimento por vídeo”.</li>
+    <li>Escreva a evolução no formato <strong>SOAP</strong> (Subjetivo, Objetivo, Avaliação, Plano) e o CID-10. O rascunho é salvo; ao <strong>Finalizar</strong>, a evolução fica imutável. Correções depois disso são feitas por <strong>adendo</strong>, e o texto original permanece.</li>
+    <li>Emita os documentos (receita simples ou de controle especial, atestado, pedido de exame, relatório, declaração de comparecimento).</li>
+    <li>Conclua a consulta.</li>
+  </ol>
+  <figure><img src="imagens/21-medico-atendimento.jpg" alt="Atendimento"><figcaption>Tela de atendimento: prontuário à esquerda, vídeo e documentos à direita.</figcaption></figure>
+</section>
+
+<section>
+  <h3>5.4 Assinatura digital dos documentos</h3>
+  <p>Em <strong>Documentos</strong>, cada documento emitido mostra dois caminhos:</p>
+  <table>
+    <tr><th style="width:30%">Caminho</th><th>Como funciona</th></tr>
+    <tr><td><strong>Assinar com certificado em nuvem</strong></td><td>CPF do titular + código de 6 dígitos do aplicativo do certificado (integração BirdID). A plataforma envia ao provedor só o resumo criptográfico do documento. No ambiente de testes, o código é <span class="mono">000000</span>.</td></tr>
+    <tr><td><strong>Assinar fora da plataforma</strong></td><td>1) Baixe o PDF; 2) assine no programa que você já usa (VIDaaS, BirdID, SafeID, Assinador do ITI, leitor de PDF com token A3), <strong>sem editar</strong>; 3) envie o PDF assinado. A plataforma confere que a assinatura é válida, que nada foi acrescentado depois, que o arquivo é <strong>este</strong> documento e que o certificado é <strong>do médico</strong>. Se algo não confere, recusa e explica o motivo.</td></tr>
+  </table>
+  <div class="dica">Receita de controle especial exige assinatura qualificada ICP-Brasil (Lei 14.063/2020). Use certificado ICP, não a assinatura do gov.br, para esse tipo.</div>
+  <h3>5.5 Prontuário completo do paciente</h3>
+  <p>Em <strong>Pacientes</strong> (filtro “Meus pacientes” ou “Todos da clínica”) ou pelo botão <strong>Prontuário completo</strong> do atendimento: cabeçalho com idade, CPF mascarado, contato e alerta de alergia, e as abas Resumo, Linha do tempo, Evoluções, Sinais vitais e Exames. A ficha clínica “muda” ganhando uma <strong>versão nova</strong>; a anterior fica guardada. Toda leitura fica registrada na auditoria e aparece para o paciente.</p>
+  <figure><span class="recorte"><img src="imagens/23-medico-prontuario.jpg" alt="Prontuário"></span><figcaption>Prontuário: identificação, alerta de alergia e abas.</figcaption></figure>
+</section>
+
+<section>
+  <figure><span class="recorte"><img src="imagens/24-medico-graficos.jpg" alt="Gráficos"></span><figcaption>Sinais vitais: um gráfico por medida, com o valor exato ao passar o mouse e a tabela completa abaixo.</figcaption></figure>
+  <h3>5.6 Plantão e fila</h3>
+  <p>Em <strong>Plantão e fila</strong>: <strong>Entrar de plantão agora (6 horas)</strong>, depois <strong>Chamar o próximo</strong>. A fila respeita a prioridade e a ordem de chegada, e dois médicos nunca chamam o mesmo paciente. Encerrar o plantão é recusado se houver atendimento em curso.</p>
+  <figure><img src="imagens/26-medico-plantao.jpg" alt="Plantão"><figcaption>Plantão: escala e fila da clínica.</figcaption></figure>
+  <h3>5.7 Notificações</h3>
+  <p>O <strong>sino</strong> (no topo do menu ou do celular) mostra consultas marcadas e canceladas, lembretes, documentos assinados, CRM verificado e respostas a pedidos LGPD. Clicar leva ao lugar certo e marca como lida.</p>
+</section>
+
+<!-- ============================== RECEPCAO ============================== -->
+<section class="quebra">
+  <h2>6. Recepção</h2>
+  <ul>
+    <li><strong>Marcar para um paciente:</strong> em Marcar consulta, a recepção escolhe o paciente, o médico e o horário.</li>
+    <li><strong>Agenda da clínica:</strong> vê todas as consultas, com o médico de cada uma, e pode cancelar com motivo (fica na auditoria).</li>
+    <li><strong>Pacientes:</strong> busca por nome ou CPF e vê o cadastro (idade, telefone, última e próxima consulta). O prontuário aparece como <strong>“Dados clínicos protegidos”</strong>: a recepção não lê dado clínico.</li>
+    <li><strong>Plantão e fila:</strong> acompanha a escala e a fila.</li>
+  </ul>
+
+  <!-- ============================== ADMIN ============================== -->
+  <h2>7. Administração da clínica</h2>
+  <h3>7.1 Abrir a clínica</h3>
+  <ol class="passos">
+    <li>Em <strong>Minhas clínicas → Criar clínica</strong>: nome, razão social, CNPJ (validado) e o endereço da clínica no sistema (ex.: <span class="mono">clinica-vida</span>). Quem cria administra; se tiver CRM, também passa a atender como médico.</li>
+    <li>A clínica nasce <strong>em implantação</strong>: a equipe prepara tudo sem paciente entrar. Em <strong>Equipe → Situação da clínica</strong>, clique em <strong>Abrir clínica</strong> e copie o <strong>link de entrada do paciente</strong>.</li>
+    <li>Em <strong>Convidar</strong>, gere convites para médicos, recepção e outros administradores. O link vale 7 dias e só aparece uma vez.</li>
+  </ol>
+  <figure><span class="recorte"><img src="imagens/30-admin-equipe.jpg" alt="Equipe"></span><figcaption>Equipe e clínica: situação, link de entrada e verificação de CRM.</figcaption></figure>
+</section>
+
+<section>
+  <h3>7.2 Verificar o CRM dos médicos</h3>
+  <ol class="passos">
+    <li>Em <strong>Equipe → Verificação de CRM</strong>, clique em <strong>Verificar CRM</strong>.</li>
+    <li>Abra a busca oficial do CFM pelo link do painel (<span class="mono">portal.cfm.org.br/busca-medicos</span>) e pesquise o CRM e a UF.</li>
+    <li>Confira se o <strong>nome</strong> é o do cadastro e se a <strong>situação</strong> é <strong>Ativo</strong>. Registre o que viu. Situação diferente de Ativo não pode ser verificada; recusa exige motivo.</li>
+    <li>A verificação vale 12 meses e fica no histórico com quem conferiu e quando. O médico recebe um aviso.</li>
+  </ol>
+  <figure><span class="recorte"><img src="imagens/31-admin-crm.jpg" alt="Verificar CRM"></span><figcaption>Painel de verificação de CRM, com o passo a passo e o link para o CFM.</figcaption></figure>
+  <h3>7.3 Valores, indicadores e pedidos LGPD</h3>
+  <ul>
+    <li><strong>Valores:</strong> preço da consulta agendada e do pronto atendimento. Sem valor, a consulta não é cobrada.</li>
+    <li><strong>Indicadores (7, 30 ou 90 dias):</strong> consultas concluídas, taxa de cancelamento, receita confirmada e líquida, ticket médio, pacientes atendidos e novos, pronto atendimento (espera média) e taxa de assinatura de documentos, com gráfico diário e tabela por médico. Só números, nunca dado clínico.</li>
+    <li><strong>Pedidos LGPD:</strong> pedidos dos pacientes dirigidos à clínica, com prazo de 15 dias e alerta de prazo vencido.</li>
+  </ul>
+</section>
+
+<section>
+  <figure><span class="recorte"><img src="imagens/32-admin-indicadores.jpg" alt="Indicadores"></span><figcaption>Indicadores da clínica.</figcaption></figure>
+
+  <h2>8. Validação pública de documentos</h2>
+  <p>Qualquer pessoa (farmácia, RH, laboratório) abre <span class="mono">/validar</span>, digita o código impresso no rodapé do documento e vê se ele é autêntico: tipo, número, data, médico com CRM, clínica e as <strong>iniciais</strong> do paciente. O conteúdo clínico nunca aparece. Para o PDF assinado em mãos, a página leva ao validador oficial do ITI (<span class="mono">validar.iti.gov.br</span>), que confere a assinatura ICP-Brasil.</p>
+  <figure><img src="imagens/40-validar.jpg" alt="Validar"><figcaption>Página pública de validação.</figcaption></figure>
+</section>
+
+<!-- ============================== LGPD ============================== -->
+<section class="quebra">
+  <h2>9. Privacidade e LGPD na prática</h2>
+  <table>
+    <tr><th style="width:32%">Exigência</th><th>Como a plataforma atende</th></tr>
+    <tr><td>Dado de saúde no Brasil</td><td>Banco, autenticação e arquivos na região São Paulo.</td></tr>
+    <tr><td>Necessidade (art. 6º, III)</td><td>Recepção e administração não leem prontuário; o médico só lê de quem atende na clínica.</td></tr>
+    <tr><td>Consentimento provado (art. 8º)</td><td>Aceite por versão do texto, com data, IP e navegador; revogação registrada; nova versão pede novo aceite.</td></tr>
+    <tr><td>Transparência (art. 9º)</td><td>Política de privacidade (<span class="mono">/privacidade</span>), termos com o termo de telemedicina (<span class="mono">/termos</span>) e “Quem acessou meus dados”.</td></tr>
+    <tr><td>Direitos do titular (art. 18)</td><td>Correção, cópia completa em JSON (acesso e portabilidade), revogação e pedidos com prazo de 15 dias (art. 19).</td></tr>
+    <tr><td>Segurança (art. 46)</td><td>Isolamento por clínica no banco, criptografia, registros imutáveis, auditoria somente inserção, links temporários para arquivos.</td></tr>
+    <tr><td>Encarregado (art. 41)</td><td>Nome e e-mail configuráveis, no rodapé, na política e na área do titular.</td></tr>
+    <tr><td>Cookies</td><td>Só o cookie de sessão (necessário). O aviso informa; não há rastreamento.</td></tr>
+  </table>
+  <div class="aviso">Pedidos de exclusão <strong>não apagam o prontuário</strong>: a Lei 13.787/2018 manda guardá-lo por 20 anos. A clínica responde o que foi excluído ou anonimizado e o que fica guardado por obrigação legal. Os textos de Termos e Política são uma base técnica e <strong>devem passar por revisão jurídica</strong> antes da publicação.</div>
+</section>
+
+<!-- ============================== CHECKLIST ============================== -->
+<section class="quebra">
+  <h2>10. Roteiro de testes (checklist)</h2>
+  <p>Faça na ordem, com a clínica de demonstração. Cada linha diz o que fazer e o que deve acontecer.</p>
+  <h3>A. Acesso e LGPD</h3>
+  <table class="check">
+    <tr><th></th><th>Ação</th><th>Resultado esperado</th></tr>
+    <tr><td>☐</td><td>Abra <span class="mono">localhost:3000</span> desconectado.</td><td>Aparece a capa, não o login.</td></tr>
+    <tr><td>☐</td><td>Crie uma conta nova e tente salvar o perfil sem marcar os aceites.</td><td>Mensagem pedindo os três aceites.</td></tr>
+    <tr><td>☐</td><td>Em Minha conta, clique em “Baixar meus dados”.</td><td>Baixa um arquivo JSON com cadastro e consentimentos.</td></tr>
+    <tr><td>☐</td><td>Revogue o consentimento de telemedicina e entre numa clínica.</td><td>A tela “Antes de continuar” pede o aceite de novo.</td></tr>
+  </table>
+  <h3>B. Paciente (demo.paciente)</h3>
+  <table class="check">
+    <tr><th></th><th>Ação</th><th>Resultado esperado</th></tr>
+    <tr><td>☐</td><td>Marque uma consulta para amanhã.</td><td>Aparece na agenda; o sino mostra “Consulta marcada”.</td></tr>
+    <tr><td>☐</td><td>Minha saúde → Sinais vitais: registre pressão 80 × 120.</td><td>Recusa: “A sistólica precisa ser maior que a diastólica.”</td></tr>
+    <tr><td>☐</td><td>Registre 124 × 80.</td><td>Entra no gráfico e na tabela como “Paciente”.</td></tr>
+    <tr><td>☐</td><td>Exames → envie um PDF de teste.</td><td>Aparece na lista; “Abrir” baixa o arquivo.</td></tr>
+    <tr><td>☐</td><td>Cancele a consulta marcada (com motivo).</td><td>O médico recebe “Consulta cancelada” no sino.</td></tr>
+  </table>
+  <h3>C. Médico (demo.medico)</h3>
+  <table class="check">
+    <tr><th></th><th>Ação</th><th>Resultado esperado</th></tr>
+    <tr><td>☐</td><td>Agenda → Atender a consulta de Maria.</td><td>Mostra alergia (Penicilina), remédios e sinais vitais no topo.</td></tr>
+    <tr><td>☐</td><td>Escreva a evolução SOAP e finalize.</td><td>Fica somente leitura; só é possível registrar adendo.</td></tr>
+    <tr><td>☐</td><td>Emita uma receita e assine na nuvem (CPF do cadastro + código 000000).</td><td>Status “Assinado digitalmente”; a paciente recebe aviso e baixa o PDF.</td></tr>
+    <tr><td>☐</td><td>Emita outra receita, baixe o PDF e envie o mesmo PDF sem assinatura.</td><td>Recusado com explicação.</td></tr>
+    <tr><td>☐</td><td>Pacientes → abra João (sem consulta com você ainda, se for o caso).</td><td>Sem consulta: “Dados clínicos protegidos”.</td></tr>
+    <tr><td>☐</td><td>Plantão: entre de plantão e chame o próximo da fila.</td><td>O paciente da fila é levado à sala.</td></tr>
+  </table>
+</section>
+
+<section>
+  <h3>D. Administração (demo.admin)</h3>
+  <table class="check">
+    <tr><th></th><th>Ação</th><th>Resultado esperado</th></tr>
+    <tr><td>☐</td><td>Equipe → convide um médico com um e-mail novo; aceite o convite com essa conta.</td><td>O médico aparece com CRM “Aguardando verificação” e o aviso no topo das telas dele.</td></tr>
+    <tr><td>☐</td><td>Como o novo médico, tente emitir documento ou abrir plantão.</td><td>Bloqueado: “CRM aguardando verificação”.</td></tr>
+    <tr><td>☐</td><td>Verifique o CRM com situação “Inativo”.</td><td>Recusado: só se verifica CRM ativo.</td></tr>
+    <tr><td>☐</td><td>Verifique com “Ativo”.</td><td>Médico liberado; ele recebe aviso; o paciente passa a vê-lo em Marcar consulta.</td></tr>
+    <tr><td>☐</td><td>Pacientes → abra Maria.</td><td>Só cadastro: “Dados clínicos protegidos”.</td></tr>
+    <tr><td>☐</td><td>Indicadores → troque entre 7, 30 e 90 dias.</td><td>Números e gráfico do período.</td></tr>
+    <tr><td>☐</td><td>Como paciente, faça um pedido LGPD para a clínica; como admin, responda “Concluir” sem texto e depois com texto.</td><td>Sem texto: recusado; com texto: o paciente vê a resposta e recebe aviso.</td></tr>
+  </table>
+  <h3>E. Público</h3>
+  <table class="check">
+    <tr><th></th><th>Ação</th><th>Resultado esperado</th></tr>
+    <tr><td>☐</td><td>Copie o código de um documento e abra <span class="mono">/validar</span> em janela anônima.</td><td>“Documento autêntico”, só com iniciais do paciente.</td></tr>
+    <tr><td>☐</td><td>Digite um código inventado.</td><td>“Documento não confere”.</td></tr>
+    <tr><td>☐</td><td>Abra o site no celular (ou reduza a janela).</td><td>Menu vira gaveta (☰), sem rolagem lateral.</td></tr>
+  </table>
+
+  <h2>11. Testes automáticos</h2>
+  <table>
+    <tr><th style="width:38%">Comando</th><th>O que verifica</th></tr>
+    <tr><td class="mono">pnpm typecheck</td><td>Tipos dos 4 pacotes.</td></tr>
+    <tr><td class="mono">pnpm test</td><td>Testes de unidade (regras de agenda, assinatura, LGPD, CRM, PDF, operação).</td></tr>
+    <tr><td class="mono">pnpm test:banco</td><td>137 testes da API contra o Postgres de verdade: acesso ao prontuário por papel, imutabilidade, CRM, assinatura externa ponta a ponta, LGPD, notificações (inclusive duas instâncias ao mesmo tempo) e indicadores. Criam e apagam os próprios dados.</td></tr>
+    <tr><td class="mono">pnpm db:verificar-rls</td><td>Segurança por linha ligada em todas as tabelas e políticas no lugar.</td></tr>
+  </table>
+  <p>No GitHub, o arquivo <span class="mono">.github/workflows/ci.yml</span> roda tipos, testes e as compilações de produção a cada envio. Os testes de banco rodam se o segredo <span class="mono">DATABASE_URL_TESTE</span> (um projeto Supabase só para testes) estiver configurado.</p>
+</section>
+
+<!-- ============================== PRODUCAO ============================== -->
+<section class="quebra">
+  <h2>12. Configuração para produção</h2>
+  <p>Sem nenhum serviço pago, a plataforma funciona inteira em modo de teste. Para valer de verdade, contrate e configure:</p>
+  <table>
+    <tr><th style="width:22%">Recurso</th><th style="width:28%">Serviço</th><th>Como configurar (API: <span class="mono">apps/api/.env</span>)</th></tr>
+    <tr><td>Videochamada</td><td>Daily (plano gratuito para testar)</td><td><span class="mono">VIDEO_PROVEDOR=daily</span> e <span class="mono">VIDEO_API_KEY</span> (painel do Daily → Developers).</td></tr>
+    <tr><td>Assinatura integrada</td><td>BirdID (homologação, depois produção)</td><td><span class="mono">ASSINATURA_PROVEDOR=birdid</span>, <span class="mono">ASSINATURA_URL</span>, <span class="mono">_CLIENT_ID</span>, <span class="mono">_CLIENT_SECRET</span> e <span class="mono">CHAVE_CRIPTOGRAFIA</span>. A assinatura externa funciona sem contrato.</td></tr>
+    <tr><td>Pagamento</td><td>Mercado Pago (split)</td><td>Ver seção 6 do <span class="mono">.env.example</span> (<span class="mono">URL_PUBLICA_API</span>, <span class="mono">PAGAMENTO_WEBHOOK_SEGREDO</span>).</td></tr>
+    <tr><td>E-mails</td><td>Resend (plano gratuito)</td><td><span class="mono">EMAIL_PROVEDOR=resend</span>, <span class="mono">EMAIL_API_KEY</span>, <span class="mono">EMAIL_REMETENTE</span> com domínio verificado.</td></tr>
+    <tr><td>CRM automático</td><td>Webservice do CFM (pago) ou fornecedor</td><td>Opcional. Sem ele, a conferência manual pela administração já atende.</td></tr>
+  </table>
+  <h3>Identidade e LGPD (site: <span class="mono">apps/web/.env.local</span>)</h3>
+  <p><span class="mono">NEXT_PUBLIC_NOME_PLATAFORMA</span>, <span class="mono">NEXT_PUBLIC_EMPRESA_RAZAO_SOCIAL</span>, <span class="mono">_CNPJ</span>, <span class="mono">_ENDERECO</span>, <span class="mono">NEXT_PUBLIC_ENCARREGADO_NOME</span> e <span class="mono">_EMAIL</span>. Sem eles, os textos legais mostram “[a preencher]”.</p>
+  <h3>Escala</h3>
+  <p>A API não guarda estado e pode rodar em várias cópias. Ajuste <span class="mono">DB_POOL_MAX</span> (conexões por cópia) e use o <strong>Transaction pooler</strong> do Supabase (porta 6543) quando houver várias cópias. Use <span class="mono">/pronto</span> como verificação de saúde. Detalhes em <span class="mono">docs/adr-0020-escala-e-operacao.md</span>.</p>
+
+  <div style="break-inside: avoid">
+  <h2>13. Publicar (Vercel + Render + Supabase)</h2>
+  <div class="perigo">Todo envio para a branch <span class="mono">main</span> publica sozinho. Antes de juntar a branch <span class="mono">evolucao-plataforma</span> com a <span class="mono">main</span>, faça os passos abaixo, nesta ordem.</div>
+  <ol class="passos">
+    <li>Rode as migrações no banco de <strong>produção</strong> (com a <span class="mono">DATABASE_URL</span> de produção): <span class="mono">pnpm db:migrar</span>, depois <span class="mono">pnpm db:verificar-rls</span>.</li>
+    <li>No <strong>Render</strong> (API), cadastre as variáveis novas (lista completa em <span class="mono">docs/publicar.md</span>) e defina o Health Check Path como <span class="mono">/pronto</span>.</li>
+    <li>Na <strong>Vercel</strong> (site), cadastre as variáveis <span class="mono">NEXT_PUBLIC_*</span> de identidade e do encarregado.</li>
+    <li>Junte a branch com a <span class="mono">main</span> (pull request no GitHub) e acompanhe o deploy.</li>
+    <li>Confira <span class="mono">https://SEU-SITE/c/&lt;clinica&gt;/diagnostico</span>: as cinco luzes devem ficar verdes.</li>
+  </ol>
+  </div>
+</section>
+
+<!-- ============================== PROBLEMAS ============================== -->
+<section class="quebra">
+  <h2>14. Solução de problemas</h2>
+  <table>
+    <tr><th style="width:38%">Sintoma</th><th>O que fazer</th></tr>
+    <tr><td>“Serviço temporariamente indisponível” ou “A API não respondeu”.</td><td>A API está rodando? (<span class="mono">pnpm dev</span>). Em produção: confira <span class="mono">ORIGEM_PERMITIDA</span> na API (CORS) e se o plano gratuito do Render “dormiu” (a primeira chamada demora).</td></tr>
+    <tr><td>Login falha com “Invalid API key”.</td><td>A chave em <span class="mono">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</span> deve começar com <span class="mono">sb_publishable_</span> (cuidado com caracteres cortados ao colar).</td></tr>
+    <tr><td>Médico não aparece em Marcar consulta.</td><td>O CRM dele precisa estar verificado nesta clínica (Equipe → Verificação de CRM) e ele precisa ter horários cadastrados.</td></tr>
+    <tr><td>Paciente não consegue entrar pelo link da clínica.</td><td>A clínica está “em implantação”: Equipe → Abrir clínica.</td></tr>
+    <tr><td>Erro de conexão com o banco (ENOTFOUND).</td><td>Use a conexão do <strong>Session/Transaction pooler</strong> (termina em <span class="mono">pooler.supabase.com</span>), não a direta (<span class="mono">db.xxx.supabase.co</span>, só IPv6).</td></tr>
+    <tr><td>Testes de banco falhando em paralelo.</td><td>Use <span class="mono">pnpm test:banco</span>, que roda um arquivo por vez (limite de conexões do pooler).</td></tr>
+    <tr><td>Assinatura externa recusada.</td><td>Envie exatamente o PDF baixado da plataforma, assinado e sem edição, com o seu certificado (CPF do cadastro).</td></tr>
+    <tr><td>Sala de vídeo sem imagem.</td><td>Em teste (<span class="mono">local_teste</span>) é esperado. Com Daily: permita câmera e microfone no navegador.</td></tr>
+  </table>
+
+  <h2>15. Referência rápida de comandos</h2>
+  <pre>pnpm install            # dependências
+pnpm verificar          # confere apps/api/.env e apps/web/.env.local
+pnpm db:migrar          # cria/atualiza as tabelas
+pnpm db:verificar-rls   # segurança por linha
+pnpm dev                # site :3000 e API :3333
+pnpm demo:criar         # clínica de demonstração (acessos em demo-acessos.local.md)
+pnpm typecheck          # tipos
+pnpm test               # testes de unidade
+pnpm test:banco         # testes contra o Postgres
+pnpm --filter @tele/api build   # API para produção (apps/api/dist)
+pnpm --filter web build         # site para produção</pre>
+  <p style="margin-top:6mm;color:var(--suave);font-size:9pt">Decisões técnicas registradas em <span class="mono">docs/adr-0001</span> a <span class="mono">docs/adr-0020</span>. Rotas da API e telas: <span class="mono">README.md</span>.</p>
+</section>
+
+</body>
+</html>

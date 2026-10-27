@@ -107,7 +107,7 @@ export function Atendimento({
 
         {finalizada ? (
           <Aviso>
-            Este registro esta finalizado e não pode ser alterado. Se algo precisa ser corrigido, registre um adendo — a
+            Este registro está finalizado e não pode ser alterado. Se algo precisa ser corrigido, registre um adendo — a
             evolução original permanece, e o adendo fica ao lado dela.
           </Aviso>
         ) : null}

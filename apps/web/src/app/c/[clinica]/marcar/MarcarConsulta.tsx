@@ -137,7 +137,7 @@ export function MarcarConsulta({ slug, fuso, medicos }: { slug: string; fuso: st
         rotulo="Motivo (opcional)"
         value={motivo}
         onChange={(e) => setMotivo(e.target.value)}
-        ajuda="Uma linha sobre o que você sente. Não é o prontuário: e só para o profissional se preparar."
+        ajuda="Uma linha sobre o que você sente. Não é o prontuário: é só para o profissional se preparar."
       />
 
       {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}

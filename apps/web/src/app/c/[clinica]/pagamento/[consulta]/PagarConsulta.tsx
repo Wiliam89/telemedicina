@@ -105,7 +105,7 @@ export function PagarConsulta({
           </Botao>
         </>
       ) : cobranca.status === "confirmado" ? (
-        <Aviso tipo="ok">Pagamento confirmado. Sua consulta esta agendada.</Aviso>
+        <Aviso tipo="ok">Pagamento confirmado. Sua consulta está agendada.</Aviso>
       ) : (
         <div className="space-y-4">
           {cobranca.pixQrBase64 ? (

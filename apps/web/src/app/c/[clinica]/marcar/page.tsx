@@ -26,7 +26,7 @@ export default async function PaginaMarcar({ params }: { params: Promise<{ clini
     <div className="space-y-8">
       <div className="space-y-1">
         <h1 className="text-2xl text-tinta sm:text-[1.75rem]">Marcar consulta</h1>
-        <p className="text-tinta-suave">Escolha o profissional, o dia e o horario. Horarios em hora local de {clinica.nomeFantasia}.</p>
+        <p className="text-tinta-suave">Escolha o profissional, o dia e o horário. Horários em hora local de {clinica.nomeFantasia}.</p>
       </div>
 
       {!medicos.ok ? (
