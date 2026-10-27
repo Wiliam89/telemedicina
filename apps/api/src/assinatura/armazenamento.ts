@@ -44,7 +44,7 @@ export class ArmazenamentoDeDocumentos {
       });
       // "already exists" acontece quando dois processos sobem juntos: tudo bem.
       if (error && !/exist/i.test(error.message)) {
-        throw new Error(`Nao foi possivel preparar o armazenamento: ${error.message}`);
+        throw new Error(`Não foi possível preparar o armazenamento: ${error.message}`);
       }
     }
     this.baldeConferido = true;
@@ -72,7 +72,7 @@ export class ArmazenamentoDeDocumentos {
   /** Baixa o arquivo - usado para conferir a assinatura e para o download. */
   async ler(caminho: string): Promise<Uint8Array> {
     const { data, error } = await this.supabase.storage.from(BALDE_DOCUMENTOS).download(caminho);
-    if (error || !data) throw new Error(`Documento nao encontrado no armazenamento: ${error?.message ?? caminho}`);
+    if (error || !data) throw new Error(`Documento não encontrado no armazenamento: ${error?.message ?? caminho}`);
     return new Uint8Array(await data.arrayBuffer());
   }
 

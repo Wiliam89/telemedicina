@@ -13,7 +13,7 @@ const TIPOS: { valor: TipoDocumento; rotulo: string }[] = [
   { valor: "receita_simples", rotulo: "Receita" },
   { valor: "atestado", rotulo: "Atestado" },
   { valor: "pedido_exame", rotulo: "Pedido de exame" },
-  { valor: "declaracao_comparecimento", rotulo: "Declaracao de comparecimento" },
+  { valor: "declaracao_comparecimento", rotulo: "Declaração de comparecimento" },
 ];
 
 interface Item {
@@ -92,7 +92,7 @@ export function EmitirDocumento({ slug, consultaId, emitidos }: { slug: string; 
   }
 
   async function cancelar(id: string) {
-    const motivo = window.prompt("Por que este documento esta sendo cancelado?\n(o documento nao e apagado: fica registrado como cancelado)");
+    const motivo = window.prompt("Por que este documento esta sendo cancelado?\n(o documento não é apagado: fica registrado como cancelado)");
     if (!motivo || motivo.trim().length < 5) return;
     const { data } = await criarClienteNavegador().auth.getSession();
     const r = await chamarApi(`/documentos/${id}/cancelar`, { metodo: "POST", token: data.session?.access_token, clinica: slug, corpo: { motivo: motivo.trim() } });
@@ -101,12 +101,12 @@ export function EmitirDocumento({ slug, consultaId, emitidos }: { slug: string; 
   }
 
   return (
-    <aside className="space-y-5 rounded-lg border border-linha bg-superficie p-5">
+    <aside className="space-y-5 rounded-xl border border-linha bg-superficie shadow-cartao p-5">
       <h2 className="font-titulo text-xl tracking-tight">Emitir documento</h2>
 
       <div className="space-y-1.5">
         <label htmlFor="tipo" className="block text-sm font-medium">Tipo</label>
-        <select id="tipo" value={tipo} onChange={(e) => setTipo(e.target.value as TipoDocumento)} className="w-full rounded-md border border-linha bg-superficie px-3 py-2">
+        <select id="tipo" value={tipo} onChange={(e) => setTipo(e.target.value as TipoDocumento)} className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15">
           {TIPOS.map((t) => (
             <option key={t.valor} value={t.valor}>{t.rotulo}</option>
           ))}
@@ -134,24 +134,24 @@ export function EmitirDocumento({ slug, consultaId, emitidos }: { slug: string; 
       {tipo === "atestado" ? (
         <div className="space-y-3">
           <Campo id="dias" rotulo="Dias de afastamento" type="number" min={1} max={365} value={dias} onChange={(e) => setDias(e.target.value)} />
-          <Campo id="cid-doc" rotulo="CID-10 (so com autorizacao do paciente)" value={cid10} onChange={(e) => setCid10(e.target.value.toUpperCase())} placeholder="J02" ajuda="O art. 76 do Codigo de Etica Medica proibe revelar o diagnostico em atestado sem autorizacao." />
+          <Campo id="cid-doc" rotulo="CID-10 (só com autorizacao do paciente)" value={cid10} onChange={(e) => setCid10(e.target.value.toUpperCase())} placeholder="J02" ajuda="O art. 76 do Código de Etica Medica proibe revelar o diagnóstico em atestado sem autorizacao." />
         </div>
       ) : null}
 
       {tipo === "pedido_exame" ? (
         <div className="space-y-1.5">
           <label htmlFor="exames" className="block text-sm font-medium">Exames (um por linha)</label>
-          <textarea id="exames" rows={4} value={exames} onChange={(e) => setExames(e.target.value)} className="w-full rounded-md border border-linha bg-superficie px-3 py-2" placeholder={"Hemograma completo\nGlicemia de jejum"} />
+          <textarea id="exames" rows={4} value={exames} onChange={(e) => setExames(e.target.value)} className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15" placeholder={"Hemograma completo\nGlicemia de jejum"} />
         </div>
       ) : null}
 
-      <Campo id="obs" rotulo="Observacoes (opcional)" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
+      <Campo id="obs" rotulo="Observações (opcional)" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} />
 
       {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
 
       <Botao onClick={emitir} carregando={emitindo} className="w-full">Emitir</Botao>
       <p className="text-xs text-tinta-suave">
-        Documento emitido nao pode ser alterado. Se houver erro, cancele e emita outro — o cancelamento fica registrado.
+        Documento emitido não pode ser alterado. Se houver erro, cancele e emita outro — o cancelamento fica registrado.
       </p>
 
       {emitidos.length > 0 ? (

@@ -59,7 +59,7 @@ export class ResolvedorDePagamento {
     }
 
     if (!this.ambiente.CHAVE_CRIPTOGRAFIA) {
-      throw new ErroDePagamento("FALHA", "CHAVE_CRIPTOGRAFIA nao esta definida em apps/api/.env.");
+      throw new ErroDePagamento("FALHA", "CHAVE_CRIPTOGRAFIA não está definida em apps/api/.env.");
     }
 
     const agora = Date.now();

@@ -141,6 +141,34 @@
       "when": 1791224752694,
       "tag": "0019_sala_de_video",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793060352265,
+      "tag": "0020_ficha_sinais_anexos",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1793061972072,
+      "tag": "0021_verificacao_crm",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1793063659941,
+      "tag": "0022_lgpd",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1793064532875,
+      "tag": "0023_notificacoes",
+      "breakpoints": true
     }
   ]
 }

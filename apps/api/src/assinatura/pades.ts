@@ -87,7 +87,7 @@ export async function assinarPdf(
   const signPdf = new SignPdf();
   const assinado = await signPdf.sign(Buffer.from(pdfPreparado), new AssinadorEmNuvem());
 
-  if (!capturada) throw new Error("O provedor nao devolveu assinatura.");
+  if (!capturada) throw new Error("O provedor não devolveu assinatura.");
   return { pdfAssinado: new Uint8Array(assinado), assinatura: capturada };
 }
 

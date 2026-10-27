@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { BarraDaClinica } from "@/componentes/BarraDaClinica";
 import { chamarApi } from "@/lib/api";
 import { contextoDaClinica } from "@/lib/clinica";
 import { ProntoAtendimento } from "./ProntoAtendimento";
@@ -34,11 +33,10 @@ export default async function PaginaProntoAtendimento({ params }: { params: Prom
 
   return (
     <div className="space-y-8">
-      <BarraDaClinica clinica={clinica} outras={perfil.clinicas} />
       <div className="space-y-1">
-        <h1 className="font-titulo text-3xl tracking-tight">Pronto atendimento</h1>
+        <h1 className="text-2xl text-tinta sm:text-[1.75rem]">Pronto atendimento</h1>
         <p className="text-tinta-suave">
-          Sem agendamento: voce entra na fila e e atendido pelo proximo profissional disponivel.
+          Sem agendamento: você entra na fila e e atendido pelo próximo profissional disponível.
         </p>
       </div>
 

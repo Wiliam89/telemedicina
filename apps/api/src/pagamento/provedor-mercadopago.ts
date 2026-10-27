@@ -66,7 +66,7 @@ export class ProvedorMercadoPago implements ProvedorDePagamento {
         signal: AbortSignal.timeout(20000),
       });
     } catch {
-      throw new ErroDePagamento("PROVEDOR_INDISPONIVEL", "O servico de pagamento nao respondeu. Tente de novo em instantes.");
+      throw new ErroDePagamento("PROVEDOR_INDISPONIVEL", "O servico de pagamento não respondeu. Tente de novo em instantes.");
     }
 
     const texto = await resposta.text();
@@ -74,7 +74,7 @@ export class ProvedorMercadoPago implements ProvedorDePagamento {
 
     if (!resposta.ok) {
       const detalhe = String(dados["message"] ?? dados["error"] ?? "");
-      if (resposta.status === 401) throw new ErroDePagamento("TOKEN_VENCIDO", "A autorizacao da clinica no provedor venceu. E preciso reconectar a conta.");
+      if (resposta.status === 401) throw new ErroDePagamento("TOKEN_VENCIDO", "A autorizacao da clínica no provedor venceu. E preciso reconectar a conta.");
       if (resposta.status >= 500) throw new ErroDePagamento("PROVEDOR_INDISPONIVEL", "O servico de pagamento esta instavel.");
       throw new ErroDePagamento("FALHA", detalhe || `O provedor recusou a operacao (HTTP ${resposta.status}).`);
     }
@@ -113,7 +113,7 @@ export class ProvedorMercadoPago implements ProvedorDePagamento {
       corpo["payment_method_id"] = "pix";
       corpo["date_of_expiration"] = new Date(Date.now() + (pedido.expiraEmMinutos ?? 30) * 60000).toISOString();
     } else {
-      if (!pedido.tokenDoCartao) throw new ErroDePagamento("FALHA", "Falta o token do cartao (gerado no navegador).");
+      if (!pedido.tokenDoCartao) throw new ErroDePagamento("FALHA", "Falta o token do cartão (gerado no navegador).");
       corpo["token"] = pedido.tokenDoCartao;
       corpo["installments"] = pedido.parcelas ?? 1;
       // Pre-autorizacao: reserva o valor sem cobrar. A captura vem depois

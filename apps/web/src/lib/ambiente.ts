@@ -10,7 +10,7 @@
 function obrigatoria(nome: string, valor: string | undefined): string {
   if (!valor) {
     throw new Error(
-      `${nome} nao esta definida em apps/web/.env.local. Rode "pnpm verificar" na raiz do projeto.`,
+      `${nome} não está definida em apps/web/.env.local. Rode "pnpm verificar" na raiz do projeto.`,
     );
   }
   return valor;

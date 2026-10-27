@@ -27,7 +27,7 @@ export function tratarErro(erro: FastifyError | Error, req: FastifyRequest, repl
       ok: false,
       erro: {
         codigo: "DADOS_INVALIDOS",
-        mensagem: "Os dados enviados nao passaram na validacao.",
+        mensagem: "Os dados enviados não passaram na validação.",
         detalhes: erro.issues.map((i) => ({ campo: i.path.join(".") || "(raiz)", problema: i.message })),
       },
     };

@@ -81,6 +81,10 @@ describe("portaria das rotas da agenda", () => {
     PERMITIR_ASSINATURA_SEM_VALOR_LEGAL: false,
     VIDEO_PROVEDOR: "local_teste" as const,
     PERMITIR_VIDEO_SIMULADO: false,
+    EMAIL_PROVEDOR: "console" as const,
+    NOME_PLATAFORMA: "Teste",
+    DB_POOL_MAX: 3,
+    LIMITE_POR_MINUTO: 10000,
   };
   let app: Awaited<ReturnType<typeof criarServidor>>["app"];
 

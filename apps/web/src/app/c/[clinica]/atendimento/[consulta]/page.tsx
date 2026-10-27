@@ -1,10 +1,16 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import type { ConsultaResumo, DocumentoResumo, EvolucaoResumo } from "@tele/shared";
+import type { ConsultaResumo, DocumentoResumo, EvolucaoResumo, FichaClinicaResumo, SinalVitalResumo } from "@tele/shared";
+import { AlertTriangle, FolderHeart } from "lucide-react";
 import { Aviso } from "@/componentes/Aviso";
-import { BarraDaClinica } from "@/componentes/BarraDaClinica";
+import { LinkBotao } from "@/componentes/Botao";
+import { FormularioFicha } from "@/componentes/prontuario/FormularioFicha";
+import { FormularioSinais } from "@/componentes/prontuario/FormularioSinais";
+import { ResumoSinais } from "@/componentes/prontuario/ProntuarioDoPaciente";
+import { CabecalhoDaPagina, Cartao } from "@/componentes/ui";
 import { chamarApi } from "@/lib/api";
 import { contextoDaClinica } from "@/lib/clinica";
+import { temPapel } from "@/lib/papeis";
 import { dataCurta, hora } from "@/lib/datas";
 import { Atendimento } from "./Atendimento";
 
@@ -21,7 +27,7 @@ export default async function PaginaAtendimento({
 }) {
   const { clinica: slug, consulta: consultaId } = await params;
   const { token, perfil, clinica } = await contextoDaClinica(slug);
-  if (clinica.papel !== "medico") notFound();
+  if (!temPapel(clinica, "medico")) notFound();
 
   const hoje = new Date();
   const de = new Date(hoje.getTime() - 45 * 86400000).toISOString().slice(0, 10);
@@ -36,19 +42,65 @@ export default async function PaginaAtendimento({
   const abertura = await chamarApi<{ id: string }>(`/consultas/${consultaId}/evolucao`, { metodo: "POST", token, clinica: slug });
   const historico = await chamarApi<EvolucaoResumo[]>(`/pacientes/${consulta.paciente.id}/prontuario`, { token, clinica: slug });
   const documentos = await chamarApi<DocumentoResumo[]>("/documentos", { token, clinica: slug });
+  const [ficha, sinais] = await Promise.all([
+    chamarApi<FichaClinicaResumo | null>(`/pacientes/${consulta.paciente.id}/ficha`, { token, clinica: slug }),
+    chamarApi<SinalVitalResumo[]>(`/pacientes/${consulta.paciente.id}/sinais`, { token, clinica: slug }),
+  ]);
+  const f = ficha.ok ? ficha.dados : null;
+  const prontuario = `/c/${slug}/pacientes/${consulta.paciente.id}`;
 
   return (
     <div className="space-y-8">
-      <BarraDaClinica clinica={clinica} outras={perfil.clinicas} />
 
-      <header className="space-y-1">
-        <p className="text-xs uppercase tracking-[0.2em] text-tinta-suave">Atendimento</p>
-        <h1 className="font-titulo text-3xl tracking-tight">{consulta.paciente.nomeCompleto}</h1>
-        <p className="text-tinta-suave">
-          {dataCurta(consulta.inicio, clinica.fusoHorario)} as {hora(consulta.inicio, clinica.fusoHorario)}
-          {consulta.motivo ? ` · ${consulta.motivo}` : ""}
-        </p>
-      </header>
+      <CabecalhoDaPagina
+        sobretitulo="Atendimento"
+        titulo={consulta.paciente.nomeCompleto}
+        descricao={`${dataCurta(consulta.inicio, clinica.fusoHorario)} às ${hora(consulta.inicio, clinica.fusoHorario)}${consulta.motivo ? ` · ${consulta.motivo}` : ""}`}
+        acoes={
+          <LinkBotao href={prontuario} variante="secundario" icone={<FolderHeart className="h-4 w-4" aria-hidden="true" />}>
+            Prontuário completo
+          </LinkBotao>
+        }
+      />
+
+      {/* O que o medico precisa saber ANTES de prescrever, sempre a vista. */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Cartao titulo="Alergias">
+          {f && f.alergias.length > 0 ? (
+            <p className="flex items-start gap-2 font-medium text-alerta">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              {f.alergias.join(" · ")}
+            </p>
+          ) : f?.negaAlergias ? (
+            <p className="text-sm text-selo-forte">Nega alergias.</p>
+          ) : (
+            <p className="text-sm text-espera">Não registradas - pergunte e registre na ficha.</p>
+          )}
+        </Cartao>
+        <Cartao titulo="Medicamentos em uso">
+          {f && f.medicamentosEmUso.length > 0 ? (
+            <ul className="space-y-1 text-sm">
+              {f.medicamentosEmUso.map((m) => (
+                <li key={m}>{m}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-tinta-suave">Nenhum registrado.</p>
+          )}
+          <div className="mt-3">
+            <FormularioFicha slug={slug} pacienteId={consulta.paciente.id} atual={f} />
+          </div>
+        </Cartao>
+        <Cartao titulo="Últimos sinais vitais">
+          {sinais.ok ? <ResumoSinais sinais={sinais.dados} /> : null}
+          <details className="mt-3">
+            <summary className="cursor-pointer text-sm font-medium text-selo">Registrar sinais desta consulta</summary>
+            <div className="mt-3">
+              <FormularioSinais slug={slug} pacienteId={consulta.paciente.id} consultaId={consultaId} compacto />
+            </div>
+          </details>
+        </Cartao>
+      </div>
 
       {!abertura.ok ? (
         <Aviso tipo="erro">{abertura.erro.mensagem}</Aviso>

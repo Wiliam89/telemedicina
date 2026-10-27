@@ -1,5 +1,9 @@
 import type { InputHTMLAttributes, ReactNode } from "react";
 
+/** Classes do controle de formulario, compartilhadas por input, select e textarea. */
+export const CLASSE_CONTROLE =
+  "w-full rounded-lg border bg-superficie px-3 py-2.5 text-[0.95rem] text-tinta shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] transition-colors placeholder:text-tinta-suave/60 hover:border-linha-forte focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15";
+
 /**
  * Um campo de formulario com rotulo, ajuda e erro ligados ao input por
  * aria-* (leitor de tela anuncia tudo junto). O erro fica sempre no mesmo
@@ -22,12 +26,7 @@ export function Campo({ id, rotulo, ajuda, erro, className, ...resto }: Props) {
         id={id}
         aria-invalid={erro ? true : undefined}
         aria-describedby={[ajuda ? `${id}-ajuda` : null, erro ? `${id}-erro` : null].filter(Boolean).join(" ") || undefined}
-        className={
-          "w-full rounded-md border bg-superficie px-3 py-2 text-base text-tinta placeholder:text-tinta-suave/60 " +
-          (erro ? "border-alerta" : "border-linha") +
-          " " +
-          (className ?? "")
-        }
+        className={`${CLASSE_CONTROLE} ${erro ? "border-alerta" : "border-linha"} ${className ?? ""}`}
         {...resto}
       />
       {ajuda ? (

@@ -11,10 +11,10 @@ import { criarClienteNavegador } from "@/lib/supabase-navegador";
 import { EmitirDocumento } from "./EmitirDocumento";
 
 const CAMPOS = [
-  { chave: "subjetivo", rotulo: "S — Subjetivo", ajuda: "O que o paciente relata: queixa, historia, duracao." },
-  { chave: "objetivo", rotulo: "O — Objetivo", ajuda: "O que voce constata: exame fisico, sinais vitais, exames." },
-  { chave: "avaliacao", rotulo: "A — Avaliacao", ajuda: "Hipotese diagnostica, raciocinio clinico." },
-  { chave: "plano", rotulo: "P — Plano", ajuda: "Conduta: prescricao, exames, orientacoes, retorno." },
+  { chave: "subjetivo", rotulo: "S — Subjetivo", ajuda: "O que o paciente relata: queixa, história, duração." },
+  { chave: "objetivo", rotulo: "O — Objetivo", ajuda: "O que você constata: exame físico, sinais vitais, exames." },
+  { chave: "avaliacao", rotulo: "A — Avaliação", ajuda: "Hipótese diagnóstica, raciocínio clínico." },
+  { chave: "plano", rotulo: "P — Plano", ajuda: "Conduta: prescrição, exames, orientações, retorno." },
 ] as const;
 
 type Campo = (typeof CAMPOS)[number]["chave"];
@@ -72,7 +72,7 @@ export function Atendimento({
   }
 
   async function finalizar() {
-    if (!window.confirm("Finalizar o prontuario?\n\nDepois disso o registro NAO pode mais ser alterado nem apagado — nem por voce, nem pela administracao. Correcoes so por adendo.")) return;
+    if (!window.confirm("Finalizar o prontuário?\n\nDepois disso o registro NAO pode mais ser alterado nem apagado — nem por você, nem pela administração. Correcoes só por adendo.")) return;
     setErro(null);
     setOcupado(true);
     const r = await chamarApi(`/evolucoes/${evolucaoId}`, { metodo: "PATCH", token: await token(), clinica: slug, corpo: { ...texto, cid10: cid10.trim() || undefined } });
@@ -88,7 +88,7 @@ export function Atendimento({
   }
 
   async function adendo() {
-    const observacao = window.prompt("O que precisa ser corrigido ou acrescentado?\n(a evolucao original permanece intacta)");
+    const observacao = window.prompt("O que precisa ser corrigido ou acrescentado?\n(a evolução original permanece intacta)");
     if (!observacao || observacao.trim().length < 3) return;
     const r = await chamarApi(`/evolucoes/${evolucaoId}/adendo`, { metodo: "POST", token: await token(), clinica: slug, corpo: { objetivo: observacao.trim() } });
     if (r.ok) router.refresh();
@@ -101,14 +101,14 @@ export function Atendimento({
     <div className="grid gap-8 lg:grid-cols-[1fr_22rem] lg:items-start">
       <section className="space-y-5">
         <div className="flex items-baseline justify-between gap-3">
-          <h2 className="font-titulo text-2xl tracking-tight">Prontuario desta consulta</h2>
+          <h2 className="text-xl text-tinta">Prontuário desta consulta</h2>
           <span className="text-sm text-tinta-suave">{finalizada ? "Finalizado" : "Rascunho"}</span>
         </div>
 
         {finalizada ? (
           <Aviso>
-            Este registro esta finalizado e nao pode ser alterado. Se algo precisa ser corrigido, registre um adendo — a
-            evolucao original permanece, e o adendo fica ao lado dela.
+            Este registro esta finalizado e não pode ser alterado. Se algo precisa ser corrigido, registre um adendo — a
+            evolução original permanece, e o adendo fica ao lado dela.
           </Aviso>
         ) : null}
 
@@ -125,7 +125,7 @@ export function Atendimento({
                 setAviso(null);
                 setTexto((t) => ({ ...t, [c.chave]: e.target.value }));
               }}
-              className="w-full rounded-md border border-linha bg-superficie px-3 py-2 text-base read-only:bg-papel read-only:text-tinta-suave"
+              className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15 text-base read-only:bg-papel read-only:text-tinta-suave"
             />
           </div>
         ))}
@@ -139,7 +139,7 @@ export function Atendimento({
             value={cid10}
             onChange={(e) => setCid10(e.target.value.toUpperCase())}
             placeholder="J02"
-            className="w-40 rounded-md border border-linha bg-superficie px-3 py-2 font-mono read-only:bg-papel"
+            className="w-40 rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15 font-mono read-only:bg-papel"
           />
         </div>
 
@@ -152,19 +152,19 @@ export function Atendimento({
           ) : (
             <>
               <Botao variante="secundario" onClick={salvar} carregando={ocupado}>Salvar rascunho</Botao>
-              <Botao onClick={finalizar} carregando={ocupado}>Finalizar prontuario</Botao>
+              <Botao onClick={finalizar} carregando={ocupado}>Finalizar prontuário</Botao>
             </>
           )}
         </div>
 
         {outras.length > 0 ? (
           <div className="space-y-3 pt-4">
-            <h3 className="font-titulo text-lg tracking-tight">Historico do paciente</h3>
+            <h3 className="font-titulo text-lg tracking-tight">Histórico do paciente</h3>
             <ul className="space-y-3">
               {outras.map((h) => (
-                <li key={h.id} className="rounded-lg border border-linha bg-superficie p-4 text-sm">
+                <li key={h.id} className="rounded-xl border border-linha bg-superficie shadow-cartao p-4 text-sm">
                   <p className="mb-2 text-xs uppercase tracking-wide text-tinta-suave">
-                    {h.adendoDe ? "Adendo" : "Evolucao"} · {new Date(h.criadoEm).toLocaleDateString("pt-BR")} ·{" "}
+                    {h.adendoDe ? "Adendo" : "Evolução"} · {new Date(h.criadoEm).toLocaleDateString("pt-BR")} ·{" "}
                     {h.medico.nomeCompleto} (CRM {h.medico.crm}-{h.medico.crmUf})
                   </p>
                   {h.subjetivo ? <p><strong>S:</strong> {h.subjetivo}</p> : null}

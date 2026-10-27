@@ -80,15 +80,15 @@ export function PagarConsulta({
     return <Aviso tipo="ok">Consulta confirmada. O pagamento foi recebido.</Aviso>;
   }
   if (status === "cancelada") {
-    return <Aviso tipo="erro">Esta consulta foi cancelada. Se o pagamento nao foi confirmado a tempo, o horario voltou a ficar livre.</Aviso>;
+    return <Aviso tipo="erro">Esta consulta foi cancelada. Se o pagamento não foi confirmado a tempo, o horário voltou a ficar livre.</Aviso>;
   }
   if (valorCentavos === null) {
-    return <Aviso>Esta clinica ainda nao definiu o valor da consulta. Fale com a administracao.</Aviso>;
+    return <Aviso>Esta clínica ainda não definiu o valor da consulta. Fale com a administração.</Aviso>;
   }
 
   return (
     <div className="max-w-md space-y-5">
-      <div className="rounded-lg border border-linha bg-superficie p-5">
+      <div className="rounded-xl border border-linha bg-superficie shadow-cartao p-5">
         <p className="text-sm text-tinta-suave">Valor da consulta</p>
         <p className="font-titulo text-3xl">{emReais(valorCentavos)}</p>
       </div>
@@ -96,8 +96,8 @@ export function PagarConsulta({
       {!cobranca ? (
         <>
           <Aviso>
-            Seu horario esta <strong>reservado</strong> enquanto voce paga. Se o pagamento nao for confirmado a tempo, ele
-            volta a ficar disponivel para outras pessoas.
+            Seu horário está <strong>reservado</strong> enquanto você paga. Se o pagamento não for confirmado a tempo, ele
+            volta a ficar disponível para outras pessoas.
           </Aviso>
           {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
           <Botao onClick={gerarPix} carregando={criando} className="w-full">
@@ -109,7 +109,7 @@ export function PagarConsulta({
       ) : (
         <div className="space-y-4">
           {cobranca.pixQrBase64 ? (
-            <div className="flex justify-center rounded-lg border border-linha bg-superficie p-6">
+            <div className="flex justify-center rounded-xl border border-linha bg-superficie shadow-cartao p-6">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`data:image/png;base64,${cobranca.pixQrBase64}`} alt="QR Code do Pix" className="h-56 w-56" />
             </div>
@@ -126,16 +126,16 @@ export function PagarConsulta({
                   await navigator.clipboard.writeText(cobranca.pixCopiaECola!);
                   setCopiado(true);
                 }}
-                className="rounded-md border border-selo px-3 py-1.5 text-sm text-selo"
+                className="rounded-lg border border-selo px-3 py-1.5 text-sm text-selo"
               >
-                {copiado ? "Copiado" : "Copiar codigo"}
+                {copiado ? "Copiado" : "Copiar código"}
               </button>
             </div>
           ) : null}
 
           <Aviso>
             Aguardando o pagamento. Assim que o banco confirmar, esta tela muda sozinha — pode deixar aberta.
-            {cobranca.expiraEm ? ` O codigo vale ate ${new Date(cobranca.expiraEm).toLocaleTimeString("pt-BR")}.` : ""}
+            {cobranca.expiraEm ? ` O código vale até ${new Date(cobranca.expiraEm).toLocaleTimeString("pt-BR")}.` : ""}
           </Aviso>
         </div>
       )}

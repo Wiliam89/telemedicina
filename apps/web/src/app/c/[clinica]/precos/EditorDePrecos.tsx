@@ -41,7 +41,7 @@ export function EditorDePrecos({
     for (const i of itens) {
       const centavos = paraCentavos(i.texto);
       if (centavos === null || centavos < 100) {
-        setErro(`Valor invalido em "${NOME_DO_TIPO[i.tipo]}". O minimo e R$ 1,00.`);
+        setErro(`Valor inválido em "${NOME_DO_TIPO[i.tipo]}". O mínimo e R$ 1,00.`);
         return;
       }
       convertidos.push({ tipo: i.tipo, medicoId: i.medicoId, valorCentavos: centavos, comissaoPlataformaBps: 0 });
@@ -60,18 +60,18 @@ export function EditorDePrecos({
   return (
     <div className="max-w-2xl space-y-5">
       {itens.length === 0 ? (
-        <Aviso>Nenhum valor definido: as consultas nao sao cobradas pela plataforma.</Aviso>
+        <Aviso>Nenhum valor definido: as consultas não são cobradas pela plataforma.</Aviso>
       ) : (
         <ul className="space-y-3">
           {itens.map((item, i) => (
-            <li key={i} className="grid gap-3 rounded-lg border border-linha bg-superficie p-4 sm:grid-cols-[12rem_1fr_8rem_auto] sm:items-end">
+            <li key={i} className="grid gap-3 rounded-xl border border-linha bg-superficie shadow-cartao p-4 sm:grid-cols-[12rem_1fr_8rem_auto] sm:items-end">
               <div className="space-y-1.5">
                 <label htmlFor={`tipo-${i}`} className="block text-sm font-medium">Tipo</label>
                 <select
                   id={`tipo-${i}`}
                   value={item.tipo}
                   onChange={(e) => setItens((a) => a.map((x, j) => (i === j ? { ...x, tipo: e.target.value as Item["tipo"] } : x)))}
-                  className="w-full rounded-md border border-linha bg-superficie px-3 py-2"
+                  className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15"
                 >
                   {Object.entries(NOME_DO_TIPO).map(([v, n]) => (
                     <option key={v} value={v}>{n}</option>
@@ -84,7 +84,7 @@ export function EditorDePrecos({
                   id={`med-${i}`}
                   value={item.medicoId ?? ""}
                   onChange={(e) => setItens((a) => a.map((x, j) => (i === j ? { ...x, medicoId: e.target.value || null } : x)))}
-                  className="w-full rounded-md border border-linha bg-superficie px-3 py-2"
+                  className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15"
                 >
                   <option value="">Todos (valor padrao)</option>
                   {medicos.map((m) => (
@@ -103,7 +103,7 @@ export function EditorDePrecos({
                     setItens((a) => a.map((x, j) => (i === j ? { ...x, texto: e.target.value } : x)));
                   }}
                   placeholder="150,00"
-                  className="w-full rounded-md border border-linha bg-superficie px-3 py-2 text-right font-mono"
+                  className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15 text-right font-mono"
                 />
               </div>
               <button onClick={() => setItens((a) => a.filter((_, j) => j !== i))} className="text-sm text-alerta underline-offset-4 hover:underline">
@@ -124,8 +124,8 @@ export function EditorDePrecos({
         <Botao onClick={salvar} carregando={salvando}>Salvar</Botao>
       </div>
       <p className="text-sm text-tinta-suave">
-        O valor de um profissional especifico tem preferencia sobre o valor padrao. Consultas ja marcadas nao mudam de
-        preco: o valor e congelado no momento da cobranca.
+        O valor de um profissional especifico tem preferencia sobre o valor padrao. Consultas já marcadas não mudam de
+        preço: o valor e congelado no momento da cobrança.
       </p>
     </div>
   );

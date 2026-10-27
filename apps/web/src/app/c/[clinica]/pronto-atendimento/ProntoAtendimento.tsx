@@ -69,9 +69,9 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
   }, [passo, slug, router]);
 
   const emergencia = (
-    <div role="alert" className="rounded-md border-2 border-alerta bg-alerta-suave px-4 py-3 text-sm text-alerta">
-      <strong>Nao use este servico em emergencia.</strong> Dor no peito, falta de ar intensa, desmaio, sangramento que
-      nao para ou sinais de AVC: ligue <strong>192</strong> (SAMU) ou va ao pronto-socorro mais proximo agora.
+    <div role="alert" className="rounded-lg border-2 border-alerta bg-alerta-suave px-4 py-3 text-sm text-alerta">
+      <strong>Não use este servico em emergência.</strong> Dor no peito, falta de ar intensa, desmaio, sangramento que
+      nao para ou sinais de AVC: ligue <strong>192</strong> (SAMU) ou vá ao pronto-socorro mais próximo agora.
     </div>
   );
 
@@ -79,7 +79,7 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
     return (
       <div className="max-w-lg space-y-5">
         {emergencia}
-        <div className="rounded-lg border border-linha bg-superficie p-6 text-center">
+        <div className="rounded-xl border border-linha bg-superficie shadow-cartao p-6 text-center">
           <p className="text-sm uppercase tracking-[0.15em] text-tinta-suave">Sua posicao na fila</p>
           <p className="font-titulo text-6xl text-selo">{atual.minhaPosicao ?? "—"}</p>
           {atual.esperaEstimadaMinutos !== null ? (
@@ -97,8 +97,8 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
         </Aviso>
         {atual.medicosDePlantao === 0 ? (
           <Aviso tipo="erro">
-            Nenhum profissional esta de plantao neste momento. Voce continua na fila e sera atendido assim que alguem
-            abrir o plantao.
+            Nenhum profissional esta de plantão neste momento. Você continua na fila e sera atendido assim que alguem
+            abrir o plantão.
           </Aviso>
         ) : null}
       </div>
@@ -107,7 +107,7 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
 
   async function seguirParaTermo() {
     if (queixa.trim().length < 5) {
-      setErro("Conte em poucas palavras o que voce esta sentindo.");
+      setErro("Conte em poucas palavras o que você está sentindo.");
       return;
     }
     setErro(null);
@@ -153,24 +153,24 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
       {passo === "queixa" ? (
         <>
           <div className="space-y-1.5">
-            <label htmlFor="queixa" className="block text-sm font-medium">O que voce esta sentindo?</label>
+            <label htmlFor="queixa" className="block text-sm font-medium">O que você está sentindo?</label>
             <p className="text-xs text-tinta-suave">Escreva com suas palavras. Isso ajuda o profissional a se preparar.</p>
             <textarea
               id="queixa"
               rows={4}
               value={queixa}
               onChange={(e) => setQueixa(e.target.value)}
-              className="w-full rounded-md border border-linha bg-superficie px-3 py-2 text-base"
+              className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15 text-base"
               placeholder="Estou com dor de garganta ha 2 dias, piora ao engolir..."
             />
           </div>
           {valorCentavos !== null ? (
-            <div className="rounded-lg border border-linha bg-superficie p-4">
+            <div className="rounded-xl border border-linha bg-superficie shadow-cartao p-4">
               <p className="text-sm text-tinta-suave">Valor do atendimento</p>
               <p className="font-titulo text-2xl">{emReais(valorCentavos)}</p>
             </div>
           ) : (
-            <Aviso>Esta clinica ainda nao definiu o valor do pronto atendimento.</Aviso>
+            <Aviso>Esta clínica ainda não definiu o valor do pronto atendimento.</Aviso>
           )}
           {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
           <Botao onClick={seguirParaTermo} className="w-full" disabled={valorCentavos === null}>Continuar</Botao>
@@ -179,8 +179,8 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
 
       {passo === "termo" ? (
         <>
-          <h2 className="font-titulo text-2xl tracking-tight">Antes de continuar</h2>
-          <div className="max-h-80 space-y-4 overflow-y-auto rounded-lg border border-linha bg-superficie p-5 text-sm">
+          <h2 className="text-xl text-tinta">Antes de continuar</h2>
+          <div className="max-h-80 space-y-4 overflow-y-auto rounded-xl border border-linha bg-superficie shadow-cartao p-5 text-sm">
             {TERMO_DE_TELEMEDICINA.map((item) => (
               <div key={item.titulo}>
                 <h3 className="font-medium">{item.titulo}</h3>
@@ -188,7 +188,7 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
               </div>
             ))}
           </div>
-          <label className="flex items-start gap-3 rounded-md border border-linha bg-superficie px-4 py-3">
+          <label className="flex items-start gap-3 rounded-xl border border-linha bg-superficie shadow-cartao px-4 py-3">
             <input type="checkbox" checked={aceito} onChange={(e) => setAceito(e.target.checked)} className="mt-1" />
             <span className="text-sm">
               Li e concordo com o atendimento por telemedicina nas condicoes acima.
@@ -204,9 +204,9 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
 
       {passo === "pagamento" && pix ? (
         <>
-          <h2 className="font-titulo text-2xl tracking-tight">Pagamento</h2>
+          <h2 className="text-xl text-tinta">Pagamento</h2>
           {pix.qr ? (
-            <div className="flex justify-center rounded-lg border border-linha bg-superficie p-6">
+            <div className="flex justify-center rounded-xl border border-linha bg-superficie shadow-cartao p-6">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={`data:image/png;base64,${pix.qr}`} alt="QR Code do Pix" className="h-56 w-56" />
             </div>
@@ -218,7 +218,7 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
           ) : null}
           {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
           <Aviso>Assim que o pagamento for confirmado, toque no botao abaixo para entrar na fila.</Aviso>
-          <Botao onClick={entrarNaFila} carregando={ocupado} className="w-full">Ja paguei — entrar na fila</Botao>
+          <Botao onClick={entrarNaFila} carregando={ocupado} className="w-full">Já paguei — entrar na fila</Botao>
         </>
       ) : null}
     </div>

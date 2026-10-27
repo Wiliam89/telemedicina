@@ -55,11 +55,11 @@ export function EditorDaGrade({ slug, inicial }: { slug: string; inicial: Dispon
 
     for (const b of blocos) {
       if (b.horaFim <= b.horaInicio) {
-        setErro(`Em ${DIAS_DA_SEMANA[b.diaSemana]}, o fim (${b.horaFim}) precisa ser depois do inicio (${b.horaInicio}).`);
+        setErro(`Em ${DIAS_DA_SEMANA[b.diaSemana]}, o fim (${b.horaFim}) precisa ser depois do início (${b.horaInicio}).`);
         return;
       }
       if (vagas(b) === 0) {
-        setErro(`Em ${DIAS_DA_SEMANA[b.diaSemana]}, o bloco ${b.horaInicio}-${b.horaFim} nao comporta nenhuma consulta de ${b.duracaoMinutos} minutos.`);
+        setErro(`Em ${DIAS_DA_SEMANA[b.diaSemana]}, o bloco ${b.horaInicio}-${b.horaFim} não comporta nenhuma consulta de ${b.duracaoMinutos} minutos.`);
         return;
       }
     }
@@ -91,15 +91,15 @@ export function EditorDaGrade({ slug, inicial }: { slug: string; inicial: Dispon
     <div className="space-y-5">
       {blocos.length === 0 ? (
         <Aviso>
-          Sua semana esta vazia: nenhum paciente consegue marcar com voce nesta clinica. Adicione ao menos um bloco.
+          Sua semana está vazia: nenhum paciente consegue marcar com você nesta clínica. Adicione ao menos um bloco.
         </Aviso>
       ) : (
         <ul className="space-y-3">
           {blocos.map((b, i) => (
-            <li key={i} className="grid gap-3 rounded-lg border border-linha bg-superficie p-4 sm:grid-cols-[10rem_7rem_7rem_9rem_auto] sm:items-end">
+            <li key={i} className="grid gap-3 rounded-xl border border-linha bg-superficie shadow-cartao p-4 sm:grid-cols-[10rem_7rem_7rem_9rem_auto] sm:items-end">
               <div className="space-y-1.5">
                 <label htmlFor={`dia-${i}`} className="block text-sm font-medium">Dia</label>
-                <select id={`dia-${i}`} value={b.diaSemana} onChange={(e) => alterar(i, "diaSemana", Number(e.target.value))} className="w-full rounded-md border border-linha bg-superficie px-3 py-2">
+                <select id={`dia-${i}`} value={b.diaSemana} onChange={(e) => alterar(i, "diaSemana", Number(e.target.value))} className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15">
                   {DIAS_DA_SEMANA.map((nome, d) => (
                     <option key={d} value={d}>{nome}</option>
                   ))}
@@ -107,15 +107,15 @@ export function EditorDaGrade({ slug, inicial }: { slug: string; inicial: Dispon
               </div>
               <div className="space-y-1.5">
                 <label htmlFor={`de-${i}`} className="block text-sm font-medium">Das</label>
-                <input id={`de-${i}`} type="time" value={b.horaInicio} step={300} onChange={(e) => alterar(i, "horaInicio", e.target.value)} className="w-full rounded-md border border-linha bg-superficie px-3 py-2" />
+                <input id={`de-${i}`} type="time" value={b.horaInicio} step={300} onChange={(e) => alterar(i, "horaInicio", e.target.value)} className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15" />
               </div>
               <div className="space-y-1.5">
                 <label htmlFor={`ate-${i}`} className="block text-sm font-medium">as</label>
-                <input id={`ate-${i}`} type="time" value={b.horaFim} step={300} onChange={(e) => alterar(i, "horaFim", e.target.value)} className="w-full rounded-md border border-linha bg-superficie px-3 py-2" />
+                <input id={`ate-${i}`} type="time" value={b.horaFim} step={300} onChange={(e) => alterar(i, "horaFim", e.target.value)} className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15" />
               </div>
               <div className="space-y-1.5">
                 <label htmlFor={`dur-${i}`} className="block text-sm font-medium">Consulta de</label>
-                <select id={`dur-${i}`} value={b.duracaoMinutos} onChange={(e) => alterar(i, "duracaoMinutos", Number(e.target.value))} className="w-full rounded-md border border-linha bg-superficie px-3 py-2">
+                <select id={`dur-${i}`} value={b.duracaoMinutos} onChange={(e) => alterar(i, "duracaoMinutos", Number(e.target.value))} className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15">
                   {[15, 20, 30, 40, 45, 60].map((m) => (
                     <option key={m} value={m}>{m} min</option>
                   ))}
@@ -133,15 +133,15 @@ export function EditorDaGrade({ slug, inicial }: { slug: string; inicial: Dispon
       )}
 
       {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
-      {salvo ? <Aviso tipo="ok">Grade salva. Os horarios ja aparecem para os pacientes.</Aviso> : null}
+      {salvo ? <Aviso tipo="ok">Grade salva. Os horários já aparecem para os pacientes.</Aviso> : null}
 
       <div className="flex flex-wrap gap-3">
         <Botao variante="secundario" onClick={adicionar}>Adicionar bloco</Botao>
         <Botao onClick={salvar} carregando={salvando}>Salvar grade</Botao>
       </div>
       <p className="text-sm text-tinta-suave">
-        Salvar substitui a semana inteira. Consultas ja marcadas nao sao afetadas: elas continuam de pe mesmo que o
-        horario saia da grade.
+        Salvar substitui a semana inteira. Consultas já marcadas não são afetadas: elas continuam de pé mesmo que o
+        horário saia da grade.
       </p>
     </div>
   );

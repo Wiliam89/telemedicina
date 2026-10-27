@@ -25,6 +25,7 @@ import { gerarCodigoValidacao, iniciaisDoNome, montarTextoDocumento, normalizarC
 import { registrarAuditoria } from "../auditoria.js";
 import type { Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
+import { exigirCrmVerificado } from "../crm.js";
 import { ErroHttp } from "../erros.js";
 
 export const hashDoTexto = (texto: string) => createHash("sha256").update(texto, "utf8").digest("hex");
@@ -53,7 +54,7 @@ export const esquemaEmitir = z
     if (v.tipo.startsWith("receita") && !c.itens?.length) ctx.addIssue({ code: "custom", path: ["conteudo", "itens"], message: "receita precisa de ao menos um medicamento" });
     if (v.tipo === "atestado" && typeof c.diasAfastamento !== "number") ctx.addIssue({ code: "custom", path: ["conteudo", "diasAfastamento"], message: "atestado precisa dos dias de afastamento" });
     if (v.tipo === "pedido_exame" && !c.exames?.length) ctx.addIssue({ code: "custom", path: ["conteudo", "exames"], message: "informe ao menos um exame" });
-    if (v.tipo === "relatorio" && !c.texto) ctx.addIssue({ code: "custom", path: ["conteudo", "texto"], message: "relatorio precisa do texto" });
+    if (v.tipo === "relatorio" && !c.texto) ctx.addIssue({ code: "custom", path: ["conteudo", "texto"], message: "relatório precisa do texto" });
   });
 
 export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Banco; autenticar: Autenticador }): Promise<void> {
@@ -63,6 +64,8 @@ export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Ban
 
   app.post("/documentos", { preHandler: soMedico }, async (req, reply): Promise<Resposta<DocumentoResumo>> => {
     const dados = esquemaEmitir.parse(req.body);
+    // ADR-0016: so emite quem teve o CRM conferido nesta clinica.
+    await exigirCrmVerificado(banco, req.contexto.clinicaId, req.usuario.id);
 
     const [ctx] = await banco
       .select({
@@ -83,9 +86,9 @@ export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Ban
       .where(and(eq(consultas.id, dados.consultaId), eq(consultas.clinicaId, req.contexto.clinicaId)))
       .limit(1);
 
-    if (!ctx) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta nao encontrada nesta clinica.");
-    if (ctx.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "So o medico da consulta emite documento dela.");
-    if (ctx.statusConsulta === "cancelada") throw new ErroHttp(409, "CONSULTA_CANCELADA", "Consulta cancelada nao emite documento.");
+    if (!ctx) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta não encontrada nesta clínica.");
+    if (ctx.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "So o médico da consulta emite documento dela.");
+    if (ctx.statusConsulta === "cancelada") throw new ErroHttp(409, "CONSULTA_CANCELADA", "Consulta cancelada não emite documento.");
 
     const [eu] = await banco
       .select({ nome: perfis.nomeCompleto, crm: medicos.crm, crmUf: medicos.crmUf, especialidade: medicos.especialidade })
@@ -106,7 +109,7 @@ export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Ban
         sql`select public.proximo_numero_documento(${req.contexto.clinicaId}::uuid, ${ano}::integer) as numero`,
       );
       const numero = Number((linhasNumero as unknown as { numero: number }[])[0]?.numero);
-      if (!Number.isInteger(numero) || numero < 1) throw new ErroHttp(500, "NUMERACAO_FALHOU", "Nao foi possivel obter o numero do documento.");
+      if (!Number.isInteger(numero) || numero < 1) throw new ErroHttp(500, "NUMERACAO_FALHOU", "Não foi possível obter o número do documento.");
 
       const texto = montarTextoDocumento({
         tipo: dados.tipo,
@@ -177,9 +180,9 @@ export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Ban
     const { motivo } = z.object({ motivo: z.string().trim().min(5, "explique o motivo do cancelamento").max(300) }).parse(req.body);
 
     const [d] = await banco.select({ status: documentos.status, medicoId: documentos.medicoId }).from(documentos).where(and(eq(documentos.id, id), eq(documentos.clinicaId, req.contexto.clinicaId))).limit(1);
-    if (!d) throw new ErroHttp(404, "DOCUMENTO_NAO_ENCONTRADO", "Documento nao encontrado nesta clinica.");
+    if (!d) throw new ErroHttp(404, "DOCUMENTO_NAO_ENCONTRADO", "Documento não encontrado nesta clínica.");
     if (d.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "So quem emitiu o documento pode cancela-lo.");
-    if (d.status === "cancelado") throw new ErroHttp(409, "JA_CANCELADO", "Este documento ja estava cancelado.");
+    if (d.status === "cancelado") throw new ErroHttp(409, "JA_CANCELADO", "Este documento já estava cancelado.");
 
     await banco.transaction(async (tx) => {
       await tx.update(documentos).set({ status: "cancelado", canceladoEm: new Date(), canceladoPor: req.usuario.id, motivoCancelamento: motivo }).where(eq(documentos.id, id));
@@ -203,7 +206,8 @@ export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Ban
    * plataforma responde ao mundo. Devolve so o suficiente para confirmar
    * autenticidade.
    */
-  app.get("/validar/:codigo", async (req): Promise<Resposta<ResultadoValidacao>> => {
+  // Publica: limite proprio contra quem tenta adivinhar codigos em massa.
+  app.get("/validar/:codigo", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req): Promise<Resposta<ResultadoValidacao>> => {
     const { codigo } = z.object({ codigo: z.string().trim().min(8).max(24) }).parse(req.params);
     const normalizado = normalizarCodigo(codigo);
 

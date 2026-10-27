@@ -4,10 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { ConsultaResumo, PapelVinculo } from "@tele/shared";
 import { decidirEntrada } from "@tele/shared/video";
-import Link from "next/link";
-import { Botao } from "@/componentes/Botao";
+import { Botao, LinkBotao } from "@/componentes/Botao";
 import { chamarApi } from "@/lib/api";
-import { NOME_DO_STATUS } from "@/lib/datas";
 import { criarClienteNavegador } from "@/lib/supabase-navegador";
 
 /**
@@ -58,11 +56,10 @@ export function AcoesDaConsulta({
   if (encerrada) {
     return (
       <div className="flex items-center gap-3">
-        <span className="text-sm text-tinta-suave">{NOME_DO_STATUS[consulta.status]}</span>
         {souOMedico && consulta.status === "concluida" ? (
-          <Link href={`/c/${slug}/atendimento/${consulta.id}`} className="text-sm text-selo underline-offset-4 hover:underline">
-            Prontuario
-          </Link>
+          <LinkBotao href={`/c/${slug}/atendimento/${consulta.id}`} variante="secundario" tamanho="p">
+            Prontuário
+          </LinkBotao>
         ) : null}
       </div>
     );
@@ -72,31 +69,29 @@ export function AcoesDaConsulta({
   if (consulta.status === "aguardando_pagamento") {
     return (
       <div className="flex flex-wrap items-center gap-3">
-        <span className="text-sm text-alerta">Aguardando pagamento</span>
-        <Link href={`/c/${slug}/pagamento/${consulta.id}`} className="rounded-md bg-selo px-3 py-1.5 text-sm font-medium text-white hover:bg-selo/90">
+        <LinkBotao href={`/c/${slug}/pagamento/${consulta.id}`} tamanho="p">
           Pagar
-        </Link>
-        <button onClick={cancelar} disabled={ocupado} className="text-sm text-alerta underline-offset-4 hover:underline disabled:opacity-50">
+        </LinkBotao>
+        <Botao variante="fantasma" tamanho="p" onClick={cancelar} disabled={ocupado} className="text-alerta hover:text-alerta">
           Cancelar
-        </button>
+        </Botao>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      {erro ? <span className="text-sm text-alerta">{erro}</span> : null}
-      <span className="text-sm text-tinta-suave">{NOME_DO_STATUS[consulta.status]}</span>
+    <div className="flex flex-wrap items-center gap-2">
+      {erro ? <span className="w-full text-sm text-alerta">{erro}</span> : null}
 
       {souOMedico && consulta.status === "agendada" ? (
-        <Botao variante="secundario" carregando={ocupado} onClick={() => chamar(`/consultas/${consulta.id}/status`, { status: "em_andamento" })} className="px-3 py-1.5 text-sm">
+        <Botao variante="secundario" tamanho="p" carregando={ocupado} onClick={() => chamar(`/consultas/${consulta.id}/status`, { status: "em_andamento" })}>
           Iniciar
         </Botao>
       ) : null}
       {souOMedico ? (
-        <Link href={`/c/${slug}/atendimento/${consulta.id}`} className="text-sm text-selo underline-offset-4 hover:underline">
+        <LinkBotao href={`/c/${slug}/atendimento/${consulta.id}`} tamanho="p">
           Atender
-        </Link>
+        </LinkBotao>
       ) : null}
 
       {/*
@@ -113,27 +108,24 @@ export function AcoesDaConsulta({
       */}
       {papel === "paciente" ? (
         entrada.pode ? (
-          <Link
-            href={`/c/${slug}/consulta/${consulta.id}`}
-            className="rounded-md bg-selo px-3 py-1.5 text-sm font-medium text-white hover:bg-selo/90"
-          >
+          <LinkBotao href={`/c/${slug}/consulta/${consulta.id}`} tamanho="p">
             Entrar na consulta
-          </Link>
+          </LinkBotao>
         ) : entrada.motivo === "cedo_demais" ? (
           <span className="text-sm text-tinta-suave">
-            A sala abre as {new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(entrada.abreEm)}
+            A sala abre às {new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(entrada.abreEm)}
           </span>
         ) : null
       ) : null}
       {souOMedico && consulta.status === "em_andamento" ? (
-        <Botao carregando={ocupado} onClick={() => chamar(`/consultas/${consulta.id}/status`, { status: "concluida" })} className="px-3 py-1.5 text-sm">
+        <Botao tamanho="p" carregando={ocupado} onClick={() => chamar(`/consultas/${consulta.id}/status`, { status: "concluida" })}>
           Concluir
         </Botao>
       ) : null}
       {papel !== "medico" || souOMedico ? (
-        <button onClick={cancelar} disabled={ocupado} className="text-sm text-alerta underline-offset-4 hover:underline disabled:opacity-50">
+        <Botao variante="fantasma" tamanho="p" onClick={cancelar} disabled={ocupado} className="text-alerta hover:text-alerta">
           Cancelar
-        </button>
+        </Botao>
       ) : null}
     </div>
   );

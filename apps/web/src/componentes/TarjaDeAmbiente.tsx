@@ -15,7 +15,7 @@ export function TarjaDeAmbiente() {
   const rotulo = ambiente === "homologacao" ? "Ambiente de demonstração" : "Ambiente de desenvolvimento";
 
   return (
-    <div role="status" className="bg-alerta px-4 py-2 text-center text-sm text-white">
+    <div role="status" className="bg-espera px-4 py-1.5 text-center text-xs leading-relaxed text-white">
       <strong>{rotulo}.</strong> Os documentos emitidos aqui <strong>não têm valor legal</strong> e não devem ser usados
       em farmácia ou apresentados como atestado. A videochamada pode estar <strong>simulada</strong> — a própria sala
       avisa quando não há vídeo. Não cadastre dados de paciente real.

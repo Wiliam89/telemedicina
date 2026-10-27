@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { BarraDaClinica } from "@/componentes/BarraDaClinica";
 import { chamarApi } from "@/lib/api";
 import { contextoDaClinica } from "@/lib/clinica";
+import { temPapel } from "@/lib/papeis";
 import { PainelDePlantao } from "./PainelDePlantao";
 
-export const metadata: Metadata = { title: "Plantao" };
+export const metadata: Metadata = { title: "Plantão" };
 
 export interface PlantaoResumo {
   id: string;
@@ -37,15 +37,14 @@ export default async function PaginaPlantao({ params }: { params: Promise<{ clin
 
   return (
     <div className="space-y-8">
-      <BarraDaClinica clinica={clinica} outras={perfil.clinicas} />
       <div className="space-y-1">
-        <h1 className="font-titulo text-3xl tracking-tight">Plantao</h1>
-        <p className="text-tinta-suave">Pronto atendimento: os pacientes entram na fila e sao chamados por ordem de chegada.</p>
+        <h1 className="text-2xl text-tinta sm:text-[1.75rem]">Plantão</h1>
+        <p className="text-tinta-suave">Pronto atendimento: os pacientes entram na fila e são chamados por ordem de chegada.</p>
       </div>
 
       <PainelDePlantao
         slug={slug}
-        souMedico={clinica.papel === "medico"}
+        souMedico={temPapel(clinica, "medico")}
         meuId={perfil.id}
         plantoes={plantoes.ok ? plantoes.dados : []}
         fila={fila.ok ? fila.dados : { totalAguardando: 0, medicosDePlantao: 0, lista: [] }}

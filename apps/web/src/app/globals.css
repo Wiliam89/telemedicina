@@ -1,28 +1,54 @@
 @import "tailwindcss";
 
 /*
- * Identidade visual (Modulo 5). Os nomes viram classes do Tailwind:
- * bg-papel, text-tinta, border-linha, bg-selo, font-titulo...
+ * IDENTIDADE VISUAL
  *
- * A paleta vem do consultorio, nao do "site de tecnologia": papel claro e
- * frio, tinta azul-marinho de caneta, e o verde-azulado do tubo do
- * estetoscopio como unica cor de destaque.
+ * Os nomes viram classes do Tailwind: bg-papel, text-tinta, border-linha,
+ * bg-selo, font-titulo... Toda tela usa estes nomes, nunca cores soltas -
+ * por isso trocar a paleta aqui renova a plataforma inteira de uma vez.
+ *
+ * A linha e a das plataformas clinicas de mercado: fundo neutro e frio,
+ * superficies brancas com borda fina, tinta quase preta para leitura longa
+ * e um unico verde-azulado de destaque (a cor da acao). Vermelho e ambar
+ * so aparecem quando ha algo a corrigir ou a esperar.
+ *
+ * As fontes chegam do next/font (layout.tsx) como variaveis CSS: Inter
+ * para o texto, Plus Jakarta Sans para titulos.
  */
 @theme {
-  --color-papel: #f6f9fb;
+  --color-papel: #f4f6f9;
   --color-superficie: #ffffff;
-  --color-tinta: #0f2a3d;
-  --color-tinta-suave: #5b6f7c;
-  --color-linha: #d6e0e6;
-  --color-selo: #1e7f74;
-  --color-selo-suave: #dcefec;
-  --color-alerta: #b4232c;
-  --color-alerta-suave: #fbe9ea;
-  --color-ok: #1e7f74;
+  --color-superficie-alt: #f8fafc;
+  --color-tinta: #0f172a;
+  --color-tinta-suave: #5b6779;
+  --color-linha: #e3e8ef;
+  --color-linha-forte: #cfd7e2;
 
-  --font-titulo: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
-  --font-sans: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+  --color-selo: #0b7f7a;
+  --color-selo-forte: #08625e;
+  --color-selo-suave: #e3f3f2;
+
+  --color-marinho: #0c2a43;
+  --color-marinho-suave: #e8eef5;
+
+  --color-alerta: #c0262d;
+  --color-alerta-suave: #fdecec;
+  --color-espera: #a35a00;
+  --color-espera-suave: #fff4e0;
+  --color-info: #1d5fbf;
+  --color-info-suave: #e9f1fd;
+  --color-ok: #0b7f7a;
+
+  /* Series de grafico (validadas: daltonismo, contraste, croma). Ordem fixa. */
+  --color-serie-1: #00968c;
+  --color-serie-2: #1d5fbf;
+
+  --font-titulo: var(--fonte-titulo), "Segoe UI", system-ui, sans-serif;
+  --font-sans: var(--fonte-texto), "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
   --font-mono: "Cascadia Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+
+  --shadow-cartao: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 3px rgb(15 23 42 / 0.06);
+  --shadow-flutuante: 0 10px 30px -12px rgb(15 23 42 / 0.25);
 }
 
 html {
@@ -30,42 +56,76 @@ html {
   color: var(--color-tinta);
 }
 
+/* Titulos com a fonte de titulo e peso firme, em qualquer tela. */
+h1,
+h2,
+h3 {
+  font-family: var(--font-titulo);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+}
+
 /* Foco visivel em tudo que recebe teclado. Requisito, nao enfeite. */
 :focus-visible {
-  outline: 3px solid var(--color-selo);
+  outline: 3px solid color-mix(in srgb, var(--color-selo) 55%, transparent);
   outline-offset: 2px;
 }
 
+/* Campos de formulario sem moldura propria (select, textarea) seguem o padrao. */
+select,
+textarea {
+  border-radius: 0.5rem;
+}
+
 /*
- * O "carimbo": a assinatura visual do site. Usado so para dados que
- * certificam identidade (CRM, CPF, papel). Borda dupla e leve inclinacao,
- * como o carimbo no receituario.
+ * O "carimbo": dado que certifica identidade (CRM, CPF, papel). Antes era
+ * uma borda dupla inclinada; agora e um selo discreto, legivel e alinhado,
+ * como nas plataformas de mercado - mas continua reservado so para isso.
  */
 .carimbo {
-  display: inline-block;
-  padding: 0.35rem 0.7rem;
-  border: 2px solid var(--color-selo);
-  outline: 1px solid var(--color-selo);
-  outline-offset: 2px;
-  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--color-selo) 35%, transparent);
+  border-radius: 999px;
+  background: var(--color-selo-suave);
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--color-selo);
-  transform: rotate(-2deg);
+  color: var(--color-selo-forte);
+}
+
+.carimbo::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: var(--color-selo);
+}
+
+/* Fundo decorativo da capa e das telas de acesso: malha suave, sem imagem. */
+.malha {
+  background-image:
+    radial-gradient(circle at 15% 20%, rgb(11 127 122 / 0.16), transparent 45%),
+    radial-gradient(circle at 85% 10%, rgb(29 95 191 / 0.14), transparent 40%),
+    radial-gradient(circle at 70% 90%, rgb(11 127 122 / 0.1), transparent 45%);
+}
+
+.grade-pontilhada {
+  background-image: radial-gradient(rgb(15 23 42 / 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
 }
 
 /*
- * ANIMACAO DA TELA DE ENTRADA
+ * ANIMACAO DE ENTRADA
  *
  * O estado FINAL e o padrao (visivel, no lugar); a animacao parte do
  * estado inicial com `backwards`. Isso importa: a regra de
  * prefers-reduced-motion la embaixo desliga as animacoes, e se o padrao
  * fosse "invisivel" o texto sumiria para quem reduz movimento.
- *
- * O ritmo imita o carimbo sendo pressionado: as palavras assentam de
- * baixo para cima e a linha e tracada da esquerda para a direita.
  */
 @keyframes surgir {
   from {
@@ -81,7 +141,7 @@ html {
 }
 
 .surge {
-  animation: surgir 0.8s cubic-bezier(0.22, 0.7, 0.3, 1) backwards;
+  animation: surgir 0.7s cubic-bezier(0.22, 0.7, 0.3, 1) backwards;
   animation-delay: var(--atraso, 0s);
 }
 

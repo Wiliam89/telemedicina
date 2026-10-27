@@ -3,7 +3,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ConsultaResumo } from "@tele/shared";
 import { Aviso } from "@/componentes/Aviso";
-import { BarraDaClinica } from "@/componentes/BarraDaClinica";
 import { SalaDeVideo } from "@/componentes/SalaDeVideo";
 import { chamarApi } from "@/lib/api";
 import { contextoDaClinica } from "@/lib/clinica";
@@ -51,11 +50,10 @@ export default async function PaginaDaConsulta({
 
   return (
     <div className="space-y-8">
-      <BarraDaClinica clinica={clinica} outras={perfil.clinicas} />
 
       <header className="space-y-1">
         <p className="text-xs uppercase tracking-[0.2em] text-tinta-suave">Minha consulta</p>
-        <h1 className="font-titulo text-3xl tracking-tight">
+        <h1 className="text-2xl text-tinta sm:text-[1.75rem]">
           {dataCurta(consulta.inicio, clinica.fusoHorario)} as {hora(consulta.inicio, clinica.fusoHorario)}
         </h1>
         <p className="text-tinta-suave">
@@ -90,10 +88,10 @@ export default async function PaginaDaConsulta({
           <section className="space-y-2 border-t border-linha pt-6 text-sm text-tinta-suave">
             <h2 className="font-medium text-tinta">Antes de entrar</h2>
             <ul className="list-inside list-disc space-y-1">
-              <li>O navegador vai pedir permissao para usar a camera e o microfone. Precisa autorizar as duas.</li>
-              <li>Prefira fones de ouvido: sem eles, o som do medico volta pelo seu microfone e vira eco.</li>
-              <li>Escolha um lugar fechado. A consulta e sua, e o que for falado ali e sobre a sua saude.</li>
-              <li>Esta chamada nao e gravada.</li>
+              <li>O navegador vai pedir permissao para usar a câmera e o microfone. Precisa autorizar as duas.</li>
+              <li>Prefira fones de ouvido: sem eles, o som do médico volta pelo seu microfone e vira eco.</li>
+              <li>Escolha um lugar fechado. A consulta e sua, e o que for falado ali e sobre a sua saúde.</li>
+              <li>Esta chamada não é gravada.</li>
             </ul>
           </section>
         </>

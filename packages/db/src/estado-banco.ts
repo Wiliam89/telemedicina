@@ -9,7 +9,7 @@ import { resolve } from "node:path";
 import type { Sql } from "postgres";
 
 /** As tabelas que a migracao 0000 cria. Se mudar o schema, atualize aqui. */
-export const TABELAS_ESPERADAS = ["clinicas", "perfis", "vinculos", "convites", "medicos", "pacientes", "disponibilidades", "bloqueios", "consultas", "plantoes", "precos", "pagamentos", "fila_atendimento", "evolucoes", "documentos", "salas_de_video", "auditoria"] as const;
+export const TABELAS_ESPERADAS = ["clinicas", "perfis", "vinculos", "convites", "medicos", "pacientes", "disponibilidades", "bloqueios", "consultas", "plantoes", "precos", "pagamentos", "fila_atendimento", "evolucoes", "documentos", "salas_de_video", "fichas_clinicas", "sinais_vitais", "anexos", "verificacoes_crm", "consentimentos", "solicitacoes_titular", "notificacoes", "auditoria"] as const;
 
 /**
  * Onde fica a pasta das migracoes.
@@ -165,10 +165,10 @@ export function rlsCompleto(e: EstadoBanco): boolean {
 
 /**
  * Quantas politicas de RLS o banco deve ter somando todas as migracoes
- * (0002 cria a maioria; 0010 e 0019 acrescentam). Se adicionar politica,
+ * (0002 cria a maioria; 0010 e 0019 a 0023 acrescentam). Se adicionar politica,
  * atualize este numero - e o que faz `pnpm verificar` notar a falta.
  */
-export const POLITICAS_ESPERADAS = 31;
+export const POLITICAS_ESPERADAS = 43;
 
 /** Resumo em uma palavra, usado pela API e pelo painel. */
 export function resumirEstado(e: EstadoBanco): "migrado" | "faltam_migracoes" | "sem_tabelas" {

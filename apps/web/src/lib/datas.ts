@@ -48,6 +48,6 @@ export const NOME_DO_STATUS: Record<string, string> = {
   aguardando_pagamento: "Aguardando pagamento",
   agendada: "Agendada",
   em_andamento: "Em andamento",
-  concluida: "Concluida",
+  concluida: "Concluída",
   cancelada: "Cancelada",
 };

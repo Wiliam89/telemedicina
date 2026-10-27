@@ -1,3 +1,8 @@
+import type { SituacaoCrm } from "./crm.js";
+import type { TipoConsentimento } from "./lgpd.js";
+
+export type { Indicadores } from "./indicadores.js";
+
 /**
  * @tele/shared - tipos e regras que o site (apps/web) e a API (apps/api)
  * usam juntos.
@@ -94,6 +99,31 @@ export type {
  */
 export type { DecisaoDeEntrada, EntradaNaSala, MotivoDeRecusa, StatusParaVideo } from "./video.js";
 
+export type {
+  AnexoResumo,
+  CategoriaAnexo,
+  DadosDaFicha,
+  DadosDeSinaisVitais,
+  EventoDaLinhaDoTempo,
+  FichaClinicaResumo,
+  PacienteDetalhe,
+  PacienteNaLista,
+  SinalVitalResumo,
+  TipoDeEvento,
+  TipoSanguineo,
+} from "./prontuario.js";
+
+export type { MedicoComCrm, SituacaoCrm, VerificacaoCrmResumo } from "./crm.js";
+
+export type {
+  AcessoAosMeusDados,
+  ConsentimentoResumo,
+  SolicitacaoResumo,
+  StatusSolicitacao,
+  TipoConsentimento,
+  TipoSolicitacao,
+} from "./lgpd.js";
+
 /** O que a pessoa e DENTRO de uma clinica (Modulo 6). Espelha o enum papel_vinculo. */
 export type PapelVinculo = "paciente" | "medico" | "recepcao" | "admin_clinica";
 
@@ -109,6 +139,10 @@ export interface ClinicaResumo {
   fusoHorario: string;
   /** O papel mais forte que a pessoa tem nesta clinica. */
   papel: PapelVinculo;
+  /** Todos os papeis da pessoa nesta clinica (medico E administracao, por ex.). */
+  papeis?: PapelVinculo[];
+  /** So para quem e medico nesta clinica: a conferencia do CRM (ADR-0016). */
+  situacaoCrm?: SituacaoCrm;
 }
 
 /** O que GET /perfis/eu e POST /perfis devolvem: a PESSOA e onde ela atua. */
@@ -122,6 +156,8 @@ export interface PerfilResposta {
   paciente: { dataNascimento: string } | null;
   /** Vazio quando a pessoa ainda nao entrou em nenhuma clinica. */
   clinicas: ClinicaResumo[];
+  /** Termos/politica/telemedicina sem aceite na versao atual (ADR-0018). */
+  consentimentosPendentes: TipoConsentimento[];
 }
 
 /** Um item de GET /medicos (dentro de uma clinica). */
@@ -131,6 +167,7 @@ export interface MedicoResumo {
   crm: string;
   crmUf: string;
   especialidade: string | null;
+  situacaoCrm: SituacaoCrm;
 }
 
 /** Um item de GET /membros (a equipe da clinica atual). */
@@ -179,12 +216,12 @@ export interface ConsultaResumo {
   status: StatusConsulta;
   motivo: string | null;
   paciente: { id: string; nomeCompleto: string };
-  medico: { id: string; crm: string; crmUf: string };
+  medico: { id: string; nomeCompleto: string; especialidade: string | null; crm: string; crmUf: string };
   motivoCancelamento: string | null;
 }
 
 /** Nome de cada dia da semana, indexado por 0-6 (domingo a sabado). */
-export const DIAS_DA_SEMANA = ["Domingo", "Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado"] as const;
+export const DIAS_DA_SEMANA = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"] as const;
 
 export type StatusEvolucao = "rascunho" | "finalizada";
 

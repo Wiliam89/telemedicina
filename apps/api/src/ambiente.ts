@@ -24,7 +24,7 @@ const esquema = z.object({
 
   SUPABASE_SECRET_KEY: z
     .string()
-    .min(20, "SUPABASE_SECRET_KEY esta vazia ou curta demais")
+    .min(20, "SUPABASE_SECRET_KEY está vazia ou curta demais")
     .refine(
       (v) => !v.startsWith("sb_publishable_"),
       "SUPABASE_SECRET_KEY recebeu uma chave PUBLICAVEL. A API precisa da chave secreta (sb_secret_...).",
@@ -89,7 +89,7 @@ const esquema = z.object({
    * manda as notificacoes. Em desenvolvimento, use um tunel (ngrok,
    * cloudflared): localhost nao e alcancavel de fora.
    */
-  URL_PUBLICA_API: z.string().url("deve ser a URL publica da API").optional(),
+  URL_PUBLICA_API: z.string().url("deve ser a URL pública da API").optional(),
   /**
    * Segredo do webhook de pagamento, definido no painel do provedor. E com
    * ele que conferimos que a notificacao veio mesmo de la.
@@ -108,7 +108,7 @@ const esquema = z.object({
    * que o navegador recebe e um token de entrada, de uma pessoa, por
    * poucos minutos.
    */
-  VIDEO_API_KEY: z.string().min(10, "VIDEO_API_KEY esta vazia ou curta demais").optional(),
+  VIDEO_API_KEY: z.string().min(10, "VIDEO_API_KEY está vazia ou curta demais").optional(),
   /**
    * O mesmo caso da assinatura sem valor legal: a plataforma publicada para
    * DEMONSTRACAO, sem paciente real, precisa subir sem conta de video. Para
@@ -125,6 +125,26 @@ const esquema = z.object({
     .enum(["sim", "nao"])
     .default("nao")
     .transform((v) => v === "sim"),
+
+  /**
+   * E-mail dos avisos (ADR-0019). "console" nao envia nada - o aviso fica
+   * na central da plataforma e aparece no log. Para enviar de verdade:
+   * EMAIL_PROVEDOR=resend, EMAIL_API_KEY (painel do Resend > API Keys) e
+   * EMAIL_REMETENTE com um dominio verificado la.
+   */
+  EMAIL_PROVEDOR: z.enum(["console", "resend"]).default("console"),
+  EMAIL_API_KEY: z.string().min(10, "EMAIL_API_KEY esta vazia ou curta demais").optional(),
+  EMAIL_REMETENTE: z.string().min(5).optional(),
+  NOME_PLATAFORMA: z.string().default("TeleSaúde"),
+
+  /**
+   * ESCALA (ADR-0020). Conexoes com o banco POR INSTANCIA da API e limite de
+   * requisicoes por IP por minuto. Em producao com varias instancias, use o
+   * Transaction pooler do Supabase (porta 6543) e faca
+   * instancias x DB_POOL_MAX caber no limite do seu plano.
+   */
+  DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
+  LIMITE_POR_MINUTO: z.coerce.number().int().min(30).max(100000).default(600),
 
   ORIGEM_PERMITIDA: z.string().default("http://localhost:3000"),
 });

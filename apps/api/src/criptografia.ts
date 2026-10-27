@@ -47,12 +47,12 @@ export function cifrar(texto: string, chave: Buffer): string {
 
 export function decifrar(guardado: string, chave: Buffer): string {
   const partes = guardado.split(":");
-  if (partes.length !== 3) throw new Error("Valor cifrado em formato invalido.");
+  if (partes.length !== 3) throw new Error("Valor cifrado em formato inválido.");
 
   const [ivB64, tagB64, conteudoB64] = partes as [string, string, string];
   const iv = Buffer.from(ivB64, "base64");
   const tag = Buffer.from(tagB64, "base64");
-  if (iv.length !== TAMANHO_IV || tag.length !== TAMANHO_TAG) throw new Error("Valor cifrado em formato invalido.");
+  if (iv.length !== TAMANHO_IV || tag.length !== TAMANHO_TAG) throw new Error("Valor cifrado em formato inválido.");
 
   const decifrador = createDecifrador(chave, iv, tag);
   // Se o conteudo tiver sido alterado, final() lanca - e e o que queremos.

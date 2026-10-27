@@ -59,7 +59,7 @@ export class ResolvedorDeProvedor {
 
     if (c?.provedor === "birdid" && c.url && c.clientId && c.secretCifrado) {
       if (!this.ambiente.CHAVE_CRIPTOGRAFIA) {
-        throw new Error("Esta clinica tem credenciais proprias de assinatura, mas CHAVE_CRIPTOGRAFIA nao esta definida em apps/api/.env.");
+        throw new Error("Esta clínica tem credenciais próprias de assinatura, mas CHAVE_CRIPTOGRAFIA não está definida em apps/api/.env.");
       }
       provedor = new ProvedorBirdId({
         urlBase: c.url,

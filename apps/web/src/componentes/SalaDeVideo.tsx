@@ -139,7 +139,7 @@ export function SalaDeVideo({ slug, consultaId, comoMedico = false, aoEncerrar }
       await quadro.join({ url: r.dados.url, token: r.dados.token });
       setFase("na_sala");
     } catch {
-      setErro("Nao foi possivel abrir a sala. Verifique se o navegador tem permissao para usar camera e microfone.");
+      setErro("Não foi possível abrir a sala. Verifique se o navegador tem permissao para usar câmera e microfone.");
       desmontar();
       setFase("fechada");
     } finally {
@@ -170,24 +170,24 @@ export function SalaDeVideo({ slug, consultaId, comoMedico = false, aoEncerrar }
   if (fase === "encerrada") {
     return (
       <Aviso tipo="ok">
-        Atendimento encerrado. A sala foi fechada e nao abre novamente - se precisar de outro atendimento, e uma nova
+        Atendimento encerrado. A sala foi fechada e não abre novamente - se precisar de outro atendimento, e uma nova
         consulta.
       </Aviso>
     );
   }
 
   return (
-    <section className="space-y-3" aria-label="Sala de atendimento por video">
+    <section className="space-y-3" aria-label="Sala de atendimento por vídeo">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-titulo text-xl tracking-tight">Atendimento por video</h2>
+          <h2 className="font-titulo text-xl tracking-tight">Atendimento por vídeo</h2>
           {entrada ? (
             <p className="text-sm text-tinta-suave">
-              {entrada.outraPessoa.papel === "medico" ? "Com o medico" : "Com o paciente"}{" "}
+              {entrada.outraPessoa.papel === "medico" ? "Com o médico" : "Com o paciente"}{" "}
               {entrada.outraPessoa.nome}
             </p>
           ) : (
-            <p className="text-sm text-tinta-suave">A camera so e ligada depois que voce clicar.</p>
+            <p className="text-sm text-tinta-suave">A câmera só é ligada depois que você clicar.</p>
           )}
         </div>
 
@@ -216,29 +216,29 @@ export function SalaDeVideo({ slug, consultaId, comoMedico = false, aoEncerrar }
         className={
           fase === "fechada" || (entrada && !entrada.videoReal)
             ? "hidden"
-            : "aspect-video w-full overflow-hidden rounded-md border border-linha bg-tinta"
+            : "aspect-video w-full overflow-hidden rounded-lg border border-linha bg-tinta"
         }
       />
 
       {fase === "entrando" ? <p className="text-sm text-tinta-suave">Conectando a sala...</p> : null}
 
       {entrada && !entrada.videoReal && fase === "na_sala" ? (
-        <div className="space-y-3 rounded-md border border-linha bg-superficie p-6">
+        <div className="space-y-3 rounded-lg border border-linha bg-superficie p-6">
           <p className="text-sm font-medium">
-            Este ambiente nao faz videochamada. Nenhuma camera foi aberta.
+            Este ambiente não faz videochamada. Nenhuma câmera foi aberta.
           </p>
           <p className="text-sm text-tinta-suave">
-            O provedor de video esta no modo simulado, usado para rodar o projeto sem contratar um servico de video.
-            Todo o resto do atendimento funciona normalmente: o prontuario, a receita e o encerramento.
+            O provedor de vídeo esta no modo simulado, usado para rodar o projeto sem contratar um servico de vídeo.
+            Todo o resto do atendimento funciona normalmente: o prontuário, a receita e o encerramento.
           </p>
           <p className="text-sm text-tinta-suave">
-            Para ter video de verdade, configure <code className="rounded bg-papel px-1">VIDEO_PROVEDOR=daily</code> e{" "}
+            Para ter vídeo de verdade, configure <code className="rounded bg-papel px-1">VIDEO_PROVEDOR=daily</code> e{" "}
             <code className="rounded bg-papel px-1">VIDEO_API_KEY</code> em{" "}
             <code className="rounded bg-papel px-1">apps/api/.env</code>.
           </p>
           {comoMedico ? null : (
             <p className="text-sm text-tinta-suave">
-              Voce entraria nesta sala como <strong>{entrada.papel === "anfitriao" ? "anfitriao" : "participante"}</strong>.
+              Você entraria nesta sala como <strong>{entrada.papel === "anfitriao" ? "anfitriao" : "participante"}</strong>.
             </p>
           )}
         </div>
@@ -246,7 +246,7 @@ export function SalaDeVideo({ slug, consultaId, comoMedico = false, aoEncerrar }
 
       {fase === "na_sala" && entrada?.videoReal ? (
         <p className="text-xs text-tinta-suave">
-          Esta chamada nao e gravada. O que fica registrado e o que o medico escrever no prontuario.
+          Esta chamada não é gravada. O que fica registrado e o que o médico escrever no prontuário.
         </p>
       ) : null}
     </section>

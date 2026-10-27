@@ -17,6 +17,7 @@
  */
 import { randomUUID } from "node:crypto";
 import { and, asc, between, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { bloqueios, consultas, disponibilidades, medicos, perfis, precos, vinculos, type Banco } from "@tele/db";
@@ -31,6 +32,8 @@ import { calcularHorariosLivres } from "@tele/shared/agenda";
 import { registrarAuditoria } from "../auditoria.js";
 import type { Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
+import { exigirCrmVerificado } from "../crm.js";
+import { fusoDaClinica, notificar, quandoNaClinica } from "../notificacoes/index.js";
 import { ErroHttp } from "../erros.js";
 import { MINUTOS_DE_RESERVA } from "./pagamentos.js";
 
@@ -50,7 +53,7 @@ export const esquemaGrade = z.object({
         duracaoMinutos: z.number().int().min(10, "consulta minima de 10 minutos").max(120, "consulta maxima de 120 minutos"),
       }),
     )
-    .max(40, "grade demais para um so medico"),
+    .max(40, "grade demais para um só médico"),
 });
 
 export const esquemaBloqueio = z.object({
@@ -104,7 +107,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     const { blocos } = esquemaGrade.parse(req.body);
 
     for (const b of blocos) {
-      if (b.horaFim <= b.horaInicio) throw new ErroHttp(400, "BLOCO_INVALIDO", `No dia ${b.diaSemana}, o fim (${b.horaFim}) precisa ser depois do inicio (${b.horaInicio}).`);
+      if (b.horaFim <= b.horaInicio) throw new ErroHttp(400, "BLOCO_INVALIDO", `No dia ${b.diaSemana}, o fim (${b.horaFim}) precisa ser depois do início (${b.horaInicio}).`);
     }
 
     try {
@@ -134,8 +137,8 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
       });
     } catch (erro) {
       const codigo = (erro as { cause?: { code?: string } }).cause?.code ?? (erro as { code?: string }).code;
-      if (codigo === "23P01") throw new ErroHttp(409, "BLOCOS_SE_SOBREPOEM", "Dois blocos do mesmo dia se sobrepoem. Ajuste os horarios.");
-      if (codigo === "23505") throw new ErroHttp(409, "BLOCO_REPETIDO", "Ha dois blocos comecando no mesmo horario, no mesmo dia.");
+      if (codigo === "23P01") throw new ErroHttp(409, "BLOCOS_SE_SOBREPOEM", "Dois blocos do mesmo dia se sobrepoem. Ajuste os horários.");
+      if (codigo === "23505") throw new ErroHttp(409, "BLOCO_REPETIDO", "Ha dois blocos comecando no mesmo horário, no mesmo dia.");
       throw erro;
     }
 
@@ -157,7 +160,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     const dados = esquemaBloqueio.parse(req.body);
     const inicio = new Date(dados.inicio);
     const fim = new Date(dados.fim);
-    if (fim <= inicio) throw new ErroHttp(400, "PERIODO_INVALIDO", "O fim do bloqueio precisa ser depois do inicio.");
+    if (fim <= inicio) throw new ErroHttp(400, "PERIODO_INVALIDO", "O fim do bloqueio precisa ser depois do início.");
 
     // Bloquear por cima de consulta ja marcada seria dar um problema por
     // resolvido: avisamos quais precisam ser remarcadas antes.
@@ -174,7 +177,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
         ),
       );
     if (conflitos.length > 0) {
-      throw new ErroHttp(409, "CONSULTAS_NO_PERIODO", `Ha ${conflitos.length} consulta(s) marcada(s) nesse periodo. Cancele ou remarque antes de bloquear.`, {
+      throw new ErroHttp(409, "CONSULTAS_NO_PERIODO", `Ha ${conflitos.length} consulta(s) marcada(s) nesse período. Cancele ou remarque antes de bloquear.`, {
         consultas: conflitos.map((c) => ({ id: c.id, inicio: c.inicio.toISOString() })),
       });
     }
@@ -201,7 +204,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
 
   app.get("/horarios", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<HorarioLivre[]>> => {
     const { medicoId, data } = z
-      .object({ medicoId: z.string().uuid("medicoId invalido"), data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "data no formato AAAA-MM-DD") })
+      .object({ medicoId: z.string().uuid("medicoId inválido"), data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "data no formato AAAA-MM-DD") })
       .parse(req.query);
 
     // O medico precisa atender NESTA clinica - senao a agenda de outra vazaria.
@@ -210,7 +213,9 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
       .from(vinculos)
       .where(and(eq(vinculos.perfilId, medicoId), eq(vinculos.clinicaId, req.contexto.clinicaId), eq(vinculos.papel, "medico"), eq(vinculos.status, "ativo")))
       .limit(1);
-    if (!atende) throw new ErroHttp(404, "MEDICO_NAO_ATENDE_AQUI", "Este medico nao atende nesta clinica.");
+    if (!atende) throw new ErroHttp(404, "MEDICO_NAO_ATENDE_AQUI", "Este médico não atende nesta clínica.");
+    // ADR-0016: medico com CRM nao conferido nao recebe marcacao.
+    await exigirCrmVerificado(banco, req.contexto.clinicaId, medicoId, "terceiro");
 
     const grade = await banco
       .select({
@@ -264,11 +269,12 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
 
   app.post("/consultas", { preHandler: dentroDaClinica }, async (req, reply): Promise<Resposta<ConsultaResumo>> => {
     const dados = esquemaMarcar.parse(req.body);
+    await exigirCrmVerificado(banco, req.contexto.clinicaId, dados.medicoId, "terceiro");
     const souEquipe = ["recepcao", "admin_clinica"].includes(req.contexto.papel);
     const pacienteId = dados.pacienteId ?? req.usuario.id;
 
     if (pacienteId !== req.usuario.id && !souEquipe) {
-      throw new ErroHttp(403, "SO_PARA_SI", "Voce so pode marcar consulta para voce. A recepcao marca em nome de outros.");
+      throw new ErroHttp(403, "SO_PARA_SI", "Você só pode marcar consulta para você. A recepção marca em nome de outros.");
     }
 
     // Os dois lados precisam ter vinculo ativo aqui (o RLS repetiria a
@@ -283,8 +289,8 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
           or(and(eq(vinculos.perfilId, pacienteId), eq(vinculos.papel, "paciente")), and(eq(vinculos.perfilId, dados.medicoId), eq(vinculos.papel, "medico"))),
         ),
       );
-    if (!envolvidos.some((v) => v.perfilId === pacienteId)) throw new ErroHttp(400, "PACIENTE_SEM_VINCULO", "Este paciente nao esta cadastrado nesta clinica.");
-    if (!envolvidos.some((v) => v.perfilId === dados.medicoId)) throw new ErroHttp(400, "MEDICO_NAO_ATENDE_AQUI", "Este medico nao atende nesta clinica.");
+    if (!envolvidos.some((v) => v.perfilId === pacienteId)) throw new ErroHttp(400, "PACIENTE_SEM_VINCULO", "Este paciente não está cadastrado nesta clínica.");
+    if (!envolvidos.some((v) => v.perfilId === dados.medicoId)) throw new ErroHttp(400, "MEDICO_NAO_ATENDE_AQUI", "Este médico não atende nesta clínica.");
 
     // O horario pedido tem de ser um dos que a agenda oferece: assim ninguem
     // marca "09:07" mandando JSON na mao, nem fura a grade do medico.
@@ -297,7 +303,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     });
     const livres = (resposta.json() as Resposta<HorarioLivre[]>).ok ? (resposta.json() as { dados: HorarioLivre[] }).dados : [];
     const escolhido = livres.find((h) => new Date(h.inicio).getTime() === inicio.getTime());
-    if (!escolhido) throw new ErroHttp(409, "HORARIO_INDISPONIVEL", "Este horario nao esta mais disponivel. Recarregue a agenda e escolha outro.");
+    if (!escolhido) throw new ErroHttp(409, "HORARIO_INDISPONIVEL", "Este horário não está mais disponível. Recarregue a agenda e escolha outro.");
 
     // A clinica cobra por consulta? Entao o horario nasce RESERVADO, nao
     // agendado: ele fica preso enquanto o paciente paga, e o pagamento e
@@ -341,13 +347,37 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
       const codigo = (erro as { cause?: { code?: string } }).cause?.code ?? (erro as { code?: string }).code;
       const detalhe = String((erro as { cause?: { constraint?: string } }).cause?.constraint ?? "");
       if (codigo === "23P01") {
-        if (detalhe.includes("paciente")) throw new ErroHttp(409, "PACIENTE_JA_TEM_CONSULTA", "Voce ja tem outra consulta neste horario.");
-        throw new ErroHttp(409, "HORARIO_INDISPONIVEL", "Este horario acabou de ser ocupado. Escolha outro.");
+        if (detalhe.includes("paciente")) throw new ErroHttp(409, "PACIENTE_JA_TEM_CONSULTA", "Você já tem outra consulta neste horário.");
+        throw new ErroHttp(409, "HORARIO_INDISPONIVEL", "Este horário acabou de ser ocupado. Escolha outro.");
       }
       throw erro;
     }
 
     const [criada] = await consultasPorId(banco, [id]);
+    // ADR-0019: avisa os dois. Sem dado clinico no texto (vai por e-mail).
+    const local = await fusoDaClinica(banco, req.contexto.clinicaId);
+    const quando = quandoNaClinica(new Date(criada!.inicio), local.fuso);
+    const pagar = criada!.status === "aguardando_pagamento";
+    await notificar(banco, [
+      {
+        perfilId: criada!.paciente.id,
+        clinicaId: req.contexto.clinicaId,
+        tipo: "consulta_marcada",
+        titulo: pagar ? "Consulta reservada: conclua o pagamento" : "Consulta marcada",
+        corpo: `Teleconsulta com Dr(a). ${criada!.medico.nomeCompleto} ${quando}, em ${local.nome}.${pagar ? " O horário fica reservado por pouco tempo até o pagamento." : ""}`,
+        link: pagar ? `/c/${local.slug}/pagamento/${id}` : `/c/${local.slug}/agenda`,
+        chave: `consulta_marcada:${id}`,
+      },
+      {
+        perfilId: criada!.medico.id,
+        clinicaId: req.contexto.clinicaId,
+        tipo: "consulta_marcada",
+        titulo: "Nova consulta na sua agenda",
+        corpo: `${criada!.paciente.nomeCompleto} ${quando}.`,
+        link: `/c/${local.slug}/agenda`,
+        chave: `consulta_marcada:${id}`,
+      },
+    ]);
     void reply.code(201);
     return { ok: true, dados: criada! };
   });
@@ -360,7 +390,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     const inicio = de ? new Date(`${de}T00:00:00Z`) : new Date(Date.now() - 24 * 3600 * 1000);
     const fim = ate ? new Date(`${ate}T23:59:59Z`) : new Date(inicio.getTime() + 30 * 24 * 3600 * 1000);
     if (fim.getTime() - inicio.getTime() > JANELA_MAXIMA_DIAS * 24 * 3600 * 1000) {
-      throw new ErroHttp(400, "JANELA_GRANDE_DEMAIS", `Peca no maximo ${JANELA_MAXIMA_DIAS} dias por vez.`);
+      throw new ErroHttp(400, "JANELA_GRANDE_DEMAIS", `Peca no máximo ${JANELA_MAXIMA_DIAS} dias por vez.`);
     }
 
     /**
@@ -404,6 +434,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
       .from(consultas)
       .innerJoin(perfis, eq(perfis.id, consultas.pacienteId))
       .innerJoin(medicos, eq(medicos.perfilId, consultas.medicoId))
+      .innerJoin(perfilDoMedico, eq(perfilDoMedico.id, consultas.medicoId))
       .where(and(eq(consultas.clinicaId, req.contexto.clinicaId), between(consultas.inicio, inicio, fim), soMinhas))
       .orderBy(asc(consultas.inicio));
 
@@ -415,13 +446,13 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     const { motivo } = esquemaCancelar.parse(req.body);
 
     const [consulta] = await banco.select({ status: consultas.status, inicio: consultas.inicio, pacienteId: consultas.pacienteId, medicoId: consultas.medicoId }).from(consultas).where(and(eq(consultas.id, id), eq(consultas.clinicaId, req.contexto.clinicaId))).limit(1);
-    if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta nao encontrada nesta clinica.");
-    if (consulta.status === "cancelada") throw new ErroHttp(409, "JA_CANCELADA", "Esta consulta ja estava cancelada.");
-    if (consulta.status === "concluida") throw new ErroHttp(409, "JA_CONCLUIDA", "Consulta concluida nao se cancela - ela aconteceu.");
+    if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta não encontrada nesta clínica.");
+    if (consulta.status === "cancelada") throw new ErroHttp(409, "JA_CANCELADA", "Esta consulta já estava cancelada.");
+    if (consulta.status === "concluida") throw new ErroHttp(409, "JA_CONCLUIDA", "Consulta concluída não se cancela - ela aconteceu.");
 
     const envolvido = consulta.pacienteId === req.usuario.id || consulta.medicoId === req.usuario.id;
     if (!envolvido && !["recepcao", "admin_clinica"].includes(req.contexto.papel)) {
-      throw new ErroHttp(403, "NAO_ENVOLVIDO", "So o paciente, o medico ou a recepcao cancelam esta consulta.");
+      throw new ErroHttp(403, "NAO_ENVOLVIDO", "So o paciente, o médico ou a recepção cancelam esta consulta.");
     }
 
     await banco.transaction(async (tx) => {
@@ -438,6 +469,23 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     });
 
     const [atualizada] = await consultasPorId(banco, [id]);
+    // ADR-0019: avisa quem NAO cancelou.
+    const local = await fusoDaClinica(banco, req.contexto.clinicaId);
+    const quando = quandoNaClinica(new Date(atualizada!.inicio), local.fuso);
+    await notificar(
+      banco,
+      [atualizada!.paciente.id, atualizada!.medico.id]
+        .filter((p) => p !== req.usuario.id)
+        .map((perfilId) => ({
+          perfilId,
+          clinicaId: req.contexto.clinicaId,
+          tipo: "consulta_cancelada" as const,
+          titulo: "Consulta cancelada",
+          corpo: `A consulta de ${quando} em ${local.nome} foi cancelada.`,
+          link: `/c/${local.slug}/agenda`,
+          chave: `consulta_cancelada:${id}`,
+        })),
+    );
     return { ok: true, dados: atualizada! };
   });
 
@@ -446,13 +494,13 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     const { status } = z.object({ status: z.enum(["em_andamento", "concluida"], { message: "status deve ser em_andamento ou concluida" }) }).parse(req.body);
 
     const [consulta] = await banco.select({ status: consultas.status, medicoId: consultas.medicoId }).from(consultas).where(and(eq(consultas.id, id), eq(consultas.clinicaId, req.contexto.clinicaId))).limit(1);
-    if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta nao encontrada nesta clinica.");
-    if (consulta.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "So o medico da consulta muda o andamento dela.");
+    if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta não encontrada nesta clínica.");
+    if (consulta.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "So o médico da consulta muda o andamento dela.");
 
     // agendada -> em_andamento -> concluida. Sem pular etapa e sem voltar.
     const permitido: Record<string, string[]> = { agendada: ["em_andamento"], em_andamento: ["concluida"], concluida: [], cancelada: [] };
     if (!permitido[consulta.status]?.includes(status)) {
-      throw new ErroHttp(409, "TRANSICAO_INVALIDA", `Nao da para ir de "${consulta.status}" para "${status}".`);
+      throw new ErroHttp(409, "TRANSICAO_INVALIDA", `Não da para ir de "${consulta.status}" para "${status}".`);
     }
 
     await banco.transaction(async (tx) => {
@@ -483,6 +531,8 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
       pacienteId: consultas.pacienteId,
       pacienteNome: perfis.nomeCompleto,
       medicoId: consultas.medicoId,
+      medicoNome: perfilDoMedico.nomeCompleto,
+      especialidade: medicos.especialidade,
       crm: medicos.crm,
       crmUf: medicos.crmUf,
       motivoCancelamento: consultas.motivoCancelamento,
@@ -490,14 +540,15 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
   }
 
   async function consultasPorId(b: Banco, ids: string[]) {
-    const linhas = await b.select(colunasDaConsulta()).from(consultas).innerJoin(perfis, eq(perfis.id, consultas.pacienteId)).innerJoin(medicos, eq(medicos.perfilId, consultas.medicoId)).where(inArray(consultas.id, ids));
+    const linhas = await b.select(colunasDaConsulta()).from(consultas).innerJoin(perfis, eq(perfis.id, consultas.pacienteId)).innerJoin(medicos, eq(medicos.perfilId, consultas.medicoId)).innerJoin(perfilDoMedico, eq(perfilDoMedico.id, consultas.medicoId)).where(inArray(consultas.id, ids));
     return linhas.map(formatarConsulta);
   }
 }
 
 function formatarConsulta(l: {
   id: string; inicio: Date; fim: Date; status: string; motivo: string | null;
-  pacienteId: string; pacienteNome: string; medicoId: string; crm: string; crmUf: string; motivoCancelamento: string | null;
+  pacienteId: string; pacienteNome: string; medicoId: string; medicoNome: string; especialidade: string | null;
+  crm: string; crmUf: string; motivoCancelamento: string | null;
 }): ConsultaResumo {
   return {
     id: l.id,
@@ -506,10 +557,14 @@ function formatarConsulta(l: {
     status: l.status as ConsultaResumo["status"],
     motivo: l.motivo,
     paciente: { id: l.pacienteId, nomeCompleto: l.pacienteNome },
-    medico: { id: l.medicoId, crm: l.crm, crmUf: l.crmUf },
+    medico: { id: l.medicoId, nomeCompleto: l.medicoNome, especialidade: l.especialidade, crm: l.crm, crmUf: l.crmUf },
     motivoCancelamento: l.motivoCancelamento,
   };
 }
+
+// O perfil aparece duas vezes na consulta (paciente e medico): o segundo
+// join precisa de outro nome.
+const perfilDoMedico = alias(perfis, "perfil_do_medico");
 
 // `sql` fica importado para uso futuro em filtros mais complexos da agenda.
 void sql;

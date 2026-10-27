@@ -10,7 +10,10 @@
     "./agenda": "./src/agenda.ts",
     "./documentos": "./src/documentos.ts",
     "./consentimento": "./src/consentimento.ts",
-    "./video": "./src/video.ts"
+    "./video": "./src/video.ts",
+    "./prontuario": "./src/prontuario.ts",
+    "./crm": "./src/crm.ts",
+    "./lgpd": "./src/lgpd.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

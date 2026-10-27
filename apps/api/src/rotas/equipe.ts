@@ -19,14 +19,18 @@
  * proprio); ate la o admin copia o link e entrega como preferir.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { clinicas, convites, medicos, perfis, vinculos, type Banco } from "@tele/db";
-import type { ConviteCriado, ConviteResumo, MedicoResumo, MembroResumo, Resposta } from "@tele/shared";
+import { clinicas, convites, medicos, perfis, verificacoesCrm, vinculos, type Banco } from "@tele/db";
+import type { ConviteCriado, ConviteResumo, MedicoComCrm, MedicoResumo, MembroResumo, Resposta, VerificacaoCrmResumo } from "@tele/shared";
+import { DIAS_DE_VALIDADE_CRM, situacaoDoCrm } from "@tele/shared/crm";
 import { registrarAuditoria } from "../auditoria.js";
 import { criarExigirLogin, type Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
+import { situacoesCrm } from "../crm.js";
+import { notificar } from "../notificacoes/index.js";
 import { ErroHttp } from "../erros.js";
 
 const DIAS_DE_VALIDADE = 7;
@@ -34,11 +38,11 @@ const DIAS_DE_VALIDADE = 7;
 export const hashDoCodigo = (codigo: string) => createHash("sha256").update(codigo).digest("hex");
 
 const esquemaConvite = z.object({
-  email: z.string().trim().toLowerCase().email("informe um e-mail valido"),
-  papel: z.enum(["medico", "recepcao", "admin_clinica"], { message: "papel deve ser medico, recepcao ou admin_clinica" }),
+  email: z.string().trim().toLowerCase().email("informe um e-mail válido"),
+  papel: z.enum(["medico", "recepcao", "admin_clinica"], { message: "papel deve ser médico, recepção ou admin_clinica" }),
 });
 
-const esquemaAceite = z.object({ codigo: z.string().trim().min(20, "codigo invalido") });
+const esquemaAceite = z.object({ codigo: z.string().trim().min(20, "código inválido") });
 
 export async function rotasEquipe(
   app: FastifyInstance,
@@ -101,7 +105,130 @@ export async function rotasEquipe(
       .innerJoin(perfis, eq(perfis.id, vinculos.perfilId))
       .where(and(eq(vinculos.clinicaId, req.contexto.clinicaId), eq(vinculos.papel, "medico"), eq(vinculos.status, "ativo")))
       .orderBy(asc(perfis.nomeCompleto));
-    return { ok: true, dados: linhas };
+    const situacoes = await situacoesCrm(banco, req.contexto.clinicaId, linhas.map((l) => l.id));
+    const comSituacao = linhas.map((l) => ({ ...l, situacaoCrm: situacoes.get(l.id)! }));
+    // O paciente so ve (e so marca com) quem teve o CRM conferido (ADR-0016).
+    return { ok: true, dados: req.contexto.papel === "paciente" ? comSituacao.filter((m) => m.situacaoCrm === "verificado") : comSituacao };
+  });
+
+  /**
+   * Painel de conferencia do CRM (ADR-0016): cada medico da clinica, a
+   * situacao atual e o historico de conferencias.
+   */
+  app.get("/crm/verificacoes", { preHandler: soAdmin }, async (req): Promise<Resposta<MedicoComCrm[]>> => {
+    const lista = await banco
+      .select({ id: medicos.perfilId, nomeCompleto: perfis.nomeCompleto, crm: medicos.crm, crmUf: medicos.crmUf, especialidade: medicos.especialidade })
+      .from(vinculos)
+      .innerJoin(medicos, eq(medicos.perfilId, vinculos.perfilId))
+      .innerJoin(perfis, eq(perfis.id, vinculos.perfilId))
+      .where(and(eq(vinculos.clinicaId, req.contexto.clinicaId), eq(vinculos.papel, "medico"), eq(vinculos.status, "ativo")))
+      .orderBy(asc(perfis.nomeCompleto));
+    if (lista.length === 0) return { ok: true, dados: [] };
+
+    const quem = alias(perfis, "conferente");
+    const historico = await banco
+      .select({ v: verificacoesCrm, por: quem.nomeCompleto })
+      .from(verificacoesCrm)
+      .leftJoin(quem, eq(quem.id, verificacoesCrm.verificadoPor))
+      .where(and(eq(verificacoesCrm.clinicaId, req.contexto.clinicaId), inArray(verificacoesCrm.medicoId, lista.map((m) => m.id))))
+      .orderBy(desc(verificacoesCrm.criadoEm));
+
+    return {
+      ok: true,
+      dados: lista.map((m) => {
+        const dele = historico.filter((h) => h.v.medicoId === m.id).map(({ v, por }): VerificacaoCrmResumo => ({
+          id: v.id,
+          resultado: v.resultado,
+          metodo: v.metodo,
+          crm: v.crm,
+          crmUf: v.crmUf,
+          nomeNoConselho: v.nomeNoConselho,
+          situacaoNoConselho: v.situacaoNoConselho,
+          especialidadesNoConselho: v.especialidadesNoConselho,
+          observacao: v.observacao,
+          verificadoPor: por,
+          validoAte: v.validoAte?.toISOString() ?? null,
+          criadoEm: v.criadoEm.toISOString(),
+        }));
+        return { ...m, situacao: situacaoDoCrm(dele[0] ?? null), historico: dele };
+      }),
+    };
+  });
+
+  /**
+   * A administracao registra o que viu no Conselho. "verificado" vale por
+   * DIAS_DE_VALIDADE_CRM; "recusado" exige explicacao. Nada e sobrescrito.
+   */
+  app.post("/medicos/:id/crm", { preHandler: soAdmin }, async (req, reply): Promise<Resposta<{ situacao: string }>> => {
+    const { id } = z.object({ id: z.string().uuid("id inválido") }).parse(req.params);
+    const dados = z
+      .object({
+        resultado: z.enum(["verificado", "recusado"], { message: "resultado deve ser verificado ou recusado" }),
+        nomeNoConselho: z.string().trim().min(3, "Informe o nome como aparece no Conselho.").max(200).optional(),
+        situacaoNoConselho: z.string().trim().min(2).max(60).optional(),
+        especialidadesNoConselho: z.string().trim().max(300).optional(),
+        observacao: z.string().trim().max(1000).optional(),
+      })
+      .superRefine((d, ctx) => {
+        if (d.resultado === "verificado" && !d.nomeNoConselho) ctx.addIssue({ code: "custom", path: ["nomeNoConselho"], message: "Informe o nome como aparece no Conselho." });
+        if (d.resultado === "verificado" && !d.situacaoNoConselho) ctx.addIssue({ code: "custom", path: ["situacaoNoConselho"], message: "Informe a situação mostrada pelo Conselho (ex.: Ativo)." });
+        if (d.resultado === "verificado" && d.situacaoNoConselho && !/^ativ/i.test(d.situacaoNoConselho)) {
+          ctx.addIssue({ code: "custom", path: ["situacaoNoConselho"], message: "Só se verifica CRM com situação ATIVA no Conselho. Caso contrário, recuse." });
+        }
+        if (d.resultado === "recusado" && (d.observacao ?? "").length < 5) ctx.addIssue({ code: "custom", path: ["observacao"], message: "Explique o motivo da recusa." });
+      })
+      .parse(req.body);
+
+    const [medico] = await banco
+      .select({ crm: medicos.crm, crmUf: medicos.crmUf })
+      .from(vinculos)
+      .innerJoin(medicos, eq(medicos.perfilId, vinculos.perfilId))
+      .where(and(eq(vinculos.perfilId, id), eq(vinculos.clinicaId, req.contexto.clinicaId), eq(vinculos.papel, "medico"), eq(vinculos.status, "ativo")))
+      .limit(1);
+    if (!medico) throw new ErroHttp(404, "MEDICO_NAO_ENCONTRADO", "Médico não encontrado nesta clínica.");
+
+    await banco.transaction(async (tx) => {
+      const [v] = await tx
+        .insert(verificacoesCrm)
+        .values({
+          medicoId: id,
+          clinicaId: req.contexto.clinicaId,
+          resultado: dados.resultado,
+          metodo: "consulta_manual_cfm",
+          crm: medico.crm,
+          crmUf: medico.crmUf,
+          nomeNoConselho: dados.nomeNoConselho ?? null,
+          situacaoNoConselho: dados.situacaoNoConselho ?? null,
+          especialidadesNoConselho: dados.especialidadesNoConselho ?? null,
+          observacao: dados.observacao ?? null,
+          verificadoPor: req.usuario.id,
+          validoAte: dados.resultado === "verificado" ? new Date(Date.now() + DIAS_DE_VALIDADE_CRM * 86400000) : null,
+        })
+        .returning({ id: verificacoesCrm.id });
+      await registrarAuditoria(tx, {
+        quem: req.usuario.id,
+        clinicaId: req.contexto.clinicaId,
+        acao: dados.resultado === "verificado" ? "crm.verificado" : "crm.recusado",
+        tabela: "verificacoes_crm",
+        registroId: v!.id,
+        detalhes: { medico: id, crm: `${medico.crm}-${medico.crmUf}`, situacaoNoConselho: dados.situacaoNoConselho ?? null },
+        ip: req.ip,
+      });
+      if (dados.resultado === "verificado") {
+        await notificar(tx, {
+          perfilId: id,
+          clinicaId: req.contexto.clinicaId,
+          tipo: "crm_verificado",
+          titulo: "Seu CRM foi verificado",
+          corpo: `${req.contexto.nomeFantasia} conferiu seu CRM no Conselho. Você já pode emitir documentos, abrir plantão e receber marcações.`,
+          link: `/c/${req.contexto.slug}/inicio`,
+          chave: `crm_verificado:${v!.id}`,
+        });
+      }
+    });
+
+    void reply.code(201);
+    return { ok: true, dados: { situacao: dados.resultado } };
   });
 
   app.post("/convites", { preHandler: soAdmin }, async (req, reply): Promise<Resposta<ConviteCriado>> => {
@@ -163,7 +290,7 @@ export async function rotasEquipe(
       .set({ status: "revogado" })
       .where(and(eq(convites.id, id), eq(convites.clinicaId, req.contexto.clinicaId), eq(convites.status, "pendente")))
       .returning({ id: convites.id });
-    if (alterados.length === 0) throw new ErroHttp(404, "CONVITE_NAO_ENCONTRADO", "Convite nao encontrado ou ja usado.");
+    if (alterados.length === 0) throw new ErroHttp(404, "CONVITE_NAO_ENCONTRADO", "Convite não encontrado ou já usado.");
     await registrarAuditoria(banco, {
       quem: req.usuario.id,
       clinicaId: req.contexto.clinicaId,
@@ -194,10 +321,10 @@ export async function rotasEquipe(
 
     // Mensagem unica para "nao existe" e "ja usado": nao ajudamos ninguem a
     // descobrir se um codigo tentado por acaso chegou perto.
-    if (!convite || convite.status !== "pendente") throw new ErroHttp(404, "CONVITE_INVALIDO", "Este convite nao existe, ja foi usado ou foi revogado.");
+    if (!convite || convite.status !== "pendente") throw new ErroHttp(404, "CONVITE_INVALIDO", "Este convite não existe, já foi usado ou foi revogado.");
     if (convite.expiraEm < new Date()) {
       await banco.update(convites).set({ status: "expirado" }).where(eq(convites.id, convite.id));
-      throw new ErroHttp(410, "CONVITE_EXPIRADO", "Este convite venceu. Peca outro a administracao da clinica.");
+      throw new ErroHttp(410, "CONVITE_EXPIRADO", "Este convite venceu. Peca outro a administração da clínica.");
     }
 
     // Medico precisa ter CRM cadastrado antes de atender (CFM 2.314/2022).

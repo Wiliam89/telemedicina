@@ -1,10 +1,13 @@
+import { CalendarDays, CalendarPlus, Clock3 } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import type { ConsultaResumo } from "@tele/shared";
 import { Aviso } from "@/componentes/Aviso";
-import { BarraDaClinica } from "@/componentes/BarraDaClinica";
+import { LinkBotao } from "@/componentes/Botao";
+import { StatusDaConsulta } from "@/componentes/EtiquetaDeStatus";
+import { Avatar, CabecalhoDaPagina, Cartao, Etiqueta, Vazio } from "@/componentes/ui";
 import { chamarApi } from "@/lib/api";
 import { contextoDaClinica } from "@/lib/clinica";
+import { temPapel } from "@/lib/papeis";
 import { dataCurta, diaPorExtenso, hora } from "@/lib/datas";
 import { AcoesDaConsulta } from "./AcoesDaConsulta";
 
@@ -16,8 +19,8 @@ export const metadata: Metadata = { title: "Agenda" };
  *   medico   -> "meus atendimentos"
  *   recepcao -> "a agenda da clinica"
  *
- * Quem ve o que nao e decidido aqui: o RLS ja devolve so o permitido. Esta
- * tela apenas escolhe o titulo e quais acoes oferecer.
+ * Quem ve o que e decidido pela API (que filtra pelo papel). Esta tela
+ * apenas escolhe o titulo e quais acoes oferecer.
  */
 export default async function PaginaAgenda({ params }: { params: Promise<{ clinica: string }> }) {
   const { clinica: slug } = await params;
@@ -27,7 +30,7 @@ export default async function PaginaAgenda({ params }: { params: Promise<{ clini
   const r = await chamarApi<ConsultaResumo[]>("/consultas", { token, clinica: slug });
 
   const titulo =
-    clinica.papel === "paciente" ? "Minhas consultas" : clinica.papel === "medico" ? "Meus atendimentos" : "Agenda da clinica";
+    clinica.papel === "paciente" ? "Minhas consultas" : clinica.papel === "medico" ? "Meus atendimentos" : "Agenda da clínica";
 
   // Agrupa por dia, para a tela ler como uma agenda de papel.
   const porDia = new Map<string, ConsultaResumo[]>();
@@ -37,58 +40,91 @@ export default async function PaginaAgenda({ params }: { params: Promise<{ clini
       porDia.set(dia, [...(porDia.get(dia) ?? []), c]);
     }
   }
+  const ativas = r.ok ? r.dados.filter((c) => c.status !== "cancelada") : [];
 
   return (
     <div className="space-y-8">
-      <BarraDaClinica clinica={clinica} outras={perfil.clinicas} />
+      <CabecalhoDaPagina
+        titulo={titulo}
+        descricao="Consultas de ontem até os próximos 30 dias, no fuso horário da clínica."
+        acoes={
+          <>
+            {temPapel(clinica, "medico") ? (
+              <LinkBotao href={`/c/${slug}/grade`} variante="secundario" icone={<Clock3 className="h-4 w-4" aria-hidden="true" />}>
+                Meus horários
+              </LinkBotao>
+            ) : null}
+            {clinica.papel === "paciente" || clinica.papel === "recepcao" ? (
+              <LinkBotao href={`/c/${slug}/marcar`} icone={<CalendarPlus className="h-4 w-4" aria-hidden="true" />}>
+                Marcar consulta
+              </LinkBotao>
+            ) : null}
+          </>
+        }
+      />
 
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h1 className="font-titulo text-3xl tracking-tight">{titulo}</h1>
-        {clinica.papel === "paciente" ? (
-          <Link href={`/c/${slug}/marcar`} className="rounded-md bg-selo px-4 py-2 text-sm font-medium text-white hover:bg-selo/90">
-            Marcar consulta
-          </Link>
-        ) : null}
-        {clinica.papel === "medico" ? (
-          <Link href={`/c/${slug}/grade`} className="text-sm text-selo underline-offset-4 hover:underline">
-            Meus horarios de atendimento
-          </Link>
-        ) : null}
-      </div>
+      {r.ok ? (
+        <div className="flex flex-wrap gap-2 text-sm">
+          <Etiqueta tom="info">{ativas.filter((c) => c.status === "agendada").length} agendada(s)</Etiqueta>
+          <Etiqueta tom="espera">{ativas.filter((c) => c.status === "aguardando_pagamento").length} aguardando pagamento</Etiqueta>
+          <Etiqueta tom="neutro">{ativas.filter((c) => c.status === "concluida").length} concluída(s)</Etiqueta>
+        </div>
+      ) : null}
 
       {!r.ok ? (
         <Aviso tipo="erro">{r.erro.mensagem}</Aviso>
       ) : porDia.size === 0 ? (
-        <Aviso>
-          Nenhuma consulta nos proximos 30 dias.
-          {clinica.papel === "paciente" ? " Use \u201cMarcar consulta\u201d para agendar." : null}
-        </Aviso>
+        <Vazio
+          Icone={CalendarDays}
+          titulo="Nenhuma consulta nos próximos 30 dias"
+          acao={clinica.papel === "paciente" ? <LinkBotao href={`/c/${slug}/marcar`}>Marcar consulta</LinkBotao> : undefined}
+        >
+          {clinica.papel === "medico" ? "Cadastre seus horários de atendimento para receber marcações." : null}
+        </Vazio>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-6">
           {[...porDia.entries()].map(([dia, lista]) => (
-            <section key={dia} className="space-y-3">
-              <h2 className="font-titulo text-lg capitalize text-tinta-suave">{diaPorExtenso(lista[0]!.inicio, fuso)}</h2>
-              <ul className="divide-y divide-linha overflow-hidden rounded-lg border border-linha bg-superficie">
-                {lista.map((c) => (
-                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
-                    <div className="flex items-center gap-4">
-                      <span className={"font-mono text-lg " + (c.status === "cancelada" ? "text-tinta-suave line-through" : "")}>
-                        {hora(c.inicio, fuso)}
-                      </span>
-                      <div>
-                        <p className="font-medium">
-                          {clinica.papel === "paciente" ? `CRM ${c.medico.crm}-${c.medico.crmUf}` : c.paciente.nomeCompleto}
+            <Cartao
+              key={dia}
+              titulo={<span className="inline-block first-letter:uppercase">{diaPorExtenso(lista[0]!.inicio, fuso)}</span>}
+              acoes={<Etiqueta>{lista.length} consulta(s)</Etiqueta>}
+              semPadding
+            >
+              <ul className="divide-y divide-linha">
+                {lista.map((c) => {
+                  const nome = clinica.papel === "paciente" ? c.medico.nomeCompleto : c.paciente.nomeCompleto;
+                  const cancelada = c.status === "cancelada";
+                  const detalhe =
+                    clinica.papel === "paciente"
+                      ? `${c.medico.especialidade ?? "Clínica geral"} · CRM ${c.medico.crm}-${c.medico.crmUf}`
+                      : cancelada && c.motivoCancelamento
+                        ? `Cancelada: ${c.motivoCancelamento}`
+                        : (c.motivo ?? "Sem observação");
+                  return (
+                    <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4">
+                      <div className="w-14 shrink-0">
+                        <p className={"font-titulo text-lg font-semibold leading-none " + (cancelada ? "text-tinta-suave line-through" : "")}>
+                          {hora(c.inicio, fuso)}
                         </p>
-                        <p className="text-sm text-tinta-suave">
-                          {c.status === "cancelada" && c.motivoCancelamento ? `Cancelada: ${c.motivoCancelamento}` : (c.motivo ?? "sem observacao")}
+                        <p className="mt-1 text-xs text-tinta-suave">até {hora(c.fim, fuso)}</p>
+                      </div>
+                      <Avatar nome={nome} tamanho="p" />
+                      <div className="min-w-[12rem] flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium">{nome}</p>
+                          <StatusDaConsulta status={c.status} />
+                        </div>
+                        <p className="mt-0.5 text-sm text-tinta-suave">
+                          {detalhe}
+                          {clinica.papel === "recepcao" || clinica.papel === "admin_clinica" ? ` · Dr(a). ${c.medico.nomeCompleto}` : ""}
                         </p>
                       </div>
-                    </div>
-                    <AcoesDaConsulta slug={slug} consulta={c} papel={clinica.papel} souOMedico={c.medico.id === perfil.id} />
-                  </li>
-                ))}
+                      <AcoesDaConsulta slug={slug} consulta={c} papel={clinica.papel} souOMedico={c.medico.id === perfil.id} />
+                    </li>
+                  );
+                })}
               </ul>
-            </section>
+            </Cartao>
           ))}
         </div>
       )}

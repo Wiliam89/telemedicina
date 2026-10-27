@@ -5,6 +5,7 @@
 export { gerarPdfDocumento, type DadosDoPdf } from "./pdf.js";
 export { assinarPdf, pareceAssinado, prepararPdfParaAssinatura, type DadosDaAssinatura } from "./pades.js";
 export { verificarPdfAssinado, type ResultadoDaVerificacao } from "./verificar.js";
+export { conferirAssinaturaExterna, type DocumentoEsperado, type ResultadoExterno } from "./externa.js";
 export { ArmazenamentoDeDocumentos, BALDE_DOCUMENTOS } from "./armazenamento.js";
 export { ErroDoProvedor, type Autorizacao, type CredenciaisDoMedico, type EscopoAssinatura, type ProvedorDeAssinatura } from "./provedor.js";
 export { ProvedorLocalDeTeste } from "./provedor-local.js";

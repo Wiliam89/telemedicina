@@ -1,0 +1,11 @@
+**/node_modules
+**/.next
+**/.next-build
+**/dist
+**/.env
+**/.env.local
+**/*.local.md
+.git
+.claude
+.vercel
+coverage

@@ -1,0 +1,81 @@
+# =============================================================================
+#  Integracao continua (ADR-0020): todo push e pull request passa por aqui.
+#
+#    1. tipos nos 4 pacotes
+#    2. testes de unidade (os de banco sao pulados)
+#    3. compilacao de producao da API e do site
+#    4. testes contra Postgres de verdade - SO se o segredo
+#       DATABASE_URL_TESTE estiver configurado no GitHub (Settings >
+#       Secrets and variables > Actions). Use um projeto Supabase SEPARADO,
+#       so para testes: eles criam e apagam dados.
+# =============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Tipos
+        run: pnpm typecheck
+      - name: Testes de unidade
+        run: pnpm test
+      - name: Compilar a API
+        run: pnpm --filter @tele/api build
+      - name: Compilar o site
+        run: pnpm --filter web build
+        env:
+          # Valores de mentira so para compilar - o site real usa os da Vercel.
+          NEXT_PUBLIC_SUPABASE_URL: https://exemplo.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_compilacao_de_teste
+          NEXT_PUBLIC_API_URL: http://localhost:3333
+          NEXT_PUBLIC_AMBIENTE: desenvolvimento
+
+  banco:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: verificar
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL_TESTE }}
+    steps:
+      - name: Sem banco de teste configurado?
+        if: env.DATABASE_URL == ''
+        run: echo "DATABASE_URL_TESTE nao configurado - testes de banco pulados."
+      - uses: actions/checkout@v4
+        if: env.DATABASE_URL != ''
+      - uses: pnpm/action-setup@v4
+        if: env.DATABASE_URL != ''
+        with:
+          version: 10.15.0
+      - uses: actions/setup-node@v4
+        if: env.DATABASE_URL != ''
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        if: env.DATABASE_URL != ''
+      - name: Migracoes
+        if: env.DATABASE_URL != ''
+        run: pnpm --filter @tele/db migrar
+      - name: Testes contra o Postgres
+        if: env.DATABASE_URL != ''
+        working-directory: apps/api
+        run: node node_modules/vitest/vitest.mjs run --no-file-parallelism

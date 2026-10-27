@@ -40,13 +40,13 @@ async function consultarApi(): Promise<{ estado: "ok"; dados: StatusSaude } | { 
 function descreverBanco(banco: StatusSaude["banco"]): string {
   switch (banco.estado) {
     case "migrado":
-      return `${banco.migracoesAplicadas} migracoes aplicadas. Tabelas: ${banco.tabelas.join(", ")}.`;
+      return `${banco.migracoesAplicadas} migrações aplicadas. Tabelas: ${banco.tabelas.join(", ")}.`;
     case "faltam_migracoes":
-      return `${banco.migracoesAplicadas} de ${banco.migracoesEsperadas} migracoes aplicadas. Rode: pnpm db:migrar`;
+      return `${banco.migracoesAplicadas} de ${banco.migracoesEsperadas} migrações aplicadas. Rode: pnpm db:migrar`;
     case "sem_tabelas":
-      return "O Postgres responde, mas nao tem nenhuma tabela. Rode: pnpm db:migrar";
+      return "O Postgres responde, mas não tem nenhuma tabela. Rode: pnpm db:migrar";
     case "falhou":
-      return "A API nao conseguiu falar com o Postgres. Confira DATABASE_URL em apps/api/.env (pnpm db:testar-conexao).";
+      return "A API não conseguiu falar com o Postgres. Confira DATABASE_URL em apps/api/.env (pnpm db:testar-conexao).";
   }
 }
 
@@ -54,11 +54,11 @@ function descreverBanco(banco: StatusSaude["banco"]): string {
 function descreverSeguranca(seg: StatusSaude["seguranca"]): string {
   switch (seg.estado) {
     case "protegido":
-      return `RLS ligado nas 5 tabelas, ${seg.politicas} politicas. Um usuario so ve o que as politicas permitem.`;
+      return `RLS ligado nas 5 tabelas, ${seg.politicas} políticas. Um usuário só ve o que as políticas permitem.`;
     case "incompleto":
       return seg.tabelasSemRls.length > 0
         ? `RLS DESLIGADO em: ${seg.tabelasSemRls.join(", ")}. Rode: pnpm db:migrar (ou pnpm db:verificar-rls para detalhes)`
-        : `RLS ligado, mas faltam politicas ou permissoes (${seg.politicas} politicas). Rode: pnpm db:verificar-rls`;
+        : `RLS ligado, mas faltam políticas ou permissoes (${seg.politicas} políticas). Rode: pnpm db:verificar-rls`;
     case "desconhecido":
       return "Depende da luz do banco.";
   }
@@ -66,7 +66,7 @@ function descreverSeguranca(seg: StatusSaude["seguranca"]): string {
 
 function Luz({ ligada, rotulo, detalhe }: { ligada: boolean; rotulo: string; detalhe: string }) {
   return (
-    <li className="flex items-start gap-3 rounded-lg border border-linha bg-superficie p-4">
+    <li className="flex items-start gap-3 rounded-xl border border-linha bg-superficie shadow-cartao p-4">
       <span
         aria-hidden="true"
         className={`mt-1 inline-block h-3 w-3 shrink-0 rounded-full ${ligada ? "bg-ok" : "bg-alerta"}`}
@@ -81,7 +81,7 @@ function Luz({ ligada, rotulo, detalhe }: { ligada: boolean; rotulo: string; det
   );
 }
 
-export const metadata = { title: "Diagnostico" };
+export const metadata = { title: "Diagnóstico" };
 
 export default async function PaginaDiagnostico({ params }: { params: Promise<{ clinica: string }> }) {
   // Exige vinculo com a clinica do endereco: diagnostico e ferramenta de
@@ -92,9 +92,9 @@ export default async function PaginaDiagnostico({ params }: { params: Promise<{ 
 
   return (
     <section>
-      <h1 className="mb-2 font-titulo text-3xl tracking-tight">Painel de conexoes</h1>
+      <h1 className="mb-2 text-2xl text-tinta sm:text-[1.75rem]">Status do sistema</h1>
       <p className="mb-6 text-tinta-suave">
-        Se as cinco luzes abaixo estiverem verdes, o banco do Modulo 4 esta pronto e protegido.
+        Se as cinco luzes abaixo estiverem verdes, a plataforma está conectada, migrada e protegida.
       </p>
 
       <ul className="space-y-3">
@@ -130,7 +130,7 @@ export default async function PaginaDiagnostico({ params }: { params: Promise<{ 
         />
         <Luz
           ligada={api.estado === "ok" && api.dados.seguranca.estado === "protegido"}
-          rotulo="Seguranca por linha (RLS)"
+          rotulo="Segurança por linha (RLS)"
           detalhe={
             api.estado === "ok"
               ? descreverSeguranca(api.dados.seguranca)

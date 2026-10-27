@@ -29,6 +29,7 @@ import type { Resposta } from "@tele/shared";
 import { registrarAuditoria } from "../auditoria.js";
 import type { Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
+import { exigirCrmVerificado } from "../crm.js";
 import { ErroHttp } from "../erros.js";
 
 /**
@@ -56,12 +57,13 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
     const dados = z
       .object({ inicio: z.string().datetime({ offset: true }), fim: z.string().datetime({ offset: true }) })
       .parse(req.body);
+    await exigirCrmVerificado(banco, req.contexto.clinicaId, req.usuario.id);
 
     const inicio = new Date(dados.inicio);
     const fim = new Date(dados.fim);
-    if (fim <= inicio) throw new ErroHttp(400, "PERIODO_INVALIDO", "O fim do plantao precisa ser depois do inicio.");
+    if (fim <= inicio) throw new ErroHttp(400, "PERIODO_INVALIDO", "O fim do plantão precisa ser depois do início.");
     if (fim.getTime() - inicio.getTime() > 24 * 3600 * 1000) {
-      throw new ErroHttp(400, "PLANTAO_LONGO_DEMAIS", "Um plantao nao pode passar de 24 horas.");
+      throw new ErroHttp(400, "PLANTAO_LONGO_DEMAIS", "Um plantão não pode passar de 24 horas.");
     }
 
     const [criado] = await banco
@@ -85,16 +87,18 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
 
   app.post("/plantoes/:id/abrir", { preHandler: soMedico }, async (req): Promise<Resposta<{ status: string }>> => {
     const { id } = z.object({ id: z.string().uuid("id invalido") }).parse(req.params);
+    // ADR-0016: plantao e atendimento - exige CRM conferido.
+    await exigirCrmVerificado(banco, req.contexto.clinicaId, req.usuario.id);
 
     const [p] = await banco
       .select({ status: plantoes.status, medicoId: plantoes.medicoId, fim: plantoes.fim })
       .from(plantoes)
       .where(and(eq(plantoes.id, id), eq(plantoes.clinicaId, req.contexto.clinicaId)))
       .limit(1);
-    if (!p) throw new ErroHttp(404, "PLANTAO_NAO_ENCONTRADO", "Plantao nao encontrado nesta clinica.");
-    if (p.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "So quem esta escalado abre o proprio plantao.");
-    if (p.status !== "escalado") throw new ErroHttp(409, "JA_ABERTO", `Este plantao ja esta "${p.status}".`);
-    if (p.fim < new Date()) throw new ErroHttp(409, "PLANTAO_VENCIDO", "Este plantao ja passou.");
+    if (!p) throw new ErroHttp(404, "PLANTAO_NAO_ENCONTRADO", "Plantão não encontrado nesta clínica.");
+    if (p.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "So quem esta escalado abre o próprio plantão.");
+    if (p.status !== "escalado") throw new ErroHttp(409, "JA_ABERTO", `Este plantão já está "${p.status}".`);
+    if (p.fim < new Date()) throw new ErroHttp(409, "PLANTAO_VENCIDO", "Este plantão já passou.");
 
     await banco.update(plantoes).set({ status: "aberto", abertoEm: new Date() }).where(eq(plantoes.id, id));
     await registrarAuditoria(banco, {
@@ -112,8 +116,8 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       .from(plantoes)
       .where(and(eq(plantoes.id, id), eq(plantoes.clinicaId, req.contexto.clinicaId)))
       .limit(1);
-    if (!p) throw new ErroHttp(404, "PLANTAO_NAO_ENCONTRADO", "Plantao nao encontrado nesta clinica.");
-    if (p.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "So quem esta escalado encerra o proprio plantao.");
+    if (!p) throw new ErroHttp(404, "PLANTAO_NAO_ENCONTRADO", "Plantão não encontrado nesta clínica.");
+    if (p.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "So quem esta escalado encerra o próprio plantão.");
 
     // Encerrar com paciente em atendimento deixaria alguem no vacuo.
     const [emAtendimento] = await banco
@@ -121,7 +125,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       .from(filaAtendimento)
       .where(and(eq(filaAtendimento.plantaoId, id), inArray(filaAtendimento.status, ["chamado", "em_atendimento"])));
     if ((emAtendimento?.n ?? 0) > 0) {
-      throw new ErroHttp(409, "ATENDIMENTO_EM_CURSO", "Conclua o atendimento em andamento antes de encerrar o plantao.");
+      throw new ErroHttp(409, "ATENDIMENTO_EM_CURSO", "Conclua o atendimento em andamento antes de encerrar o plantão.");
     }
 
     await banco.update(plantoes).set({ status: "encerrado", encerradoEm: new Date() }).where(eq(plantoes.id, id));
@@ -155,7 +159,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
   app.post("/fila", { preHandler: dentroDaClinica }, async (req, reply) => {
     const dados = z
       .object({
-        queixa: z.string().trim().min(5, "descreva o que voce esta sentindo").max(1000),
+        queixa: z.string().trim().min(5, "descreva o que você está sentindo").max(1000),
         pagamentoId: z.string().uuid("pagamentoId invalido"),
         consentimento: z.literal(true, { message: "e preciso aceitar o termo de telemedicina" }),
       })
@@ -177,7 +181,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
         ),
       )
       .limit(1);
-    if (existente) throw new ErroHttp(409, "JA_NA_FILA", "Voce ja esta na fila desta clinica.");
+    if (existente) throw new ErroHttp(409, "JA_NA_FILA", "Você já está na fila desta clínica.");
 
     // O pagamento precisa estar CONFIRMADO, ser desta pessoa, desta clinica,
     // e nao ter sido usado antes. Sem isso, entrar na fila seria de graca.
@@ -186,10 +190,10 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       .from(pagamentos)
       .where(and(eq(pagamentos.id, dados.pagamentoId), eq(pagamentos.clinicaId, req.contexto.clinicaId)))
       .limit(1);
-    if (!pagamento) throw new ErroHttp(404, "PAGAMENTO_NAO_ENCONTRADO", "Pagamento nao encontrado nesta clinica.");
-    if (pagamento.pagadorId !== req.usuario.id) throw new ErroHttp(403, "PAGAMENTO_DE_OUTRO", "Este pagamento nao e seu.");
+    if (!pagamento) throw new ErroHttp(404, "PAGAMENTO_NAO_ENCONTRADO", "Pagamento não encontrado nesta clínica.");
+    if (pagamento.pagadorId !== req.usuario.id) throw new ErroHttp(403, "PAGAMENTO_DE_OUTRO", "Este pagamento não é seu.");
     if (pagamento.status !== "confirmado") {
-      throw new ErroHttp(409, "PAGAMENTO_NAO_CONFIRMADO", "O pagamento ainda nao foi confirmado. Aguarde a confirmacao para entrar na fila.");
+      throw new ErroHttp(409, "PAGAMENTO_NAO_CONFIRMADO", "O pagamento ainda não foi confirmado. Aguarde a confirmação para entrar na fila.");
     }
 
     const [jaUsado] = await banco
@@ -198,7 +202,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       .where(eq(filaAtendimento.pagamentoId, dados.pagamentoId))
       .limit(1);
     if (jaUsado || pagamento.consultaId) {
-      throw new ErroHttp(409, "PAGAMENTO_JA_USADO", "Este pagamento ja foi usado em outro atendimento.");
+      throw new ErroHttp(409, "PAGAMENTO_JA_USADO", "Este pagamento já foi usado em outro atendimento.");
     }
 
     const [entrada] = await banco
@@ -302,7 +306,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       .from(plantoes)
       .where(and(eq(plantoes.clinicaId, req.contexto.clinicaId), eq(plantoes.medicoId, req.usuario.id), eq(plantoes.status, "aberto")))
       .limit(1);
-    if (!plantao) throw new ErroHttp(409, "SEM_PLANTAO_ABERTO", "Abra seu plantao antes de chamar pacientes.");
+    if (!plantao) throw new ErroHttp(409, "SEM_PLANTAO_ABERTO", "Abra seu plantão antes de chamar pacientes.");
 
     const resultado = await banco.transaction(async (tx) => {
       const proximos = await tx.execute<{ id: string; paciente_id: string }>(sql`
@@ -369,11 +373,11 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       .from(filaAtendimento)
       .where(and(eq(filaAtendimento.id, id), eq(filaAtendimento.clinicaId, req.contexto.clinicaId)))
       .limit(1);
-    if (!f) throw new ErroHttp(404, "NAO_ENCONTRADO", "Entrada da fila nao encontrada.");
+    if (!f) throw new ErroHttp(404, "NAO_ENCONTRADO", "Entrada da fila não encontrada.");
 
     const souEquipe = ["recepcao", "admin_clinica"].includes(req.contexto.papel);
-    if (f.pacienteId !== req.usuario.id && !souEquipe) throw new ErroHttp(403, "NAO_E_SUA", "Esta entrada da fila nao e sua.");
-    if (f.status !== "aguardando") throw new ErroHttp(409, "JA_EM_ATENDIMENTO", "O atendimento ja comecou - fale com o profissional.");
+    if (f.pacienteId !== req.usuario.id && !souEquipe) throw new ErroHttp(403, "NAO_E_SUA", "Esta entrada da fila não é sua.");
+    if (f.status !== "aguardando") throw new ErroHttp(409, "JA_EM_ATENDIMENTO", "O atendimento já comecou - fale com o profissional.");
 
     await banco
       .update(filaAtendimento)

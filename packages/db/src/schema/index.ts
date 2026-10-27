@@ -22,4 +22,8 @@ export * from "./fila.js";
 export * from "./evolucoes.js";
 export * from "./documentos.js";
 export * from "./salas-video.js";
+export * from "./prontuario-paciente.js";
+export * from "./verificacoes-crm.js";
+export * from "./lgpd.js";
+export * from "./notificacoes.js";
 export * from "./auditoria.js";

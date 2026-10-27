@@ -20,7 +20,7 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 // /validar fica de fora de proposito: e a unica pagina publica, feita para
 // farmacia, RH e laboratorio conferirem um documento sem ter conta.
-const PAGINAS_PROTEGIDAS = ["/c", "/clinicas", "/completar-perfil", "/convite"];
+const PAGINAS_PROTEGIDAS = ["/c", "/clinicas", "/completar-perfil", "/convite", "/conta", "/aceitar-termos"];
 // /entrar-na-clinica e semi-publica: mostra o nome da clinica sem login e
 // so exige conta na hora de entrar. Por isso fica fora da lista.
 const PAGINAS_SO_DESLOGADO = ["/entrar", "/criar-conta"];

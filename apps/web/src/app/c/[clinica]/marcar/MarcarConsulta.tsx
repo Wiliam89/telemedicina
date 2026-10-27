@@ -81,10 +81,10 @@ export function MarcarConsulta({ slug, fuso, medicos }: { slug: string; fuso: st
     <div className="space-y-8">
       <section className="space-y-2">
         <label htmlFor="medico" className="block text-sm font-medium">Com quem</label>
-        <select id="medico" value={medicoId} onChange={(e) => setMedicoId(e.target.value)} className="w-full max-w-md rounded-md border border-linha bg-superficie px-3 py-2 text-base">
+        <select id="medico" value={medicoId} onChange={(e) => setMedicoId(e.target.value)} className="w-full max-w-md rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15 text-base">
           {medicos.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.nomeCompleto} — {m.especialidade ?? "clinica geral"} (CRM {m.crm}-{m.crmUf})
+              {m.nomeCompleto} — {m.especialidade ?? "clínica geral"} (CRM {m.crm}-{m.crmUf})
             </option>
           ))}
         </select>
@@ -99,7 +99,7 @@ export function MarcarConsulta({ slug, fuso, medicos }: { slug: string; fuso: st
               onClick={() => setDia(d)}
               aria-pressed={d === dia}
               className={
-                "shrink-0 rounded-md border px-3 py-2 text-sm " +
+                "shrink-0 rounded-lg border px-3 py-2 text-sm " +
                 (d === dia ? "border-selo bg-selo-suave font-medium text-selo" : "border-linha bg-superficie")
               }
             >
@@ -110,11 +110,11 @@ export function MarcarConsulta({ slug, fuso, medicos }: { slug: string; fuso: st
       </section>
 
       <section className="space-y-3">
-        <span className="block text-sm font-medium">Horarios livres</span>
+        <span className="block text-sm font-medium">Horários livres</span>
         {horarios === null ? (
           <p className="text-sm text-tinta-suave">Consultando a agenda...</p>
         ) : horarios.length === 0 ? (
-          <Aviso>Nenhum horario livre neste dia. Escolha outro dia ou outro profissional.</Aviso>
+          <Aviso>Nenhum horário livre neste dia. Escolha outro dia ou outro profissional.</Aviso>
         ) : (
           <ul className="flex flex-wrap gap-2">
             {horarios.map((h) => (
@@ -122,7 +122,7 @@ export function MarcarConsulta({ slug, fuso, medicos }: { slug: string; fuso: st
                 <button
                   onClick={() => marcar(h)}
                   disabled={marcando !== null}
-                  className="rounded-md border border-linha bg-superficie px-4 py-2 font-mono hover:border-selo hover:bg-selo-suave disabled:opacity-50"
+                  className="rounded-xl border border-linha bg-superficie shadow-cartao px-4 py-2 font-mono hover:border-selo hover:bg-selo-suave disabled:opacity-50"
                 >
                   {marcando === h.inicio ? "..." : h.rotulo}
                 </button>
@@ -137,11 +137,11 @@ export function MarcarConsulta({ slug, fuso, medicos }: { slug: string; fuso: st
         rotulo="Motivo (opcional)"
         value={motivo}
         onChange={(e) => setMotivo(e.target.value)}
-        ajuda="Uma linha sobre o que voce sente. Nao e o prontuario: e so para o profissional se preparar."
+        ajuda="Uma linha sobre o que você sente. Não é o prontuário: e só para o profissional se preparar."
       />
 
       {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
-      <p className="text-sm text-tinta-suave">Escolher o horario ja marca a consulta.</p>
+      <p className="text-sm text-tinta-suave">Escolher o horário já marca a consulta.</p>
     </div>
   );
 }

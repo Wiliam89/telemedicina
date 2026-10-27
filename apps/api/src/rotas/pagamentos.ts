@@ -35,7 +35,7 @@ const esquemaPrecos = z.object({
       z.object({
         tipo: z.enum(["agendada", "pronto_atendimento"]),
         medicoId: z.string().uuid().nullable().optional(),
-        valorCentavos: z.number().int().min(100, "minimo R$ 1,00").max(1000000, "maximo R$ 10.000,00"),
+        valorCentavos: z.number().int().min(100, "mínimo R$ 1,00").max(1000000, "máximo R$ 10.000,00"),
         comissaoPlataformaBps: z.number().int().min(0).max(3000, "comissao maxima de 30%").default(0),
       }),
     )
@@ -122,12 +122,12 @@ export async function rotasPagamentos(
       .where(and(eq(consultas.id, id), eq(consultas.clinicaId, req.contexto.clinicaId)))
       .limit(1);
 
-    if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta nao encontrada nesta clinica.");
+    if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta não encontrada nesta clínica.");
     if (consulta.pacienteId !== req.usuario.id && !["recepcao", "admin_clinica"].includes(req.contexto.papel)) {
-      throw new ErroHttp(403, "NAO_E_SUA", "So o paciente ou a recepcao pagam esta consulta.");
+      throw new ErroHttp(403, "NAO_E_SUA", "So o paciente ou a recepção pagam esta consulta.");
     }
     if (consulta.status !== "aguardando_pagamento") {
-      throw new ErroHttp(409, "NAO_AGUARDA_PAGAMENTO", `Esta consulta esta "${consulta.status}" - nao ha o que pagar.`);
+      throw new ErroHttp(409, "NAO_AGUARDA_PAGAMENTO", `Esta consulta esta "${consulta.status}" - não ha o que pagar.`);
     }
 
     // Preco: o do medico, se houver; senao o padrao da clinica.
@@ -136,7 +136,7 @@ export async function rotasPagamentos(
       .from(precos)
       .where(and(eq(precos.clinicaId, req.contexto.clinicaId), eq(precos.tipo, "agendada")));
     const preco = escolherPreco(tabela, consulta.medicoId);
-    if (!preco) throw new ErroHttp(409, "SEM_PRECO", "Esta clinica ainda nao definiu o valor da consulta. Fale com a administracao.");
+    if (!preco) throw new ErroHttp(409, "SEM_PRECO", "Esta clínica ainda não definiu o valor da consulta. Fale com a administração.");
 
     const divisao = calcularComissao(preco.valorCentavos, preco.comissaoPlataformaBps);
     const chaveIdempotencia = randomUUID();
@@ -256,7 +256,7 @@ export async function rotasPagamentos(
       .from(precos)
       .where(and(eq(precos.clinicaId, req.contexto.clinicaId), eq(precos.tipo, "pronto_atendimento")));
     const preco = tabela.find((p) => p.medicoId === null);
-    if (!preco) throw new ErroHttp(409, "SEM_PRECO", "Esta clinica ainda nao definiu o valor do pronto atendimento.");
+    if (!preco) throw new ErroHttp(409, "SEM_PRECO", "Esta clínica ainda não definiu o valor do pronto atendimento.");
 
     const [pessoa] = await banco
       .select({ nome: perfis.nomeCompleto, cpf: perfis.cpf })
@@ -357,9 +357,9 @@ export async function rotasPagamentos(
       .where(and(eq(pagamentos.id, id), eq(pagamentos.clinicaId, req.contexto.clinicaId)))
       .limit(1);
 
-    if (!p) throw new ErroHttp(404, "PAGAMENTO_NAO_ENCONTRADO", "Pagamento nao encontrado nesta clinica.");
+    if (!p) throw new ErroHttp(404, "PAGAMENTO_NAO_ENCONTRADO", "Pagamento não encontrado nesta clínica.");
     if (p.pagadorId !== req.usuario.id && !["recepcao", "admin_clinica"].includes(req.contexto.papel)) {
-      throw new ErroHttp(403, "NAO_E_SEU", "Este pagamento nao e seu.");
+      throw new ErroHttp(403, "NAO_E_SEU", "Este pagamento não é seu.");
     }
 
     return {

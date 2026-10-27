@@ -74,35 +74,35 @@ export function PainelDePlantao({
     <div className="space-y-8">
       {souMedico ? (
         <section className="space-y-3">
-          <h2 className="font-titulo text-2xl tracking-tight">Meu plantao</h2>
+          <h2 className="text-xl text-tinta">Meu plantão</h2>
           {meuPlantaoAberto ? (
             <div className="flex flex-wrap items-center gap-4 rounded-lg border border-selo/40 bg-selo-suave p-4">
               <span className="text-selo">
                 Plantao <strong>aberto</strong> ate {new Date(meuPlantaoAberto.fim).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
               </span>
               <Botao onClick={chamarProximo} carregando={ocupado} disabled={atual.totalAguardando === 0}>
-                {atual.totalAguardando > 0 ? `Chamar proximo (${atual.totalAguardando} na fila)` : "Fila vazia"}
+                {atual.totalAguardando > 0 ? `Chamar próximo (${atual.totalAguardando} na fila)` : "Fila vazia"}
               </Botao>
               <button
                 onClick={() => acao(`/plantoes/${meuPlantaoAberto.id}/encerrar`)}
                 disabled={ocupado}
                 className="text-sm text-alerta underline-offset-4 hover:underline disabled:opacity-50"
               >
-                Encerrar plantao
+                Encerrar plantão
               </button>
             </div>
           ) : meuPlantaoEscalado ? (
-            <div className="flex flex-wrap items-center gap-4 rounded-lg border border-linha bg-superficie p-4">
-              <span className="text-tinta-suave">Voce esta escalado, mas o plantao ainda nao foi aberto.</span>
+            <div className="flex flex-wrap items-center gap-4 rounded-xl border border-linha bg-superficie shadow-cartao p-4">
+              <span className="text-tinta-suave">Você está escalado, mas o plantão ainda não foi aberto.</span>
               <Botao onClick={() => acao(`/plantoes/${meuPlantaoEscalado.id}/abrir`)} carregando={ocupado}>
-                Abrir plantao
+                Abrir plantão
               </Botao>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-4 rounded-lg border border-linha bg-superficie p-4">
-              <span className="text-tinta-suave">Voce nao esta de plantao.</span>
+            <div className="flex flex-wrap items-center gap-4 rounded-xl border border-linha bg-superficie shadow-cartao p-4">
+              <span className="text-tinta-suave">Você não está de plantão.</span>
               <Botao variante="secundario" onClick={escalar} carregando={ocupado}>
-                Entrar de plantao agora (6 horas)
+                Entrar de plantão agora (6 horas)
               </Botao>
             </div>
           )}
@@ -112,7 +112,7 @@ export function PainelDePlantao({
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h2 className="font-titulo text-2xl tracking-tight">Fila</h2>
+          <h2 className="text-xl text-tinta">Fila</h2>
           <span className="text-sm text-tinta-suave">
             {atual.totalAguardando} aguardando · {atual.medicosDePlantao} de plantao
           </span>
@@ -121,7 +121,7 @@ export function PainelDePlantao({
         {atual.lista.length === 0 ? (
           <Aviso>Ninguem na fila no momento.</Aviso>
         ) : (
-          <ul className="divide-y divide-linha overflow-hidden rounded-lg border border-linha bg-superficie">
+          <ul className="divide-y divide-linha overflow-hidden rounded-xl border border-linha bg-superficie shadow-cartao">
             {atual.lista.map((f) => (
               <li key={f.id} className="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
                 <div className="flex items-start gap-4">

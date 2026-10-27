@@ -56,8 +56,8 @@ export async function chamarApi<T>(
       erro: {
         codigo: "API_FORA_DO_AR",
         mensagem: local
-          ? `A API em ${ambiente.apiUrl} nao respondeu. Ela esta rodando? (pnpm dev)`
-          : `Nao foi possivel falar com a API em ${ambiente.apiUrl}. Se ela estiver no ar, as causas mais comuns sao o endereco deste site nao estar em ORIGEM_PERMITIDA no servidor da API, ou a API ter demorado a acordar depois de um tempo parada - neste caso, tente de novo em alguns segundos.`,
+          ? `A API em ${ambiente.apiUrl} não respondeu. Ela esta rodando? (pnpm dev)`
+          : `Não foi possível falar com a API em ${ambiente.apiUrl}. Se ela estiver no ar, as causas mais comuns são o endereço deste site não estar em ORIGEM_PERMITIDA no servidor da API, ou a API ter demorado a acordar depois de um tempo parada - neste caso, tente de novo em alguns segundos.`,
       },
     };
   }

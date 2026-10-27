@@ -19,3 +19,7 @@ apps/web/.env.local
 coverage/
 .vercel
 .env*
+
+# acessos gerados por pnpm demo:criar
+*.local.md
+.next-build/

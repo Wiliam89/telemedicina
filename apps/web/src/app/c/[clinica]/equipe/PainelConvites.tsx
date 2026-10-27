@@ -54,13 +54,11 @@ export function PainelConvites({ slug, pendentes }: { slug: string; pendentes: C
 
   return (
     <section className="space-y-4">
-      <h2 className="font-titulo text-2xl tracking-tight">Convidar profissional</h2>
-
-      <form onSubmit={convidar} className="grid gap-4 rounded-lg border border-linha bg-superficie p-4 sm:grid-cols-[1fr_12rem_auto] sm:items-end" noValidate>
+      <form onSubmit={convidar} className="grid gap-4" noValidate>
         <Campo id="email" rotulo="E-mail" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         <div className="space-y-1.5">
-          <label htmlFor="papel" className="block text-sm font-medium">Entrara como</label>
-          <select id="papel" value={papel} onChange={(e) => setPapel(e.target.value as PapelVinculo)} className="w-full rounded-md border border-linha bg-superficie px-3 py-2 text-base">
+          <label htmlFor="papel" className="block text-sm font-medium">Entrará como</label>
+          <select id="papel" value={papel} onChange={(e) => setPapel(e.target.value as PapelVinculo)} className="w-full rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15 text-base">
             {PAPEIS.map((p) => (
               <option key={p} value={p}>{NOME_DO_PAPEL[p]}</option>
             ))}
@@ -73,7 +71,7 @@ export function PainelConvites({ slug, pendentes }: { slug: string; pendentes: C
 
       {novoLink ? (
         <Aviso tipo="ok">
-          <p className="mb-2 font-medium">Convite criado. Copie o link e entregue a pessoa — ele nao sera mostrado de novo.</p>
+          <p className="mb-2 font-medium">Convite criado. Copie o link e entregue à pessoa — ele não será mostrado de novo.</p>
           <div className="flex flex-wrap items-center gap-2">
             <code className="block max-w-full overflow-x-auto rounded bg-superficie px-2 py-1 text-xs">{novoLink}</code>
             <button
@@ -95,7 +93,7 @@ export function PainelConvites({ slug, pendentes }: { slug: string; pendentes: C
         {pendentes.length === 0 ? (
           <p className="text-sm text-tinta-suave">Nenhum convite aguardando resposta.</p>
         ) : (
-          <ul className="divide-y divide-linha overflow-hidden rounded-lg border border-linha bg-superficie">
+          <ul className="divide-y divide-linha overflow-hidden rounded-lg border border-linha">
             {pendentes.map((c) => (
               <li key={c.id} className="flex items-center justify-between gap-4 px-4 py-3">
                 <div>

@@ -97,6 +97,8 @@ Rotas de dentro de uma clinica exigem tambem `X-Clinica: <endereco>`.
 | `GET /documentos`           | vinculo          | os meus / os que emiti                     |
 | `POST /documentos/:id/cancelar` | quem emitiu  | cancela com motivo                         |
 | `POST /documentos/:id/assinar` | quem emitiu  | assina com certificado em nuvem (CPF + OTP) |
+| `GET /documentos/:id/pdf`   | quem emitiu      | PDF para assinar fora da plataforma        |
+| `POST /documentos/:id/assinatura-externa` | quem emitiu | recebe o PDF assinado fora e confere (ADR-0017) |
 | `GET /documentos/:id/arquivo`  | paciente ou medico | link temporario do PDF assinado      |
 | `PUT /clinicas/atual/assinatura` | admin_clinica | credenciais proprias no provedor (segredo cifrado) |
 | `GET /clinicas/atual/assinatura` | admin_clinica | diz apenas SE ha credencial propria    |
@@ -119,6 +121,27 @@ Rotas de dentro de uma clinica exigem tambem `X-Clinica: <endereco>`.
 | `GET /consultas/:id/sala`   | **so os dois da consulta** | a sala esta aberta? (sem token)   |
 | `POST /consultas/:id/sala/encerrar` | medico da consulta | fecha a sala e conclui        |
 | `GET /validar/:codigo`      | **publica**      | confere autenticidade sem login            |
+| `POST /clinicas/atual/status` | admin_clinica  | abre (ativa) ou fecha a clinica para pacientes |
+| `GET /crm/verificacoes`     | admin_clinica    | medicos da clinica, situacao do CRM e historico |
+| `PATCH /perfis/eu`          | login            | corrige nome e telefone (LGPD art. 18, III) |
+| `GET /notificacoes`         | login            | central de avisos (50 recentes + nao lidas) |
+| `POST /notificacoes/:id/lida`, `POST /notificacoes/lidas` | login | marca como lida(s) |
+| `GET /indicadores?dias=30`  | admin_clinica    | indicadores do periodo (so numeros)        |
+| `GET/POST /lgpd/consentimentos` | login        | historico / aceite da versao atual         |
+| `POST /lgpd/consentimentos/revogar` | login    | revoga um consentimento                    |
+| `GET /lgpd/meus-dados`      | login            | copia de tudo em JSON (acesso e portabilidade) |
+| `GET /lgpd/acessos`         | login            | quem acessou meus dados                    |
+| `GET/POST /lgpd/solicitacoes` | login          | pedidos do titular (prazo de 15 dias)      |
+| `GET /lgpd/solicitacoes-da-clinica` | admin_clinica | pedidos dirigidos a clinica          |
+| `POST /lgpd/solicitacoes/:id/responder` | admin_clinica | responde ao titular              |
+| `POST /medicos/:id/crm`     | admin_clinica    | registra a conferencia no CFM (verificado/recusado) |
+| `GET /pacientes`            | equipe           | lista com busca (nome/CPF) e `meus=1`      |
+| `GET /pacientes/:id`        | vinculo          | cadastro + `acessoClinico`                 |
+| `GET/POST /pacientes/:id/ficha` | quem atende / proprio | ficha clinica (cada POST = nova versao) |
+| `GET/POST /pacientes/:id/sinais` | quem atende / proprio | sinais vitais (paciente informa os de casa) |
+| `GET/POST /pacientes/:id/anexos` | quem atende / proprio | exames e laudos (PDF/imagem, 15 MB) |
+| `GET /anexos/:id/arquivo`   | quem atende / proprio | link temporario (auditado)            |
+| `GET /pacientes/:id/linha-do-tempo` | quem atende / proprio | tudo junto, do mais recente ao mais antigo |
 
 Nas tres rotas da sala, "os dois da consulta" e literal: o paciente e o medico
 daquela consulta, e mais ninguem - nem a recepcao, nem a administracao da
@@ -129,6 +152,14 @@ Sem conta de video configurada, o projeto roda inteiro com
 `VIDEO_PROVEDOR=local_teste`: a sala abre e avisa na tela que nao ha
 videochamada neste ambiente. Para ter video de verdade, ver a secao 7 de
 `apps/api/.env.example`.
+
+Clinica de demonstracao com os quatro papeis, consultas, prontuario e graficos
+(acessos em `demo-acessos.local.md`, fora do Git):
+
+```bash
+pnpm dev          # em um terminal
+pnpm demo:criar   # em outro
+```
 
 Prova de ponta a ponta (cria usuarios e clinica, testa o isolamento, apaga tudo):
 
@@ -145,7 +176,8 @@ mudanca e um arquivo em `packages/db/drizzle/`, gerado a partir de
 
 ```bash
 pnpm typecheck          # tipos nos 4 pacotes
-pnpm test               # 82 da API + 5 do banco + 41 do shared + 4 do site
+pnpm test               # testes de unidade (os de banco sao pulados)
+pnpm test:banco         # testes da API contra o Postgres de verdade (usa apps/api/.env)
 ```
 
 ## Onde fica cada coisa

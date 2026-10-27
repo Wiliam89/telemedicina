@@ -49,8 +49,8 @@ export async function rotasProntuario(app: FastifyInstance, opcoes: { banco: Ban
   /** Confere que a evolucao existe, e desta clinica, e e do medico logado. */
   async function minhaEvolucao(id: string, clinicaId: string, medicoId: string) {
     const [e] = await banco.select().from(evolucoes).where(and(eq(evolucoes.id, id), eq(evolucoes.clinicaId, clinicaId))).limit(1);
-    if (!e) throw new ErroHttp(404, "EVOLUCAO_NAO_ENCONTRADA", "Evolucao nao encontrada nesta clinica.");
-    if (e.medicoId !== medicoId) throw new ErroHttp(403, "NAO_E_SUA", "So quem escreveu a evolucao pode altera-la.");
+    if (!e) throw new ErroHttp(404, "EVOLUCAO_NAO_ENCONTRADA", "Evolução não encontrada nesta clínica.");
+    if (e.medicoId !== medicoId) throw new ErroHttp(403, "NAO_E_SUA", "So quem escreveu a evolução pode altera-la.");
     return e;
   }
 
@@ -62,9 +62,9 @@ export async function rotasProntuario(app: FastifyInstance, opcoes: { banco: Ban
       .from(consultas)
       .where(and(eq(consultas.id, id), eq(consultas.clinicaId, req.contexto.clinicaId)))
       .limit(1);
-    if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta nao encontrada nesta clinica.");
-    if (consulta.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "So o medico da consulta escreve o prontuario dela.");
-    if (consulta.status === "cancelada") throw new ErroHttp(409, "CONSULTA_CANCELADA", "Consulta cancelada nao gera prontuario.");
+    if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta não encontrada nesta clínica.");
+    if (consulta.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "So o médico da consulta escreve o prontuário dela.");
+    if (consulta.status === "cancelada") throw new ErroHttp(409, "CONSULTA_CANCELADA", "Consulta cancelada não gera prontuário.");
 
     // Uma evolucao principal por consulta (adendos vem depois, com adendo_de).
     const [existente] = await banco
@@ -94,7 +94,7 @@ export async function rotasProntuario(app: FastifyInstance, opcoes: { banco: Ban
 
     const atual = await minhaEvolucao(id, req.contexto.clinicaId, req.usuario.id);
     if (atual.status === "finalizada") {
-      throw new ErroHttp(409, "EVOLUCAO_FINALIZADA", "Esta evolucao ja foi finalizada e nao pode ser alterada. Registre um adendo.");
+      throw new ErroHttp(409, "EVOLUCAO_FINALIZADA", "Esta evolução já foi finalizada e não pode ser alterada. Registre um adendo.");
     }
 
     await banco
@@ -115,7 +115,7 @@ export async function rotasProntuario(app: FastifyInstance, opcoes: { banco: Ban
   app.post("/evolucoes/:id/finalizar", { preHandler: soMedico }, async (req): Promise<Resposta<EvolucaoResumo>> => {
     const { id } = z.object({ id: z.string().uuid("id invalido") }).parse(req.params);
     const atual = await minhaEvolucao(id, req.contexto.clinicaId, req.usuario.id);
-    if (atual.status === "finalizada") throw new ErroHttp(409, "JA_FINALIZADA", "Esta evolucao ja estava finalizada.");
+    if (atual.status === "finalizada") throw new ErroHttp(409, "JA_FINALIZADA", "Esta evolução já estava finalizada.");
 
     const vazia = ![atual.subjetivo, atual.objetivo, atual.avaliacao, atual.plano].some((c) => c && c.trim() !== "");
     if (vazia) throw new ErroHttp(400, "EVOLUCAO_VAZIA", "Escreva ao menos um campo (S, O, A ou P) antes de finalizar.");
@@ -144,8 +144,8 @@ export async function rotasProntuario(app: FastifyInstance, opcoes: { banco: Ban
     const dados = esquemaAdendo.parse(req.body);
 
     const original = await minhaEvolucao(id, req.contexto.clinicaId, req.usuario.id);
-    if (original.status !== "finalizada") throw new ErroHttp(409, "AINDA_RASCUNHO", "Esta evolucao ainda e rascunho: edite-a em vez de fazer adendo.");
-    if (original.adendoDe) throw new ErroHttp(409, "ADENDO_DE_ADENDO", "Aponte o adendo para a evolucao original, nao para outro adendo.");
+    if (original.status !== "finalizada") throw new ErroHttp(409, "AINDA_RASCUNHO", "Esta evolução ainda é rascunho: edite-a em vez de fazer adendo.");
+    if (original.adendoDe) throw new ErroHttp(409, "ADENDO_DE_ADENDO", "Aponte o adendo para a evolução original, não para outro adendo.");
 
     const criado = await banco.transaction(async (tx) => {
       const [a] = await tx
@@ -191,7 +191,7 @@ export async function rotasProntuario(app: FastifyInstance, opcoes: { banco: Ban
       .from(consultas)
       .where(and(eq(consultas.pacienteId, id), eq(consultas.medicoId, req.usuario.id), eq(consultas.clinicaId, req.contexto.clinicaId)))
       .limit(1);
-    if (!vinculo) throw new ErroHttp(403, "SEM_RELACAO_ASSISTENCIAL", "Voce so acessa o prontuario de pacientes que atende nesta clinica.");
+    if (!vinculo) throw new ErroHttp(403, "SEM_RELACAO_ASSISTENCIAL", "Você só acessa o prontuário de pacientes que atende nesta clínica.");
 
     const linhas = await banco
       .select(colunas())

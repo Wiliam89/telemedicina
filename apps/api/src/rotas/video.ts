@@ -86,7 +86,7 @@ export async function rotasVideo(
       .where(and(eq(consultas.id, consultaId), eq(consultas.clinicaId, clinicaId)))
       .limit(1);
 
-    if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Esta consulta nao existe nesta clinica.");
+    if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Esta consulta não existe nesta clínica.");
 
     const souMedico = consulta.medicoId === usuarioId;
     const souPaciente = consulta.pacienteId === usuarioId;
@@ -284,7 +284,7 @@ export async function rotasVideo(
       const { souMedico } = await conferirAcesso(req.contexto.clinicaId, consultaId, req.usuario.id);
 
       if (!souMedico) {
-        throw new ErroHttp(403, "SO_O_MEDICO_ENCERRA", "Somente o medico da consulta encerra o atendimento.");
+        throw new ErroHttp(403, "SO_O_MEDICO_ENCERRA", "Somente o médico da consulta encerra o atendimento.");
       }
 
       const [sala] = await banco

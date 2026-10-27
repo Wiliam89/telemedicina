@@ -36,7 +36,7 @@ export class ProvedorLocalDePagamento implements ProvedorDePagamento {
     const status: StatusNoProvedor = recusado ? "recusado" : pedido.metodo === "cartao_credito" ? "autorizado" : "pendente";
     COBRANCAS.set(id, { status, valor: pedido.valorCentavos, metodo: pedido.metodo });
 
-    if (recusado) throw new ErroDePagamento("RECUSADO", "Cartao recusado pelo emissor (simulado).");
+    if (recusado) throw new ErroDePagamento("RECUSADO", "Cartão recusado pelo emissor (simulado).");
 
     return {
       idNoProvedor: id,
@@ -51,13 +51,13 @@ export class ProvedorLocalDePagamento implements ProvedorDePagamento {
 
   async consultar(_c: CredenciaisDaClinica, id: string): Promise<Cobranca> {
     const atual = COBRANCAS.get(id);
-    if (!atual) throw new ErroDePagamento("FALHA", "Cobranca simulada nao encontrada.");
+    if (!atual) throw new ErroDePagamento("FALHA", "Cobrança simulada não encontrada.");
     return { idNoProvedor: id, status: atual.status, bruto: { simulado: true } };
   }
 
   async capturar(_c: CredenciaisDaClinica, id: string): Promise<Cobranca> {
     const atual = COBRANCAS.get(id);
-    if (!atual) throw new ErroDePagamento("FALHA", "Cobranca simulada nao encontrada.");
+    if (!atual) throw new ErroDePagamento("FALHA", "Cobrança simulada não encontrada.");
     if (atual.status !== "autorizado") throw new ErroDePagamento("FALHA", `So se captura o que esta autorizado (esta: ${atual.status}).`);
     atual.status = "confirmado";
     return { idNoProvedor: id, status: "confirmado", bruto: { simulado: true } };
@@ -65,7 +65,7 @@ export class ProvedorLocalDePagamento implements ProvedorDePagamento {
 
   async estornar(_c: CredenciaisDaClinica, id: string): Promise<Cobranca> {
     const atual = COBRANCAS.get(id);
-    if (!atual) throw new ErroDePagamento("FALHA", "Cobranca simulada nao encontrada.");
+    if (!atual) throw new ErroDePagamento("FALHA", "Cobrança simulada não encontrada.");
     atual.status = "estornado";
     return { idNoProvedor: id, status: "estornado", bruto: { simulado: true } };
   }

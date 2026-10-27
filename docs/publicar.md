@@ -63,6 +63,15 @@ temporariamente e rode `pnpm db:migrar` uma vez, para criar o schema.
 | `PAGAMENTO_WEBHOOK_SEGREDO` | qualquer segredo longo, por enquanto |
 | `VIDEO_PROVEDOR` | `local_teste` |
 | `PERMITIR_VIDEO_SIMULADO` | `sim` — ver o aviso abaixo |
+| `EMAIL_PROVEDOR` | `console` (só central) ou `resend` — ver ADR-0019 |
+| `EMAIL_API_KEY` / `EMAIL_REMETENTE` | só com `resend` |
+| `NOME_PLATAFORMA` | o nome que aparece nos e-mails |
+| `DB_POOL_MAX` | `10` por instância (ADR-0020) |
+| `LIMITE_POR_MINUTO` | `600` |
+
+> **Health check (ADR-0020):** em *Settings > Health Check Path* do Render,
+> use `/pronto`. Ele responde 503 quando o banco não responde, e o Render
+> não manda tráfego para a instância.
 
 > **Sobre `PERMITIR_ASSINATURA_SEM_VALOR_LEGAL=sim`**
 >
@@ -115,6 +124,9 @@ temporariamente e rode `pnpm db:migrar` uma vez, para criar o schema.
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | do projeto novo — Settings > API Keys > Publishable |
 | `NEXT_PUBLIC_API_URL` | a URL do Render |
 | `NEXT_PUBLIC_AMBIENTE` | `homologacao` |
+| `NEXT_PUBLIC_NOME_PLATAFORMA` | o nome da sua plataforma |
+| `NEXT_PUBLIC_EMPRESA_RAZAO_SOCIAL`, `NEXT_PUBLIC_EMPRESA_CNPJ`, `NEXT_PUBLIC_EMPRESA_ENDERECO` | aparecem nos Termos e na Política |
+| `NEXT_PUBLIC_ENCARREGADO_NOME`, `NEXT_PUBLIC_ENCARREGADO_EMAIL` | o encarregado de dados (DPO) — LGPD art. 41 |
 
 ## Parte 3 — Conferir
 

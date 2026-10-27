@@ -27,7 +27,13 @@ export interface ContextoClinica {
   nomeFantasia: string;
   /** Fuso IANA da clinica. Toda hora local desta requisicao usa este. */
   fusoHorario: string;
+  /** O papel de maior alcance - o que a tela mostra. */
   papel: PapelVinculo;
+  /**
+   * TODOS os papeis ativos. A medica dona do consultorio e medico E
+   * administracao: as rotas de medico conferem aqui, nao em `papel`.
+   */
+  papeis: PapelVinculo[];
 }
 
 declare module "fastify" {
@@ -95,6 +101,7 @@ export function criarExigirClinica(banco: Banco, autenticar: Autenticador) {
       nomeFantasia: clinica.nomeFantasia,
       fusoHorario: clinica.fusoHorario,
       papel: maior.papel!,
+      papeis: ativos.map((a) => a.papel!),
     };
   }
 
@@ -104,7 +111,7 @@ export function criarExigirClinica(banco: Banco, autenticar: Autenticador) {
 /** Exige que o papel na clinica esteja entre os aceitos; senao 403. */
 export function exigirPapel(...aceitos: PapelVinculo[]) {
   return async function verificar(req: FastifyRequest, reply: FastifyReply): Promise<void> {
-    if (!aceitos.includes(req.contexto.papel)) {
+    if (!aceitos.some((p) => req.contexto.papeis.includes(p))) {
       await erro(reply, 403, "PAPEL_INSUFICIENTE", `Esta acao e de ${aceitos.join(" ou ")}. Voce e ${req.contexto.papel} nesta clinica.`);
     }
   };

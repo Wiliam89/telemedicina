@@ -10,9 +10,11 @@ import postgres from "postgres";
  * `onnotice`       -> silencia os avisos "ja existe, pulando" que o Postgres
  *                     emite quando uma migracao roda pela segunda vez.
  */
-export function criarBanco(urlConexao: string) {
+export function criarBanco(urlConexao: string, opcoes: { max?: number } = {}) {
   const cliente = postgres(urlConexao, {
-    max: 10,
+    // Conexoes por instancia da API (DB_POOL_MAX). Some as instancias: o
+    // total precisa caber no limite do pooler do Supabase.
+    max: opcoes.max ?? 10,
     idle_timeout: 20,
     prepare: false,
     connect_timeout: 10,

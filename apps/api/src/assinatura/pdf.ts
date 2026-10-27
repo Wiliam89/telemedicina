@@ -61,6 +61,10 @@ export async function gerarPdfDocumento(d: DadosDoPdf): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
   pdf.setTitle(`${d.tipo} ${d.numero}/${d.ano}`);
   pdf.setSubject(`Documento medico - codigo ${d.codigoValidacao}`);
+  // A "impressao digital" do documento nos metadados: e por ela que a
+  // assinatura feita FORA da plataforma prova que assinou ESTE documento
+  // (ADR-0017), mesmo que o programa do medico regrave o arquivo.
+  pdf.setKeywords([`codigo:${d.codigoValidacao}`, `sha256:${d.hashTexto}`]);
   // Sem data de criacao variavel: dois PDFs do mesmo documento devem ser
   // iguais byte a byte, senao a reemissao mudaria o arquivo sem motivo.
   pdf.setCreationDate(new Date(0));

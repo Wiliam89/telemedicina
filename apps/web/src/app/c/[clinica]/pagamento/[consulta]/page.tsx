@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { ConsultaResumo } from "@tele/shared";
-import { BarraDaClinica } from "@/componentes/BarraDaClinica";
 import { chamarApi } from "@/lib/api";
 import { contextoDaClinica } from "@/lib/clinica";
 import { dataCurta, hora } from "@/lib/datas";
@@ -31,9 +30,8 @@ export default async function PaginaPagamento({ params }: { params: Promise<{ cl
 
   return (
     <div className="space-y-8">
-      <BarraDaClinica clinica={clinica} outras={perfil.clinicas} />
       <div className="space-y-1">
-        <h1 className="font-titulo text-3xl tracking-tight">Pagamento da consulta</h1>
+        <h1 className="text-2xl text-tinta sm:text-[1.75rem]">Pagamento da consulta</h1>
         <p className="text-tinta-suave">
           {dataCurta(consulta.inicio, clinica.fusoHorario)} as {hora(consulta.inicio, clinica.fusoHorario)} · CRM{" "}
           {consulta.medico.crm}-{consulta.medico.crmUf}

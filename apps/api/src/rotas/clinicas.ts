@@ -13,7 +13,7 @@
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { clinicas, pacientes, perfis, vinculos, type Banco } from "@tele/db";
+import { clinicas, medicos, pacientes, perfis, vinculos, type Banco } from "@tele/db";
 import type { ClinicaResumo, Resposta } from "@tele/shared";
 import { registrarAuditoria } from "../auditoria.js";
 import type { ResolvedorDeProvedor } from "../assinatura/index.js";
@@ -66,20 +66,20 @@ const esquemaCriarClinica = z.object({
   cnpj: z
     .string()
     .transform((v) => v.replace(/\D/g, ""))
-    .refine((v) => v.length === 14, "cnpj: 14 digitos")
-    .refine(cnpjValido, "cnpj invalido: confira os digitos"),
+    .refine((v) => v.length === 14, "cnpj: 14 dígitos")
+    .refine(cnpjValido, "cnpj inválido: confira os dígitos"),
   slug: z
     .string()
     .trim()
     .toLowerCase()
-    .regex(/^[a-z0-9][a-z0-9-]{2,38}[a-z0-9]$/, "endereco: de 4 a 40 letras minusculas, numeros ou hifen, sem comecar nem terminar com hifen")
-    .refine((v) => !RESERVADOS.includes(v), "este endereco e reservado pelo sistema"),
+    .regex(/^[a-z0-9][a-z0-9-]{2,38}[a-z0-9]$/, "endereço: de 4 a 40 letras minusculas, numeros ou hifen, sem comecar nem terminar com hifen")
+    .refine((v) => !RESERVADOS.includes(v), "este endereço e reservado pelo sistema"),
   /** Fuso IANA. Padrao: Brasilia. Ex.: America/Manaus, America/Rio_Branco. */
   fusoHorario: z
     .string()
     .trim()
     .default("America/Sao_Paulo")
-    .refine(fusoValido, "fuso horario desconhecido (use o nome IANA, ex.: America/Manaus)"),
+    .refine(fusoValido, "fuso horário desconhecido (use o nome IANA, ex.: America/Manaus)"),
 });
 
 export async function rotasClinicas(
@@ -93,8 +93,13 @@ export async function rotasClinicas(
   app.post("/clinicas", { preHandler: exigirLogin }, async (req, reply): Promise<Resposta<ClinicaResumo>> => {
     const dados = esquemaCriarClinica.parse(req.body);
 
-    const [perfil] = await banco.select({ id: perfis.id }).from(perfis).where(eq(perfis.id, req.usuario.id)).limit(1);
-    if (!perfil) throw new ErroHttp(400, "PERFIL_NECESSARIO", "Complete seu perfil antes de criar uma clinica.");
+    const [perfil] = await banco
+      .select({ id: perfis.id, crm: medicos.crm })
+      .from(perfis)
+      .leftJoin(medicos, eq(medicos.perfilId, perfis.id))
+      .where(eq(perfis.id, req.usuario.id))
+      .limit(1);
+    if (!perfil) throw new ErroHttp(400, "PERFIL_NECESSARIO", "Complete seu perfil antes de criar uma clínica.");
 
     let criada: { id: string; slug: string; nomeFantasia: string; status: ClinicaResumo["status"]; fusoHorario: string };
     try {
@@ -105,6 +110,9 @@ export async function rotasClinicas(
           .returning({ id: clinicas.id, slug: clinicas.slug, nomeFantasia: clinicas.nomeFantasia, status: clinicas.status, fusoHorario: clinicas.fusoHorario });
         // Quem cria administra: sem isso a clinica nasceria sem dono.
         await tx.insert(vinculos).values({ perfilId: req.usuario.id, clinicaId: c!.id, papel: "admin_clinica" });
+        // O medico que abre o proprio consultorio tambem ATENDE nele. Sem
+        // isto ele administraria sem conseguir atender ninguem.
+        if (perfil.crm) await tx.insert(vinculos).values({ perfilId: req.usuario.id, clinicaId: c!.id, papel: "medico" });
         await registrarAuditoria(tx, {
           quem: req.usuario.id,
           clinicaId: c!.id,
@@ -120,8 +128,8 @@ export async function rotasClinicas(
       const codigo = (erro as { cause?: { code?: string } }).cause?.code ?? (erro as { code?: string }).code;
       const detalhe = String((erro as { cause?: { detail?: string } }).cause?.detail ?? "");
       if (codigo === "23505") {
-        if (detalhe.includes("slug")) throw new ErroHttp(409, "ENDERECO_EM_USO", "Este endereco ja esta em uso por outra clinica. Escolha outro.");
-        throw new ErroHttp(409, "CNPJ_EM_USO", "Ja existe uma clinica cadastrada com este CNPJ.");
+        if (detalhe.includes("slug")) throw new ErroHttp(409, "ENDERECO_EM_USO", "Este endereço já está em uso por outra clínica. Escolha outro.");
+        throw new ErroHttp(409, "CNPJ_EM_USO", "Já existe uma clínica cadastrada com este CNPJ.");
       }
       throw erro;
     }
@@ -140,7 +148,7 @@ export async function rotasClinicas(
    */
   app.patch("/clinicas/atual", { preHandler: [...dentroDaClinica, exigirPapel("admin_clinica")] }, async (req): Promise<Resposta<ClinicaResumo>> => {
     const { fusoHorario } = z
-      .object({ fusoHorario: z.string().trim().refine(fusoValido, "fuso horario desconhecido (use o nome IANA, ex.: America/Manaus)") })
+      .object({ fusoHorario: z.string().trim().refine(fusoValido, "fuso horário desconhecido (use o nome IANA, ex.: America/Manaus)") })
       .parse(req.body);
 
     const anterior = req.contexto.fusoHorario;
@@ -164,6 +172,46 @@ export async function rotasClinicas(
   });
 
   /**
+   * Abrir (ou fechar) a clinica para pacientes.
+   *
+   * Toda clinica nasce "em_implantacao": a equipe monta grade, valores e
+   * convites sem que paciente nenhum consiga entrar pela porta publica
+   * (/entrar-na-clinica). Quando estiver pronta, a administracao ativa.
+   *
+   * So os dois estados que a propria clinica controla. "suspensa" e
+   * "encerrada" sao decisoes da PLATAFORMA (contrato, inadimplencia,
+   * ordem judicial) - nao aparecem aqui de proposito.
+   */
+  app.post("/clinicas/atual/status", { preHandler: [...dentroDaClinica, exigirPapel("admin_clinica")] }, async (req): Promise<Resposta<ClinicaResumo>> => {
+    const { status } = z
+      .object({ status: z.enum(["ativa", "em_implantacao"], { message: "status deve ser ativa ou em_implantacao" }) })
+      .parse(req.body);
+
+    const [atual] = await banco.select({ status: clinicas.status }).from(clinicas).where(eq(clinicas.id, req.contexto.clinicaId)).limit(1);
+    if (atual?.status === "suspensa" || atual?.status === "encerrada") {
+      throw new ErroHttp(409, "CLINICA_BLOQUEADA", "Esta clínica esta suspensa ou encerrada pela plataforma e não pode ser reaberta por aqui.");
+    }
+
+    const [c] = await banco
+      .update(clinicas)
+      .set({ status, atualizadoEm: new Date() })
+      .where(eq(clinicas.id, req.contexto.clinicaId))
+      .returning({ id: clinicas.id, slug: clinicas.slug, nomeFantasia: clinicas.nomeFantasia, status: clinicas.status, fusoHorario: clinicas.fusoHorario });
+
+    await registrarAuditoria(banco, {
+      quem: req.usuario.id,
+      clinicaId: req.contexto.clinicaId,
+      acao: status === "ativa" ? "clinica.ativada" : "clinica.em_implantacao",
+      tabela: "clinicas",
+      registroId: req.contexto.clinicaId,
+      detalhes: { de: atual?.status, para: status },
+      ip: req.ip,
+    });
+
+    return { ok: true, dados: { ...c!, papel: req.contexto.papel } };
+  });
+
+  /**
    * Credenciais PROPRIAS da clinica no provedor de assinatura.
    *
    * Enviar `null` remove e faz a clinica voltar a usar as credenciais da
@@ -180,7 +228,7 @@ export async function rotasClinicas(
       })
       .superRefine((v, ctx) => {
         if (v.provedor && (!v.url || !v.clientId || !v.clientSecret)) {
-          ctx.addIssue({ code: "custom", message: "para usar credenciais proprias, informe url, clientId e clientSecret" });
+          ctx.addIssue({ code: "custom", message: "para usar credenciais próprias, informe url, clientId e clientSecret" });
         }
       })
       .parse(req.body);
@@ -268,7 +316,7 @@ export async function rotasClinicas(
       .leftJoin(pacientes, eq(pacientes.perfilId, perfis.id))
       .where(eq(perfis.id, req.usuario.id))
       .limit(1);
-    if (!perfil) throw new ErroHttp(400, "PERFIL_NECESSARIO", "Complete seu perfil antes de entrar numa clinica.");
+    if (!perfil) throw new ErroHttp(400, "PERFIL_NECESSARIO", "Complete seu perfil antes de entrar numa clínica.");
     if (!perfil.nascimento) {
       throw new ErroHttp(400, "DADOS_DE_PACIENTE_NECESSARIOS", "Para ser atendido, informe sua data de nascimento no perfil.");
     }
@@ -278,9 +326,9 @@ export async function rotasClinicas(
       .from(clinicas)
       .where(eq(clinicas.slug, slug))
       .limit(1);
-    if (!c) throw new ErroHttp(404, "CLINICA_NAO_ENCONTRADA", `Nao existe clinica com o endereco "${slug}".`);
+    if (!c) throw new ErroHttp(404, "CLINICA_NAO_ENCONTRADA", `Não existe clínica com o endereço "${slug}".`);
     if (c.status !== "ativa") {
-      throw new ErroHttp(409, "CLINICA_INDISPONIVEL", `${c.nomeFantasia} nao esta aceitando novos pacientes no momento.`);
+      throw new ErroHttp(409, "CLINICA_INDISPONIVEL", `${c.nomeFantasia} não está aceitando novos pacientes no momento.`);
     }
 
     await banco.transaction(async (tx) => {
@@ -310,7 +358,7 @@ export async function rotasClinicas(
       .from(clinicas)
       .where(eq(clinicas.slug, slug))
       .limit(1);
-    if (!c) throw new ErroHttp(404, "CLINICA_NAO_ENCONTRADA", "Clinica nao encontrada.");
+    if (!c) throw new ErroHttp(404, "CLINICA_NAO_ENCONTRADA", "Clínica não encontrada.");
     // Nada alem do nome: quem nao tem vinculo nao precisa saber mais.
     return { ok: true, dados: { slug: c.slug, nomeFantasia: c.nomeFantasia, aceitandoPacientes: c.status === "ativa" } };
   });
