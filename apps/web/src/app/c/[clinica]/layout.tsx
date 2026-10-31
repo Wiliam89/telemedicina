@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { EncerrarPorInatividade } from "@/componentes/EncerrarPorInatividade";
 import { MolduraDaClinica } from "@/componentes/MolduraDaClinica";
 import { contextoDaClinica } from "@/lib/clinica";
 
@@ -14,6 +15,8 @@ export default async function LayoutDaClinica({ children, params }: { children: 
   return (
     <MolduraDaClinica clinica={clinica} outras={perfil.clinicas} nome={perfil.nomeCompleto}>
       {children}
+      {/* So a equipe: e quem abre prontuario em computador compartilhado. */}
+      {(clinica.papeis ?? [clinica.papel]).some((p) => p !== "paciente") ? <EncerrarPorInatividade /> : null}
     </MolduraDaClinica>
   );
 }

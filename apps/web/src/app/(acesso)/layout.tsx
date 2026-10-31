@@ -15,7 +15,7 @@ export default function LayoutAcesso({ children }: { children: ReactNode }) {
         <main id="conteudo" className="flex flex-1 items-center justify-center py-10">
           <div className="w-full max-w-sm">{children}</div>
         </main>
-        <p className="text-xs text-tinta-suave">Seus dados ficam no Brasil e cada acesso ao prontuário é registrado.</p>
+        <p className="text-xs text-tinta-suave">Banco de dados no Brasil e cada acesso ao prontuário registrado.</p>
       </div>
 
       <aside className="relative hidden overflow-hidden bg-marinho lg:block">
@@ -31,7 +31,7 @@ export default function LayoutAcesso({ children }: { children: ReactNode }) {
             {[
               { Icone: Video, t: "Teleconsulta segura", d: "Sala exclusiva por consulta, sem gravação." },
               { Icone: FileCheck2, t: "Documentos verificáveis", d: "Receitas e atestados com assinatura ICP-Brasil." },
-              { Icone: ShieldCheck, t: "Conforme a LGPD", d: "Dados no Brasil, acesso registrado e isolado por clínica." },
+              { Icone: ShieldCheck, t: "Privacidade no projeto", d: "Banco de dados em São Paulo, acesso registrado e isolado por clínica." },
             ].map(({ Icone, t, d }) => (
               <li key={t} className="flex items-start gap-4">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white/10 ring-1 ring-white/15">

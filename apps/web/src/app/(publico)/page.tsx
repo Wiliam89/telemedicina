@@ -32,7 +32,7 @@ const RECURSOS = [
 ];
 
 const CONFORMIDADE = [
-  { Icone: MapPin, titulo: "Dados no Brasil", texto: "Servidores em São Paulo, como exige a Resolução CFM 2.314/2022." },
+  { Icone: MapPin, titulo: "Banco de dados no Brasil", texto: "Prontuários, documentos e arquivos guardados em São Paulo." },
   { Icone: Lock, titulo: "Isolamento por clínica", texto: "Garantido pelo banco de dados (RLS), não só pela tela." },
   { Icone: ScrollText, titulo: "Trilha de auditoria", texto: "Cada acesso ao prontuário fica registrado e não pode ser apagado." },
   { Icone: BadgeCheck, titulo: "Documento verificável", texto: "Qualquer farmácia confere a autenticidade pelo código, sem conta." },
@@ -60,7 +60,7 @@ export default async function Capa() {
               className="surge inline-flex items-center gap-2 rounded-full border border-selo/25 bg-selo-suave px-3 py-1 text-xs font-semibold text-selo-forte"
               style={atraso(0.05)}
             >
-              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> Conforme CFM 2.314/2022 e LGPD
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" /> Construída com base na CFM 2.314/2022 e na LGPD
             </p>
             <h1 className="surge mt-6 text-4xl leading-[1.08] text-tinta sm:text-5xl lg:text-[3.6rem]" style={atraso(0.15)}>
               Telemedicina completa para <span className="text-selo">clínicas e médicos</span>

@@ -5,9 +5,9 @@
  * aceitou a anterior passa a ver o pedido de novo aceite no proximo acesso.
  */
 export const VERSOES_LEGAIS = {
-  termos_de_uso: "2026-10-26",
-  politica_de_privacidade: "2026-10-26",
-  telemedicina: "2026-10-26",
+  termos_de_uso: "2026-10-31",
+  politica_de_privacidade: "2026-10-31",
+  telemedicina: "2026-10-31",
 } as const;
 
 export type TipoConsentimento = keyof typeof VERSOES_LEGAIS;

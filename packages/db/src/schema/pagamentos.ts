@@ -97,6 +97,10 @@ export const pagamentos = pgTable(
     index("pagamentos_clinica_criado").on(t.clinicaId, t.criadoEm),
     index("pagamentos_pagador").on(t.pagadorId),
     uniqueIndex("pagamentos_chave_idempotencia").on(t.chaveIdempotencia),
+    // Uma so cobranca em aberto por consulta, e uma so por paciente na fila de
+    // cada clinica. A API ja se protege; o banco e a ultima trava.
+    uniqueIndex("pagamentos_um_em_aberto_por_consulta").on(t.consultaId).where(sql`${t.consultaId} is not null and ${t.status} in ('pendente', 'autorizado')`),
+    uniqueIndex("pagamentos_um_pendente_pronto_atendimento").on(t.pagadorId, t.clinicaId).where(sql`${t.consultaId} is null and ${t.status} = 'pendente'`),
   ],
 );
 

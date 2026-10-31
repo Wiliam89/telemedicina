@@ -30,6 +30,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { criarBanco } from "@tele/db";
+import { VERSOES_LEGAIS } from "@tele/shared/lgpd";
 import type { Ambiente } from "./ambiente.js";
 import { criarServidor } from "./servidor.js";
 import { ProvedorLocalDeVideo } from "./video/provedor-local.js";
@@ -101,6 +102,11 @@ beforeAll(async () => {
   await sql`
     insert into pacientes (perfil_id, data_nascimento)
     values (${pacienteId}, '1990-01-01'), (${outroPacienteId}, '1985-05-05')
+  `;
+  // A sala exige o termo de telemedicina aceito (ADR-0021).
+  await sql`
+    insert into consentimentos (perfil_id, tipo, acao, versao)
+    values (${pacienteId}, 'telemedicina', 'aceito', ${VERSOES_LEGAIS.telemedicina}), (${outroPacienteId}, 'telemedicina', 'aceito', ${VERSOES_LEGAIS.telemedicina})
   `;
   await sql`
     insert into clinicas (id, slug, nome_fantasia, razao_social, cnpj, status, fuso_horario)

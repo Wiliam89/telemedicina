@@ -23,6 +23,8 @@ pnpm dev                # site em http://localhost:3000, API em http://localhost
 | -------------------------- | ----- | -------------------------------------------------- |
 | `/`                        | nao   | capa; logado vai para /clinicas                    |
 | `/criar-conta`, `/entrar`  | nao   | conta e sessao (Supabase Auth)                     |
+| `/recuperar-senha`         | nao   | pede o link para criar senha nova                  |
+| `/redefinir-senha`         | sim   | cria a senha nova (o link do e-mail abre a sessao) |
 | `/completar-perfil`        | sim   | dados da pessoa -> `POST /perfis`                  |
 | `/clinicas`                | sim   | escolher clinica (uma so: entra direto)            |
 | `/clinicas/nova`           | sim   | abrir uma clinica                                  |
@@ -80,6 +82,7 @@ Rotas de dentro de uma clinica exigem tambem `X-Clinica: <endereco>`.
 | `POST /convites`            | admin_clinica    | convida alguem (devolve o link)            |
 | `GET /convites`             | admin_clinica    | convites pendentes                         |
 | `POST /convites/:id/revogar`| admin_clinica    | cancela um convite                         |
+| `POST /membros/:id/suspender`, `/reativar` | admin_clinica | corta ou devolve o acesso de quem trabalha aqui |
 | `GET/PUT /disponibilidades` | vinculo / medico | grade semanal do medico naquela clinica    |
 | `GET/POST /bloqueios`       | equipe / medico  | periodos sem atendimento (ferias)          |
 | `GET /horarios`             | vinculo          | horarios livres de um medico num dia        |
@@ -177,7 +180,7 @@ mudanca e um arquivo em `packages/db/drizzle/`, gerado a partir de
 ```bash
 pnpm typecheck          # tipos nos 4 pacotes
 pnpm test               # testes de unidade (os de banco sao pulados)
-pnpm test:banco         # testes da API contra o Postgres de verdade (usa apps/api/.env)
+pnpm test:banco         # testes da API em Postgres descartavel (exige DATABASE_URL_TESTE, ver manual, secao 11)
 ```
 
 ## Onde fica cada coisa

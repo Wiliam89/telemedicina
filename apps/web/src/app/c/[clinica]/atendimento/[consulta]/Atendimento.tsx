@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DocumentoResumo, EvolucaoResumo } from "@tele/shared";
 import { Aviso } from "@/componentes/Aviso";
 import { Botao } from "@/componentes/Botao";
 import { chamarApi } from "@/lib/api";
+import { EVENTO_ANTES_DE_ENCERRAR } from "@/componentes/EncerrarPorInatividade";
 import { SalaDeVideo } from "@/componentes/SalaDeVideo";
 import { criarClienteNavegador } from "@/lib/supabase-navegador";
 import { EmitirDocumento } from "./EmitirDocumento";
@@ -70,6 +71,16 @@ export function Atendimento({
     else setErro(r.erro.mensagem);
     setOcupado(false);
   }
+
+  // A sessao vai fechar por inatividade: o texto digitado nao pode se perder.
+  const salvarAoSair = useRef(salvar);
+  salvarAoSair.current = salvar;
+  useEffect(() => {
+    if (finalizada) return;
+    const aoEncerrar = () => void salvarAoSair.current();
+    window.addEventListener(EVENTO_ANTES_DE_ENCERRAR, aoEncerrar);
+    return () => window.removeEventListener(EVENTO_ANTES_DE_ENCERRAR, aoEncerrar);
+  }, [finalizada]);
 
   async function finalizar() {
     if (!window.confirm("Finalizar o prontuário?\n\nDepois disso o registro NAO pode mais ser alterado nem apagado — nem por você, nem pela administração. Correcoes só por adendo.")) return;

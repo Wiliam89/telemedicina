@@ -9,14 +9,16 @@ import { Aviso } from "@/componentes/Aviso";
 import { Botao } from "@/componentes/Botao";
 import { Campo, CLASSE_CONTROLE } from "@/componentes/Campo";
 import { ambiente } from "@/lib/ambiente";
+import { ENCARREGADO } from "@/lib/marca";
 import { acaoNaApi, tokenDoNavegador } from "@/lib/navegador";
 import { soDigitos } from "@/lib/validacao";
 
 /** Correcao do proprio cadastro (LGPD art. 18, III). */
-export function CorrigirDados({ nome, telefone }: { nome: string; telefone: string | null }) {
+export function CorrigirDados({ nome, telefone, semCpf = false }: { nome: string; telefone: string | null; semCpf?: boolean }) {
   const router = useRouter();
   const [n, setN] = useState(nome);
   const [t, setT] = useState(telefone ?? "");
+  const [cpf, setCpf] = useState("");
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -24,7 +26,7 @@ export function CorrigirDados({ nome, telefone }: { nome: string; telefone: stri
     e.preventDefault();
     setMsg(null);
     setSalvando(true);
-    const r = await acaoNaApi("/perfis/eu", { metodo: "PATCH", corpo: { nomeCompleto: n.trim(), telefone: t ? soDigitos(t) : null } });
+    const r = await acaoNaApi("/perfis/eu", { metodo: "PATCH", corpo: { nomeCompleto: n.trim(), telefone: t ? soDigitos(t) : null, ...(semCpf && cpf ? { cpf: soDigitos(cpf) } : {}) } });
     setSalvando(false);
     if (!r.ok) return setMsg({ tipo: "erro", texto: r.erro.mensagem });
     setMsg({ tipo: "ok", texto: "Dados atualizados." });
@@ -36,6 +38,7 @@ export function CorrigirDados({ nome, telefone }: { nome: string; telefone: stri
       <div className="grid gap-4 sm:grid-cols-2">
         <Campo id="conta-nome" rotulo="Nome completo" value={n} onChange={(e) => setN(e.target.value)} autoComplete="name" />
         <Campo id="conta-telefone" rotulo="Telefone" value={t} onChange={(e) => setT(e.target.value)} inputMode="numeric" autoComplete="tel" placeholder="11 99999-0000" />
+        {semCpf ? <Campo id="conta-cpf" rotulo="CPF" value={cpf} onChange={(e) => setCpf(e.target.value)} inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" ajuda="O médico precisa dele para assinar documentos. Depois de salvo, a troca é por pedido à clínica." /> : null}
       </div>
       {msg ? <Aviso tipo={msg.tipo}>{msg.texto}</Aviso> : null}
       <Botao type="submit" variante="secundario" carregando={salvando}>
@@ -100,7 +103,7 @@ export function RevogarConsentimento({ tipo }: { tipo: TipoConsentimento }) {
   );
 }
 
-/** Pedido ao controlador (clinica) ou a plataforma (art. 18). */
+/** Pedido a clinica, que e a controladora dos dados do atendimento (art. 18). */
 export function NovoPedido({ clinicas }: { clinicas: ClinicaResumo[] }) {
   const router = useRouter();
   const [tipo, setTipo] = useState<TipoSolicitacao>("confirmacao_e_acesso");
@@ -108,6 +111,20 @@ export function NovoPedido({ clinicas }: { clinicas: ClinicaResumo[] }) {
   const [descricao, setDescricao] = useState("");
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
   const [enviando, setEnviando] = useState(false);
+
+  // Pedido sem clinica nao teria quem o respondesse, e o prazo de 15 dias venceria
+  // sem resposta. Sobre a conta na plataforma, o caminho e o encarregado de dados.
+  if (clinicas.length === 0) {
+    return (
+      <Aviso>
+        Você ainda não é atendido por nenhuma clínica. Para pedidos sobre os dados da sua conta, escreva ao encarregado de dados:{" "}
+        <a href={`mailto:${ENCARREGADO.email}`} className="font-medium underline">
+          {ENCARREGADO.email}
+        </a>
+        .
+      </Aviso>
+    );
+  }
 
   async function enviar(e: FormEvent) {
     e.preventDefault();
@@ -149,7 +166,6 @@ export function NovoPedido({ clinicas }: { clinicas: ClinicaResumo[] }) {
                 {c.nomeFantasia} (dados do atendimento)
               </option>
             ))}
-            <option value="">Plataforma (dados da conta)</option>
           </select>
         </div>
       </div>

@@ -102,7 +102,9 @@ export const documentos = pgTable(
     ),
     check(
       "documentos_assinatura_coerente",
-      sql`(${t.status} <> 'assinado' and ${t.assinadoEm} is null)
+      // Documento assinado pode ser cancelado depois, e continua registrando a assinatura.
+      sql`(${t.status} = 'emitido' and ${t.assinadoEm} is null)
+          or ${t.status} = 'cancelado'
           or (${t.status} = 'assinado' and ${t.assinadoEm} is not null and ${t.assinaturaProvedor} is not null
               and ${t.arquivoUrl} is not null and ${t.arquivoHash} is not null)`,
     ),

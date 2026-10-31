@@ -169,6 +169,20 @@
       "when": 1793064532875,
       "tag": "0023_notificacoes",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793480442119,
+      "tag": "0024_protecoes_contra_duplicidade",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1793485396000,
+      "tag": "0025_cancelar_documento_assinado",
+      "breakpoints": true
     }
   ]
 }

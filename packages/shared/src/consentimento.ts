@@ -13,7 +13,7 @@
  * valendo para os atendimentos que aconteceram sob eles.
  */
 
-export const VERSAO_DO_CONSENTIMENTO = "2026-09-01";
+export const VERSAO_DO_CONSENTIMENTO = "2026-10-31";
 
 export interface ItemDoTermo {
   titulo: string;
@@ -44,7 +44,7 @@ export const TERMO_DE_TELEMEDICINA: ItemDoTermo[] = [
   {
     titulo: "Seus dados",
     texto:
-      "O que voce contar ao medico entra no seu prontuario, que fica guardado em servidores no Brasil e so pode ser acessado por profissionais que atendem voce. Todo acesso ao prontuario e registrado. Voce pode pedir uma copia dos seus dados a qualquer momento.",
+      "O que voce contar ao medico entra no seu prontuario, que fica guardado em banco de dados no Brasil e so pode ser acessado por profissionais que atendem voce. Todo acesso ao prontuario e registrado. Voce pode pedir uma copia dos seus dados a qualquer momento.",
   },
   {
     titulo: "Gravacao",

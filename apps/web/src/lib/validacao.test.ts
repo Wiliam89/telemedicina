@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { cpfValido, dataNascimentoValida, formatarCpf, problemaDaSenha, soDigitos } from "./validacao";
+import { cpfValido, dataNascimentoValida, destinoSeguro, formatarCpf, problemaDaSenha, soDigitos } from "./validacao";
+
+describe("destino depois do login", () => {
+  it("aceita paginas deste site", () => {
+    expect(destinoSeguro("/c/clinica-demo/inicio")).toBe("/c/clinica-demo/inicio");
+    expect(destinoSeguro("/convite/abc?x=1")).toBe("/convite/abc?x=1");
+  });
+
+  it("recusa qualquer caminho para outro site", () => {
+    for (const ruim of ["//site.com", "/\\site.com", "/%2Fsite.com", "%2F%2Fsite.com", "/\t/site.com", "/\n/site.com", "/%09/site.com", "https://site.com", "site.com", "/%E0%A4%A"]) {
+      expect(destinoSeguro(ruim), ruim).toBe("/clinicas");
+    }
+    expect(destinoSeguro(undefined)).toBe("/clinicas");
+  });
+});
 
 describe("validacao no navegador", () => {
   it("1. cpfValido confere os digitos verificadores", () => {

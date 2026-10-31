@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { destinoSeguro } from "@/lib/validacao";
 import { FormularioEntrar } from "./FormularioEntrar";
 
 export const metadata: Metadata = { title: "Entrar" };
@@ -10,7 +11,7 @@ export const metadata: Metadata = { title: "Entrar" };
  */
 export default async function PaginaEntrar({ searchParams }: { searchParams: Promise<{ depois?: string }> }) {
   const { depois } = await searchParams;
-  const destino = depois && depois.startsWith("/") ? depois : "/clinicas";
+  const destino = destinoSeguro(depois);
 
   return (
     <section className="space-y-7">

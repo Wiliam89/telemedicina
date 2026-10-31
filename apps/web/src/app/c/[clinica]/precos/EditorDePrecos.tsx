@@ -32,6 +32,7 @@ export function EditorDePrecos({
   );
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   async function salvar() {
@@ -49,9 +50,10 @@ export function EditorDePrecos({
 
     setSalvando(true);
     const { data } = await criarClienteNavegador().auth.getSession();
-    const r = await chamarApi("/precos", { metodo: "PUT", token: data.session?.access_token, clinica: slug, corpo: { itens: convertidos } });
+    const r = await chamarApi<{ itens: number; aviso: string | null }>("/precos", { metodo: "PUT", token: data.session?.access_token, clinica: slug, corpo: { itens: convertidos } });
     if (r.ok) {
       setSalvo(true);
+      setAviso(r.dados.aviso);
       router.refresh();
     } else setErro(r.erro.mensagem);
     setSalvando(false);
@@ -116,6 +118,7 @@ export function EditorDePrecos({
 
       {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
       {salvo ? <Aviso tipo="ok">Valores salvos.</Aviso> : null}
+      {aviso ? <Aviso>{aviso}</Aviso> : null}
 
       <div className="flex flex-wrap gap-3">
         <Botao variante="secundario" onClick={() => setItens((a) => [...a, { tipo: "agendada", medicoId: null, texto: "150,00" }])}>

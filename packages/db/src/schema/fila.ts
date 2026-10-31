@@ -14,7 +14,7 @@
  * o provedor avisa (Modulo 10).
  */
 import { sql } from "drizzle-orm";
-import { check, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { clinicas } from "./clinicas.js";
 import { consultas } from "./consultas.js";
 import { pacientes } from "./pacientes.js";
@@ -85,6 +85,9 @@ export const filaAtendimento = pgTable(
     // "quem esta esperando agora, por ordem" - a consulta mais frequente da fila.
     index("fila_clinica_status_entrada").on(t.clinicaId, t.status, t.entrouEm),
     index("fila_paciente").on(t.pacienteId),
+    // Ninguem esta duas vezes na fila da mesma clinica, nem usa o mesmo pagamento duas vezes.
+    uniqueIndex("fila_uma_entrada_ativa_por_paciente").on(t.pacienteId, t.clinicaId).where(sql`${t.status} in ('aguardando', 'chamado', 'em_atendimento')`),
+    uniqueIndex("fila_um_uso_ativo_por_pagamento").on(t.pagamentoId).where(sql`${t.status} in ('aguardando', 'chamado', 'em_atendimento')`),
   ],
 );
 

@@ -62,7 +62,7 @@
     <p style="margin-top:6mm">Plataforma de telemedicina para clínicas e médicos: agenda, teleconsulta, prontuário eletrônico, documentos com assinatura digital ICP-Brasil, pagamento e conformidade com a LGPD.</p>
     <p>Para quem vai usar, testar, implantar e publicar a plataforma.</p>
   </div>
-  <div class="rodape">Versão 1.0 · outubro de 2026 · branch <span class="mono" style="background:rgba(255,255,255,.12);color:#fff">evolucao-plataforma</span><br>Nome da plataforma configurável (NEXT_PUBLIC_NOME_PLATAFORMA).</div>
+  <div class="rodape">Versão 1.1 · outubro de 2026 · branch <span class="mono" style="background:rgba(255,255,255,.12);color:#fff">evolucao-plataforma</span><br>Nome da plataforma configurável (NEXT_PUBLIC_NOME_PLATAFORMA).</div>
 </section>
 
 <!-- ============================== SUMARIO ============================== -->
@@ -120,7 +120,8 @@
     <tr><td>Paciente</td><td>João Pedro Almeida</td><td class="mono">demo.paciente2@exemplo.com</td></tr>
   </table>
   <div class="aviso"><strong>A senha</strong> (a mesma para todos) fica no arquivo <span class="mono">demo-acessos.local.md</span>, na pasta principal do projeto, que <strong>não vai para o Git</strong>. Rodar o comando de novo mantém a senha; para gerar outra, apague o arquivo e rode de novo. Para testar vários papéis ao mesmo tempo, use uma janela anônima ou outro navegador para cada pessoa.</div>
-  <div class="perigo"><strong>Nunca</strong> rode a demonstração num banco com paciente real. O comando se recusa a rodar com <span class="mono">NODE_ENV=production</span>, e a tarja amarela no topo de todas as telas lembra que o ambiente não tem valor legal.</div>
+  <div class="perigo"><strong>Nunca</strong> rode a demonstração num banco com paciente real. O comando se recusa a rodar com <span class="mono">NODE_ENV=production</span> e, em servidor remoto, só roda depois de você confirmar (<span class="mono">$env:CONFIRMAR_BANCO_REMOTO="sim"</span> no PowerShell). A tarja amarela no topo de todas as telas lembra que o ambiente não tem valor legal.</div>
+  <div class="aviso"><strong>Banco separado:</strong> o <span class="mono">apps/api/.env</span> precisa apontar para um projeto Supabase de desenvolvimento, nunca para o da produção. Se apontar, tudo o que você testar na sua máquina grava onde estão os dados publicados.</div>
 </section>
 
 <!-- ============================== ACESSO ============================== -->
@@ -131,11 +132,18 @@
   <h3>Criar conta</h3>
   <ol class="passos">
     <li>Em <strong>Criar conta</strong>, informe e-mail e senha (mínimo de 8 caracteres, com letras e números).</li>
-    <li>Na tela <strong>Seus dados</strong>, preencha nome, data de nascimento, telefone e CPF. Médico marca <em>“Sou médico(a)”</em> e informa CRM, UF e especialidade.</li>
+    <li>Na tela <strong>Seus dados</strong>, preencha nome, data de nascimento, telefone e CPF. Médico marca <em>“Sou médico(a)”</em> e informa CRM, UF e especialidade; para ele, o CPF é obrigatório, porque é o que confirma que o certificado é dele. Quem ainda não tem CPF cadastrado informa em <strong>Minha conta</strong>; depois de salvo, a troca é por pedido à clínica.</li>
     <li>Marque os três aceites: Termos de uso, Política de privacidade e Consentimento para telemedicina. Nenhum vem marcado e cada aceite é registrado com a versão do texto, data e IP.</li>
     <li>Pronto: a pessoa entra numa clínica pelo link que a clínica divulga, por convite, ou abre a própria clínica.</li>
   </ol>
   <figure><span class="recorte" style="width:110mm"><img src="imagens/03-aceitar-termos.jpg" alt="Aceite dos termos"></span><figcaption>Tela de aceite: aparece no cadastro e sempre que os termos mudam de versão.</figcaption></figure>
+  <h3>Esqueci minha senha</h3>
+  <ol class="passos">
+    <li>Na tela <strong>Entrar</strong>, clique em <strong>Esqueci minha senha</strong> e informe o e-mail.</li>
+    <li>Abra o link recebido <strong>no mesmo navegador</strong>. A mensagem é a mesma se o e-mail existir ou não, para não revelar quem tem conta.</li>
+    <li>Crie a senha nova. Se o link tiver vencido, a tela pede um novo.</li>
+  </ol>
+  <div class="aviso">Isso depende de e-mail configurado no Supabase (seção 12). Sem SMTP próprio, os e-mails só chegam para a equipe da organização no Supabase.</div>
 </section>
 
 <!-- ============================== PACIENTE ============================== -->
@@ -150,14 +158,14 @@
   <ol class="passos">
     <li>No menu, <strong>Marcar consulta</strong>. Escolha o médico (só aparecem médicos com CRM verificado), o dia e o horário livre.</li>
     <li>Escreva em uma linha o motivo (opcional) e confirme.</li>
-    <li>Se a clínica cobra pela consulta, o horário fica <strong>reservado</strong> e a tela de pagamento abre (Pix com QR Code e copia e cola, ou cartão). Sem pagamento no prazo, a reserva expira.</li>
+    <li>Se a clínica cobra pela plataforma, o horário fica <strong>reservado por 20 minutos</strong> e a tela de pagamento abre (Pix com QR Code e copia e cola). Sem pagamento no prazo, o horário volta a ficar livre e o paciente é avisado. Se a clínica tem valor definido, mas ainda não conectou uma conta de recebimento, a consulta é confirmada sem cobrança pela plataforma.</li>
     <li>Paciente e médico recebem um aviso (no sino e por e-mail, se configurado) e lembretes 24 h e 1 h antes.</li>
   </ol>
   <h3>4.3 Teleconsulta</h3>
-  <p>Na <strong>Agenda</strong>, o botão <strong>Entrar na consulta</strong> aparece perto do horário. O navegador pede câmera e microfone. A sala é exclusiva dos dois e <strong>não é gravada</strong>.</p>
+  <p>Na <strong>Agenda</strong>, o botão <strong>Entrar na consulta</strong> aparece perto do horário. O paciente precisa ter aceitado o termo de telemedicina na versão atual; se não aceitou, a tela leva até o aceite e volta. O navegador pede câmera e microfone. A sala é exclusiva dos dois e <strong>não é gravada</strong>. Depois que o médico encerra, ela não abre de novo.</p>
   <div class="aviso">Sem uma conta de vídeo configurada (<span class="mono">VIDEO_PROVEDOR=local_teste</span>), a sala abre e mostra um aviso no lugar da imagem; todo o resto do fluxo funciona. Para vídeo real, veja a seção 12.</div>
   <h3>4.4 Pronto atendimento</h3>
-  <p>Sem agendamento: o paciente descreve o que sente, aceita o termo, paga (se houver valor) e entra na fila. A tela mostra a posição e a estimativa de espera, e leva o paciente para a sala quando um médico de plantão o chama. Há um alerta claro para emergências (SAMU 192).</p>
+  <p>Sem agendamento: o paciente descreve o que sente, aceita o termo, paga e entra na fila. Se a clínica ainda não recebe pela plataforma, a tela avisa antes que o pronto atendimento está indisponível. Tocar duas vezes em pagar não gera duas cobranças. A tela mostra a posição e a estimativa de espera, e leva o paciente para a sala quando um médico de plantão o chama. Há um alerta claro para emergências (SAMU 192).</p>
 </section>
 
 <section>
@@ -176,17 +184,18 @@
 
 <section>
   <h3>4.6 Documentos</h3>
-  <p>Receitas, atestados e pedidos de exame aparecem em <strong>Documentos</strong>. Depois que o médico assina, o paciente baixa o PDF assinado. Cada documento tem um <strong>código de validação</strong> que a farmácia confere em <span class="mono">/validar</span>.</p>
+  <p>Receitas, atestados e pedidos de exame aparecem em <strong>Documentos</strong>. Um documento cancelado pelo médico, mesmo já assinado, deixa de valer: não baixa mais, e a validação pública mostra que foi cancelado. Depois que o médico assina, o paciente baixa o PDF assinado. Cada documento tem um <strong>código de validação</strong> que a farmácia confere em <span class="mono">/validar</span>.</p>
   <figure class="duas"><img src="imagens/16-paciente-documentos.jpg" alt="Documentos"><img src="imagens/17-conta.jpg" alt="Minha conta"></figure>
   <figure style="margin-top:-3mm"><figcaption>Documentos do paciente e “Minha conta e privacidade”.</figcaption></figure>
   <h3>4.7 Minha conta e privacidade</h3>
-  <p>Pelo link <strong>Minha conta</strong> (no menu ou no topo), qualquer pessoa: corrige nome e telefone; <strong>baixa uma cópia de todos os seus dados</strong> (JSON); vê <strong>quem acessou</strong> seu prontuário e quando; vê e revoga consentimentos; e faz pedidos ao encarregado de dados, com prazo de 15 dias. Detalhes na seção 9.</p>
+  <p>Pelo link <strong>Minha conta</strong> (no menu ou no topo), qualquer pessoa: corrige nome e telefone; <strong>baixa uma cópia de todos os seus dados</strong> (JSON); vê <strong>quem acessou</strong> seu prontuário e quando; vê e revoga consentimentos; e faz pedidos à clínica que a atende, com prazo de 15 dias. Quem ainda não tem clínica vê o e-mail do encarregado de dados. Detalhes na seção 9.</p>
 </section>
 
 <!-- ============================== MEDICO ============================== -->
 <section class="quebra">
   <h2>5. Médico</h2>
   <div class="aviso"><strong>CRM pendente:</strong> até a administração da clínica conferir o CRM no Conselho, um aviso aparece no topo e o médico <strong>não emite documentos, não abre plantão e não recebe marcações</strong>. Consultas já marcadas continuam.</div>
+  <div class="dica"><strong>Sessão por inatividade:</strong> para quem trabalha na clínica, a sessão encerra depois de 30 minutos sem uso, com um aviso 2 minutos antes e o botão <strong>Continuar conectado</strong>. Durante a videochamada nunca encerra, e o rascunho aberto da evolução é salvo antes de sair.</div>
   <h3>5.1 Meus horários</h3>
   <p>Em <strong>Meus horários</strong>, monte a semana: dia, início, fim e duração da consulta. Os horários livres que o paciente vê são calculados a partir daqui, menos o que já está marcado e os bloqueios.</p>
   <h3>5.2 Agenda</h3>
@@ -232,7 +241,7 @@
     <li><strong>Marcar para um paciente:</strong> em Marcar consulta, a recepção escolhe o paciente, o médico e o horário.</li>
     <li><strong>Agenda da clínica:</strong> vê todas as consultas, com o médico de cada uma, e pode cancelar com motivo (fica na auditoria).</li>
     <li><strong>Pacientes:</strong> busca por nome ou CPF e vê o cadastro (idade, telefone, última e próxima consulta). O prontuário aparece como <strong>“Dados clínicos protegidos”</strong>: a recepção não lê dado clínico.</li>
-    <li><strong>Plantão e fila:</strong> acompanha a escala e a fila.</li>
+    <li><strong>Plantão e fila:</strong> acompanha a escala e a fila. A queixa do paciente e o motivo da consulta aparecem só para o médico: são dados de saúde, e a recepção e a administração não os veem.</li>
   </ul>
 
   <!-- ============================== ADMIN ============================== -->
@@ -241,8 +250,10 @@
   <ol class="passos">
     <li>Em <strong>Minhas clínicas → Criar clínica</strong>: nome, razão social, CNPJ (validado) e o endereço da clínica no sistema (ex.: <span class="mono">clinica-vida</span>). Quem cria administra; se tiver CRM, também passa a atender como médico.</li>
     <li>A clínica nasce <strong>em implantação</strong>: a equipe prepara tudo sem paciente entrar. Em <strong>Equipe → Situação da clínica</strong>, clique em <strong>Abrir clínica</strong> e copie o <strong>link de entrada do paciente</strong>.</li>
-    <li>Em <strong>Convidar</strong>, gere convites para médicos, recepção e outros administradores. O link vale 7 dias e só aparece uma vez.</li>
+    <li>Em <strong>Convidar</strong>, gere convites para médicos, recepção e outros administradores. O link vale 7 dias, só aparece uma vez e só pode ser aceito pela conta com o <strong>mesmo e-mail</strong> convidado.</li>
   </ol>
+  <h3>Quando alguém sai da equipe</h3>
+  <p>Em <strong>Equipe → Membros</strong>, clique em <strong>Suspender</strong>. O acesso àquela clínica termina na hora, o plantão aberto da pessoa é encerrado e o histórico continua guardado. Se a pessoa tiver consultas marcadas, a tela avisa para remarcar ou cancelar. <strong>Reativar</strong> devolve o acesso. A única pessoa que administra a clínica não pode ser suspensa: convide outra antes.</p>
   <figure><span class="recorte"><img src="imagens/30-admin-equipe.jpg" alt="Equipe"></span><figcaption>Equipe e clínica: situação, link de entrada e verificação de CRM.</figcaption></figure>
 </section>
 
@@ -257,7 +268,8 @@
   <figure><span class="recorte"><img src="imagens/31-admin-crm.jpg" alt="Verificar CRM"></span><figcaption>Painel de verificação de CRM, com o passo a passo e o link para o CFM.</figcaption></figure>
   <h3>7.3 Valores, indicadores e pedidos LGPD</h3>
   <ul>
-    <li><strong>Valores:</strong> preço da consulta agendada e do pronto atendimento. Sem valor, a consulta não é cobrada.</li>
+    <li><strong>Valores:</strong> preço da consulta agendada e do pronto atendimento. Sem valor, a consulta não é cobrada. Sem conta de recebimento conectada, a tela avisa ao salvar: as consultas são confirmadas sem cobrança pela plataforma e o pronto atendimento fica indisponível.</li>
+    <li><strong>Reembolso pendente:</strong> quando um pagamento chega para um atendimento que não vai acontecer (consulta paga e cancelada, ou Pix pago depois do prazo com o horário já ocupado), a administração recebe o aviso no sino. O reembolso é feito pela clínica, no provedor de pagamento.</li>
     <li><strong>Indicadores (7, 30 ou 90 dias):</strong> consultas concluídas, taxa de cancelamento, receita confirmada e líquida, ticket médio, pacientes atendidos e novos, pronto atendimento (espera média) e taxa de assinatura de documentos, com gráfico diário e tabela por médico. Só números, nunca dado clínico.</li>
     <li><strong>Pedidos LGPD:</strong> pedidos dos pacientes dirigidos à clínica, com prazo de 15 dias e alerta de prazo vencido.</li>
   </ul>
@@ -267,7 +279,7 @@
   <figure><span class="recorte"><img src="imagens/32-admin-indicadores.jpg" alt="Indicadores"></span><figcaption>Indicadores da clínica.</figcaption></figure>
 
   <h2>8. Validação pública de documentos</h2>
-  <p>Qualquer pessoa (farmácia, RH, laboratório) abre <span class="mono">/validar</span>, digita o código impresso no rodapé do documento e vê se ele é autêntico: tipo, número, data, médico com CRM, clínica e as <strong>iniciais</strong> do paciente. O conteúdo clínico nunca aparece. Para o PDF assinado em mãos, a página leva ao validador oficial do ITI (<span class="mono">validar.iti.gov.br</span>), que confere a assinatura ICP-Brasil.</p>
+  <p>Qualquer pessoa (farmácia, RH, laboratório) abre <span class="mono">/validar</span>, digita o código impresso no rodapé do documento e vê se ele é autêntico: tipo, número, data, médico com CRM, clínica e as <strong>iniciais</strong> do paciente. O conteúdo clínico nunca aparece. Para o PDF assinado em mãos, a página leva ao validador oficial do ITI (<span class="mono">validar.iti.gov.br</span>), que confere a assinatura ICP-Brasil. Quando a própria plataforma não conferiu a cadeia ICP-Brasil, a tela de validação avisa e orienta a usar o validador oficial.</p>
   <figure><img src="imagens/40-validar.jpg" alt="Validar"><figcaption>Página pública de validação.</figcaption></figure>
 </section>
 
@@ -276,8 +288,8 @@
   <h2>9. Privacidade e LGPD na prática</h2>
   <table>
     <tr><th style="width:32%">Exigência</th><th>Como a plataforma atende</th></tr>
-    <tr><td>Dado de saúde no Brasil</td><td>Banco, autenticação e arquivos na região São Paulo.</td></tr>
-    <tr><td>Necessidade (art. 6º, III)</td><td>Recepção e administração não leem prontuário; o médico só lê de quem atende na clínica.</td></tr>
+    <tr><td>Onde ficam os dados</td><td>Banco, autenticação e arquivos guardados na região São Paulo. A API e o site processam os dados durante o uso em provedores que podem estar fora do Brasil; a Política de Privacidade informa isso, e o tema precisa passar por revisão jurídica.</td></tr>
+    <tr><td>Necessidade (art. 6º, III)</td><td>Recepção e administração não leem prontuário, queixa nem motivo da consulta; o médico só lê de quem atende na clínica.</td></tr>
     <tr><td>Consentimento provado (art. 8º)</td><td>Aceite por versão do texto, com data, IP e navegador; revogação registrada; nova versão pede novo aceite.</td></tr>
     <tr><td>Transparência (art. 9º)</td><td>Política de privacidade (<span class="mono">/privacidade</span>), termos com o termo de telemedicina (<span class="mono">/termos</span>) e “Quem acessou meus dados”.</td></tr>
     <tr><td>Direitos do titular (art. 18)</td><td>Correção, cópia completa em JSON (acesso e portabilidade), revogação e pedidos com prazo de 15 dias (art. 19).</td></tr>
@@ -299,6 +311,8 @@
     <tr><td>☐</td><td>Crie uma conta nova e tente salvar o perfil sem marcar os aceites.</td><td>Mensagem pedindo os três aceites.</td></tr>
     <tr><td>☐</td><td>Em Minha conta, clique em “Baixar meus dados”.</td><td>Baixa um arquivo JSON com cadastro e consentimentos.</td></tr>
     <tr><td>☐</td><td>Revogue o consentimento de telemedicina e entre numa clínica.</td><td>A tela “Antes de continuar” pede o aceite de novo.</td></tr>
+    <tr><td>☐</td><td>Em Entrar, clique em “Esqueci minha senha” e informe um e-mail qualquer.</td><td>A mesma mensagem aparece, com conta ou sem conta.</td></tr>
+    <tr><td>☐</td><td>Abra <span class="mono">/entrar?depois=//exemplo.com</span> e faça login.</td><td>Vai para as suas clínicas, nunca para outro site.</td></tr>
   </table>
   <h3>B. Paciente (demo.paciente)</h3>
   <table class="check">
@@ -330,6 +344,10 @@
     <tr><td>☐</td><td>Verifique o CRM com situação “Inativo”.</td><td>Recusado: só se verifica CRM ativo.</td></tr>
     <tr><td>☐</td><td>Verifique com “Ativo”.</td><td>Médico liberado; ele recebe aviso; o paciente passa a vê-lo em Marcar consulta.</td></tr>
     <tr><td>☐</td><td>Pacientes → abra Maria.</td><td>Só cadastro: “Dados clínicos protegidos”.</td></tr>
+    <tr><td>☐</td><td>Agenda da clínica e Plantão e fila.</td><td>Sem motivo da consulta e sem queixa do paciente.</td></tr>
+    <tr><td>☐</td><td>Membros → suspenda a recepção e tente entrar como recepção.</td><td>Sem acesso à clínica. Reativar devolve o acesso.</td></tr>
+    <tr><td>☐</td><td>Tente aceitar um convite com a conta de outro e-mail.</td><td>Recusado: o convite foi enviado para outro e-mail.</td></tr>
+    <tr><td>☐</td><td>Com a recepção suspensa, tente aceitar um convite antigo dela.</td><td>Recusado: só “Reativar” devolve o acesso.</td></tr>
     <tr><td>☐</td><td>Indicadores → troque entre 7, 30 e 90 dias.</td><td>Números e gráfico do período.</td></tr>
     <tr><td>☐</td><td>Como paciente, faça um pedido LGPD para a clínica; como admin, responda “Concluir” sem texto e depois com texto.</td><td>Sem texto: recusado; com texto: o paciente vê a resposta e recebe aviso.</td></tr>
   </table>
@@ -346,10 +364,18 @@
     <tr><th style="width:38%">Comando</th><th>O que verifica</th></tr>
     <tr><td class="mono">pnpm typecheck</td><td>Tipos dos 4 pacotes.</td></tr>
     <tr><td class="mono">pnpm test</td><td>Testes de unidade (regras de agenda, assinatura, LGPD, CRM, PDF, operação).</td></tr>
-    <tr><td class="mono">pnpm test:banco</td><td>137 testes da API contra o Postgres de verdade: acesso ao prontuário por papel, imutabilidade, CRM, assinatura externa ponta a ponta, LGPD, notificações (inclusive duas instâncias ao mesmo tempo) e indicadores. Criam e apagam os próprios dados.</td></tr>
+    <tr><td class="mono">pnpm test:banco</td><td>Testes da API contra um Postgres de verdade: acesso ao prontuário por papel, imutabilidade, CRM, assinatura externa ponta a ponta, LGPD, notificações (inclusive duas instâncias ao mesmo tempo), indicadores, reservas, cobrança sem duplicidade, pagamento tardio e equipe. Exigem um <strong>banco descartável</strong> em <span class="mono">DATABASE_URL_TESTE</span>.</td></tr>
     <tr><td class="mono">pnpm db:verificar-rls</td><td>Segurança por linha ligada em todas as tabelas e políticas no lugar.</td></tr>
   </table>
-  <p>No GitHub, o arquivo <span class="mono">.github/workflows/ci.yml</span> roda tipos, testes e as compilações de produção a cada envio. Os testes de banco rodam se o segredo <span class="mono">DATABASE_URL_TESTE</span> (um projeto Supabase só para testes) estiver configurado.</p>
+  <h3>Banco descartável para os testes</h3>
+  <p>Os testes criam e apagam dados, então <span class="mono">pnpm test:banco</span> recusa rodar sem <span class="mono">DATABASE_URL_TESTE</span> e recusa banco remoto. Use um Postgres só para isso:</p>
+  <ol class="passos">
+    <li>Crie um banco vazio num Postgres local.</li>
+    <li>Rode nele o arquivo <span class="mono">scripts/preparar-banco-de-teste.sql</span>.</li>
+    <li>Aplique as migrações apontando para ele: <span class="mono">$env:DATABASE_URL="postgresql://..."; pnpm db:migrar</span></li>
+    <li>Defina <span class="mono">$env:DATABASE_URL_TESTE="postgresql://..."</span> (ou coloque em <span class="mono">apps/api/.env</span>) e rode <span class="mono">pnpm test:banco</span>.</li>
+  </ol>
+  <p>No GitHub, o arquivo <span class="mono">.github/workflows/ci.yml</span> roda tipos, testes de unidade, testes de banco num Postgres descartável, as compilações de produção e barra dependências com falha crítica, a cada envio, sem precisar de segredo.</p>
 </section>
 
 <!-- ============================== PRODUCAO ============================== -->
@@ -361,19 +387,29 @@
     <tr><td>Videochamada</td><td>Daily (plano gratuito para testar)</td><td><span class="mono">VIDEO_PROVEDOR=daily</span> e <span class="mono">VIDEO_API_KEY</span> (painel do Daily → Developers).</td></tr>
     <tr><td>Assinatura integrada</td><td>BirdID (homologação, depois produção)</td><td><span class="mono">ASSINATURA_PROVEDOR=birdid</span>, <span class="mono">ASSINATURA_URL</span>, <span class="mono">_CLIENT_ID</span>, <span class="mono">_CLIENT_SECRET</span> e <span class="mono">CHAVE_CRIPTOGRAFIA</span>. A assinatura externa funciona sem contrato.</td></tr>
     <tr><td>Pagamento</td><td>Mercado Pago (split)</td><td>Ver seção 6 do <span class="mono">.env.example</span> (<span class="mono">URL_PUBLICA_API</span>, <span class="mono">PAGAMENTO_WEBHOOK_SEGREDO</span>).</td></tr>
-    <tr><td>E-mails</td><td>Resend (plano gratuito)</td><td><span class="mono">EMAIL_PROVEDOR=resend</span>, <span class="mono">EMAIL_API_KEY</span>, <span class="mono">EMAIL_REMETENTE</span> com domínio verificado.</td></tr>
+    <tr><td>E-mails de aviso</td><td>Resend (plano gratuito)</td><td><span class="mono">EMAIL_PROVEDOR=resend</span>, <span class="mono">EMAIL_API_KEY</span>, <span class="mono">EMAIL_REMETENTE</span> com domínio verificado.</td></tr>
+    <tr><td>E-mails de login</td><td>SMTP próprio no Supabase</td><td>Painel do Supabase → Authentication → SMTP. Sem isso, recuperação de senha e confirmação de cadastro não chegam a usuários comuns. Em <strong>URL Configuration</strong>, inclua <span class="mono">https://SEU-SITE/auth/confirmar</span> nas Redirect URLs.</td></tr>
     <tr><td>CRM automático</td><td>Webservice do CFM (pago) ou fornecedor</td><td>Opcional. Sem ele, a conferência manual pela administração já atende.</td></tr>
   </table>
   <h3>Identidade e LGPD (site: <span class="mono">apps/web/.env.local</span>)</h3>
-  <p><span class="mono">NEXT_PUBLIC_NOME_PLATAFORMA</span>, <span class="mono">NEXT_PUBLIC_EMPRESA_RAZAO_SOCIAL</span>, <span class="mono">_CNPJ</span>, <span class="mono">_ENDERECO</span>, <span class="mono">NEXT_PUBLIC_ENCARREGADO_NOME</span> e <span class="mono">_EMAIL</span>. Sem eles, os textos legais mostram “[a preencher]”.</p>
+  <p>Depois de publicar esta versão, os usuários aceitam novamente os termos: o texto sobre onde os dados ficam mudou. <span class="mono">NEXT_PUBLIC_NOME_PLATAFORMA</span>, <span class="mono">NEXT_PUBLIC_EMPRESA_RAZAO_SOCIAL</span>, <span class="mono">_CNPJ</span>, <span class="mono">_ENDERECO</span>, <span class="mono">NEXT_PUBLIC_ENCARREGADO_NOME</span> e <span class="mono">_EMAIL</span>. Sem eles, os textos legais mostram “[a preencher]”.</p>
   <h3>Escala</h3>
-  <p>A API não guarda estado e pode rodar em várias cópias. Ajuste <span class="mono">DB_POOL_MAX</span> (conexões por cópia) e use o <strong>Transaction pooler</strong> do Supabase (porta 6543) quando houver várias cópias. Use <span class="mono">/pronto</span> como verificação de saúde. Detalhes em <span class="mono">docs/adr-0020-escala-e-operacao.md</span>.</p>
+  <p>A API não guarda estado e pode rodar em várias cópias. Ajuste <span class="mono">DB_POOL_MAX</span> (conexões por cópia) e use o <strong>Transaction pooler</strong> do Supabase (porta 6543) quando houver várias cópias. Use <span class="mono">/pronto</span> como verificação de saúde. Detalhes em <span class="mono">docs/adr-0020-escala-e-operacao.md</span> e <span class="mono">docs/adr-0021-auditoria-de-mercado.md</span>.</p>
+  <h3>Segurança da operação (API: variáveis opcionais)</h3>
+  <table>
+    <tr><th style="width:34%">Variável</th><th>Para que serve</th></tr>
+    <tr><td class="mono">PAGAMENTO_WEBHOOK_SEGREDO</td><td>Obrigatória para receber pagamentos. Sem ela, a API recusa os avisos do provedor.</td></tr>
+    <tr><td class="mono">PROXIES_CONFIAVEIS</td><td>Quantos proxies há na frente da API, para o IP não ser forjado. Veja o valor no log “medicao de proxies” do Render antes de definir.</td></tr>
+    <tr><td class="mono">SEGREDO_SITE_API</td><td>O mesmo valor no Render e na Vercel. Faz a auditoria registrar o IP de quem navega nas páginas geradas no servidor.</td></tr>
+    <tr><td class="mono">ASSINATURA_HOSTS_PERMITIDOS</td><td>Endereços aceitos quando uma clínica informa o próprio provedor de assinatura.</td></tr>
+  </table>
+  <p>O plano gratuito do Render hiberna a API, e com ela param os lembretes e a liberação de reservas. O workflow <span class="mono">manter-api-acordada.yml</span> a chama a cada 10 minutos; um monitor externo gratuito (como o cron-job.org) é mais confiável e ainda avisa se ela cair.</p>
 
   <div style="break-inside: avoid">
   <h2>13. Publicar (Vercel + Render + Supabase)</h2>
   <div class="perigo">Todo envio para a branch <span class="mono">main</span> publica sozinho. Antes de juntar a branch <span class="mono">evolucao-plataforma</span> com a <span class="mono">main</span>, faça os passos abaixo, nesta ordem.</div>
   <ol class="passos">
-    <li>Rode as migrações no banco de <strong>produção</strong> (com a <span class="mono">DATABASE_URL</span> de produção): <span class="mono">pnpm db:migrar</span>, depois <span class="mono">pnpm db:verificar-rls</span>.</li>
+    <li>Rode as migrações no banco de <strong>produção</strong>, confirmando que é ele mesmo: <span class="mono">$env:CONFIRMAR_BANCO_REMOTO="sim"; pnpm db:migrar</span>, depois <span class="mono">pnpm db:verificar-rls</span>. Enquanto uma migração estiver pendente, a luz do banco fica apagada, mas a plataforma continua funcionando.</li>
     <li>No <strong>Render</strong> (API), cadastre as variáveis novas (lista completa em <span class="mono">docs/publicar.md</span>) e defina o Health Check Path como <span class="mono">/pronto</span>.</li>
     <li>Na <strong>Vercel</strong> (site), cadastre as variáveis <span class="mono">NEXT_PUBLIC_*</span> de identidade e do encarregado.</li>
     <li>Junte a branch com a <span class="mono">main</span> (pull request no GitHub) e acompanhe o deploy.</li>
@@ -393,6 +429,10 @@
     <tr><td>Paciente não consegue entrar pelo link da clínica.</td><td>A clínica está “em implantação”: Equipe → Abrir clínica.</td></tr>
     <tr><td>Erro de conexão com o banco (ENOTFOUND).</td><td>Use a conexão do <strong>Session/Transaction pooler</strong> (termina em <span class="mono">pooler.supabase.com</span>), não a direta (<span class="mono">db.xxx.supabase.co</span>, só IPv6).</td></tr>
     <tr><td>Testes de banco falhando em paralelo.</td><td>Use <span class="mono">pnpm test:banco</span>, que roda um arquivo por vez (limite de conexões do pooler).</td></tr>
+    <tr><td>“Esqueci minha senha” não envia e-mail, ou o link dá erro.</td><td>Configure o SMTP no Supabase e inclua <span class="mono">/auth/confirmar</span> nas Redirect URLs (seção 12). Abra o link no mesmo navegador em que pediu.</td></tr>
+    <tr><td><span class="mono">pnpm test:banco</span> ou <span class="mono">pnpm db:migrar</span> recusados.</td><td>É a proteção contra gravar no banco errado. Testes: defina <span class="mono">DATABASE_URL_TESTE</span> (seção 11). Migração em servidor remoto: confira o banco e defina <span class="mono">CONFIRMAR_BANCO_REMOTO=sim</span>.</td></tr>
+    <tr><td>Convite recusado: “enviado para outro e-mail”.</td><td>Entre com a conta do e-mail convidado ou peça um convite novo para o e-mail certo.</td></tr>
+    <tr><td>Pronto atendimento indisponível, ou consulta sem cobrança.</td><td>A clínica ainda não tem conta de recebimento conectada. A conexão com o Mercado Pago ainda não está disponível na plataforma.</td></tr>
     <tr><td>Assinatura externa recusada.</td><td>Envie exatamente o PDF baixado da plataforma, assinado e sem edição, com o seu certificado (CPF do cadastro).</td></tr>
     <tr><td>Sala de vídeo sem imagem.</td><td>Em teste (<span class="mono">local_teste</span>) é esperado. Com Daily: permita câmera e microfone no navegador.</td></tr>
   </table>
@@ -406,10 +446,10 @@ pnpm dev                # site :3000 e API :3333
 pnpm demo:criar         # clínica de demonstração (acessos em demo-acessos.local.md)
 pnpm typecheck          # tipos
 pnpm test               # testes de unidade
-pnpm test:banco         # testes contra o Postgres
+pnpm test:banco         # testes em banco descartável (DATABASE_URL_TESTE)
 pnpm --filter @tele/api build   # API para produção (apps/api/dist)
 pnpm --filter web build         # site para produção</pre>
-  <p style="margin-top:6mm;color:var(--suave);font-size:9pt">Decisões técnicas registradas em <span class="mono">docs/adr-0001</span> a <span class="mono">docs/adr-0020</span>. Rotas da API e telas: <span class="mono">README.md</span>.</p>
+  <p style="margin-top:6mm;color:var(--suave);font-size:9pt">Decisões técnicas registradas em <span class="mono">docs/adr-0001</span> a <span class="mono">docs/adr-0021</span>. Rotas da API e telas: <span class="mono">README.md</span>.</p>
 </section>
 
 </body>

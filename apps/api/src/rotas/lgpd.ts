@@ -18,7 +18,7 @@
  * que foi anonimizado ou excluido e o que fica guardado por obrigacao
  * legal (art. 16, I).
  */
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
@@ -30,8 +30,10 @@ import {
   documentos,
   evolucoes,
   fichasClinicas,
+  filaAtendimento,
   medicos,
   pacientes,
+  pagamentos,
   perfis,
   sinaisVitais,
   solicitacoesTitular,
@@ -65,7 +67,7 @@ export async function rotasLgpd(app: FastifyInstance, opcoes: { banco: Banco; au
   });
 
   app.post("/lgpd/consentimentos", { preHandler: exigirLogin }, async (req, reply): Promise<Resposta<{ registrados: number }>> => {
-    const { tipos } = z.object({ tipos: z.array(z.enum(TIPOS)).min(1, "informe o que foi aceito") }).parse(req.body);
+    const { tipos } = z.object({ tipos: z.array(z.enum(TIPOS)).min(1, "informe o que foi aceito").max(TIPOS.length * 2) }).parse(req.body);
     const [perfil] = await banco.select({ id: perfis.id }).from(perfis).where(eq(perfis.id, req.usuario.id)).limit(1);
     if (!perfil) throw new ErroHttp(400, "PERFIL_NECESSARIO", "Complete seu perfil antes.");
     await registrarAceites(banco, req.usuario.id, [...new Set(tipos)], req.ip, String(req.headers["user-agent"] ?? ""));
@@ -106,16 +108,18 @@ export async function rotasLgpd(app: FastifyInstance, opcoes: { banco: Banco; au
       .limit(1);
     if (!pessoa) throw new ErroHttp(404, "PERFIL_NAO_ENCONTRADO", "Você ainda não tem perfil.");
 
-    const [meusVinculos, minhasConsultas, meusDocumentos, minhasEvolucoes, fichas, sinais, meusAnexos, aceites, pedidos] = await Promise.all([
+    const [meusVinculos, minhasConsultas, meusDocumentos, minhasEvolucoes, fichas, sinais, meusAnexos, aceites, pedidos, meusPagamentos, minhaFila] = await Promise.all([
       banco.select({ clinica: clinicas.nomeFantasia, papel: vinculos.papel, status: vinculos.status, desde: vinculos.criadoEm }).from(vinculos).innerJoin(clinicas, eq(clinicas.id, vinculos.clinicaId)).where(eq(vinculos.perfilId, eu)),
       banco.select({ clinica: clinicas.nomeFantasia, inicio: consultas.inicio, fim: consultas.fim, status: consultas.status, motivo: consultas.motivo }).from(consultas).innerJoin(clinicas, eq(clinicas.id, consultas.clinicaId)).where(eq(consultas.pacienteId, eu)),
       banco.select({ clinica: clinicas.nomeFantasia, tipo: documentos.tipo, numero: documentos.numero, ano: documentos.ano, status: documentos.status, texto: documentos.textoImpresso, codigoValidacao: documentos.codigoValidacao, emitidoEm: documentos.criadoEm }).from(documentos).innerJoin(clinicas, eq(clinicas.id, documentos.clinicaId)).where(eq(documentos.pacienteId, eu)),
-      banco.select({ clinica: clinicas.nomeFantasia, subjetivo: evolucoes.subjetivo, objetivo: evolucoes.objetivo, avaliacao: evolucoes.avaliacao, plano: evolucoes.plano, cid10: evolucoes.cid10, finalizadaEm: evolucoes.finalizadaEm }).from(evolucoes).innerJoin(clinicas, eq(clinicas.id, evolucoes.clinicaId)).where(and(eq(evolucoes.pacienteId, eu), eq(evolucoes.status, "finalizada"))),
+      banco.select({ clinica: clinicas.nomeFantasia, subjetivo: evolucoes.subjetivo, objetivo: evolucoes.objetivo, avaliacao: evolucoes.avaliacao, plano: evolucoes.plano, cid10: evolucoes.cid10, finalizadaEm: evolucoes.finalizadaEm, adendoDe: evolucoes.adendoDe }).from(evolucoes).innerJoin(clinicas, eq(clinicas.id, evolucoes.clinicaId)).where(and(eq(evolucoes.pacienteId, eu), eq(evolucoes.status, "finalizada"))),
       banco.select({ clinica: clinicas.nomeFantasia, f: fichasClinicas }).from(fichasClinicas).innerJoin(clinicas, eq(clinicas.id, fichasClinicas.clinicaId)).where(eq(fichasClinicas.pacienteId, eu)),
       banco.select({ clinica: clinicas.nomeFantasia, s: sinaisVitais }).from(sinaisVitais).innerJoin(clinicas, eq(clinicas.id, sinaisVitais.clinicaId)).where(eq(sinaisVitais.pacienteId, eu)),
       banco.select({ clinica: clinicas.nomeFantasia, titulo: anexos.titulo, categoria: anexos.categoria, tipoArquivo: anexos.tipoArquivo, enviadoEm: anexos.criadoEm, hash: anexos.hash }).from(anexos).innerJoin(clinicas, eq(clinicas.id, anexos.clinicaId)).where(eq(anexos.pacienteId, eu)),
       banco.select({ tipo: consentimentos.tipo, acao: consentimentos.acao, versao: consentimentos.versao, em: consentimentos.criadoEm }).from(consentimentos).where(eq(consentimentos.perfilId, eu)),
       banco.select({ tipo: solicitacoesTitular.tipo, status: solicitacoesTitular.status, descricao: solicitacoesTitular.descricao, resposta: solicitacoesTitular.resposta, criadoEm: solicitacoesTitular.criadoEm }).from(solicitacoesTitular).where(eq(solicitacoesTitular.perfilId, eu)),
+      banco.select({ clinica: clinicas.nomeFantasia, metodo: pagamentos.metodo, status: pagamentos.status, valorCentavos: pagamentos.valorCentavos, criadoEm: pagamentos.criadoEm, confirmadoEm: pagamentos.confirmadoEm }).from(pagamentos).innerJoin(clinicas, eq(clinicas.id, pagamentos.clinicaId)).where(eq(pagamentos.pagadorId, eu)),
+      banco.select({ clinica: clinicas.nomeFantasia, queixa: filaAtendimento.queixa, status: filaAtendimento.status, entrouEm: filaAtendimento.entrouEm, encerradoEm: filaAtendimento.encerradoEm }).from(filaAtendimento).innerJoin(clinicas, eq(clinicas.id, filaAtendimento.clinicaId)).where(eq(filaAtendimento.pacienteId, eu)),
     ]);
 
     await registrarAuditoria(banco, { quem: eu, clinicaId: null, acao: "lgpd.dados_exportados", tabela: "perfis", registroId: eu, ip: req.ip });
@@ -139,6 +143,8 @@ export async function rotasLgpd(app: FastifyInstance, opcoes: { banco: Banco; au
       fichasClinicas: fichas.map(({ clinica, f }) => ({ clinica, versao: f.versao, alergias: f.alergias, negaAlergias: f.negaAlergias, medicamentosEmUso: f.medicamentosEmUso, comorbidades: f.comorbidades, antecedentesFamiliares: f.antecedentesFamiliares, cirurgiasInternacoes: f.cirurgiasInternacoes, habitos: f.habitos, tipoSanguineo: f.tipoSanguineo, observacoes: f.observacoes, registradaEm: f.criadoEm })),
       sinaisVitais: sinais.map(({ clinica, s }) => ({ clinica, medidoEm: s.medidoEm, origem: s.origem, pesoKg: s.pesoKg, alturaCm: s.alturaCm, pressao: s.pressaoSistolica ? `${s.pressaoSistolica}x${s.pressaoDiastolica}` : null, frequenciaCardiaca: s.frequenciaCardiaca, temperaturaC: s.temperaturaC, saturacaoO2: s.saturacaoO2, glicemiaMgDl: s.glicemiaMgDl })),
       anexos: meusAnexos,
+      pagamentos: meusPagamentos,
+      prontoAtendimento: minhaFila,
       consentimentos: aceites,
       solicitacoes: pedidos,
     };
@@ -274,14 +280,16 @@ export async function rotasLgpd(app: FastifyInstance, opcoes: { banco: Banco; au
     if (s.status === "concluida" || s.status === "negada") throw new ErroHttp(409, "JA_RESPONDIDA", "Este pedido já foi respondido.");
 
     await banco.transaction(async (tx) => {
-      await tx
+      const respondidas = await tx
         .update(solicitacoesTitular)
         .set({
           status: dados.status,
           resposta: dados.resposta ?? null,
           ...(dados.status === "em_andamento" ? {} : { respondidoPor: req.usuario.id, respondidoEm: new Date() }),
         })
-        .where(eq(solicitacoesTitular.id, id));
+        .where(and(eq(solicitacoesTitular.id, id), notInArray(solicitacoesTitular.status, ["concluida", "negada"])))
+        .returning({ id: solicitacoesTitular.id });
+      if (respondidas.length === 0) throw new ErroHttp(409, "JA_RESPONDIDA", "Este pedido já foi respondido.");
       await registrarAuditoria(tx, { quem: req.usuario.id, clinicaId: req.contexto.clinicaId, acao: "lgpd.solicitacao_respondida", tabela: "solicitacoes_titular", registroId: id, detalhes: { status: dados.status }, ip: req.ip });
       if (dados.status !== "em_andamento") {
         await notificar(tx, {

@@ -9,6 +9,7 @@
  *   GET  /convites           convites pendentes desta clinica
  *   POST /convites/:id/revogar
  *   POST /convites/aceitar   quem recebeu o link entra na clinica
+ *   POST /membros/:id/suspender | reativar
  *
  * Sobre o convite: o codigo e sorteado aqui e aparece UMA vez, no link
  * devolvido a quem convidou. No banco guardamos so o SHA-256 dele - se o
@@ -19,11 +20,11 @@
  * proprio); ate la o admin copia o link e entrega como preferir.
  */
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, desc, eq, gt, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, ne } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { clinicas, convites, medicos, perfis, verificacoesCrm, vinculos, type Banco } from "@tele/db";
+import { clinicas, consultas, convites, medicos, perfis, plantoes, verificacoesCrm, vinculos, type Banco } from "@tele/db";
 import type { ConviteCriado, ConviteResumo, MedicoComCrm, MedicoResumo, MembroResumo, Resposta, VerificacaoCrmResumo } from "@tele/shared";
 import { DIAS_DE_VALIDADE_CRM, situacaoDoCrm } from "@tele/shared/crm";
 import { registrarAuditoria } from "../auditoria.js";
@@ -89,6 +90,80 @@ export async function rotasEquipe(
       }
     }
     return { ok: true, dados: [...porPessoa.values()] };
+  });
+
+  /**
+   * DESLIGAR E RECONTRATAR. Ex-funcionario nao pode continuar entrando: sem esta
+   * rota, o acesso ficava para sempre. Vale na hora, porque toda requisicao
+   * confere o vinculo. So afeta papeis de equipe: se a pessoa tambem e paciente
+   * aqui, continua sendo atendida. O historico e os prontuarios ficam intactos.
+   */
+  app.post("/membros/:id/suspender", { preHandler: soAdmin }, async (req): Promise<Resposta<{ status: string; consultasFuturas: number }>> => {
+    const { id } = z.object({ id: z.string().uuid("id inválido") }).parse(req.params);
+
+    const consultasFuturas = await banco.transaction(async (tx) => {
+      // A trava nas linhas de administracao impede dois administradores de se
+      // suspenderem ao mesmo tempo e deixarem a clinica sem ninguem.
+      const admins = await tx
+        .select({ perfilId: vinculos.perfilId })
+        .from(vinculos)
+        .where(and(eq(vinculos.clinicaId, req.contexto.clinicaId), eq(vinculos.papel, "admin_clinica"), eq(vinculos.status, "ativo")))
+        .for("update");
+      if (admins.length === 1 && admins[0]!.perfilId === id) {
+        throw new ErroHttp(409, "ULTIMO_ADMIN", "Esta é a única pessoa que administra a clínica. Convide outra antes de suspendê-la.");
+      }
+
+      const suspensos = await tx
+        .update(vinculos)
+        .set({ status: "suspenso", atualizadoEm: new Date() })
+        .where(and(eq(vinculos.perfilId, id), eq(vinculos.clinicaId, req.contexto.clinicaId), inArray(vinculos.papel, ["medico", "recepcao", "admin_clinica"]), eq(vinculos.status, "ativo")))
+        .returning({ papel: vinculos.papel });
+      if (suspensos.length === 0) throw new ErroHttp(404, "MEMBRO_NAO_ENCONTRADO", "Esta pessoa não faz parte da equipe ativa da clínica.");
+
+      // Plantao aberto sem medico faria a fila prometer um atendimento que nao vem.
+      await tx
+        .update(plantoes)
+        .set({ status: "encerrado", encerradoEm: new Date() })
+        .where(and(eq(plantoes.medicoId, id), eq(plantoes.clinicaId, req.contexto.clinicaId), eq(plantoes.status, "aberto")));
+
+      const [futuras] = await tx
+        .select({ n: count() })
+        .from(consultas)
+        .where(and(eq(consultas.medicoId, id), eq(consultas.clinicaId, req.contexto.clinicaId), inArray(consultas.status, ["agendada", "aguardando_pagamento"]), gt(consultas.inicio, new Date())));
+
+      await registrarAuditoria(tx, {
+        quem: req.usuario.id,
+        clinicaId: req.contexto.clinicaId,
+        acao: "membro.suspenso",
+        tabela: "vinculos",
+        registroId: id,
+        detalhes: { papeis: suspensos.map((s) => s.papel), consultasFuturas: futuras?.n ?? 0 },
+        ip: req.ip,
+      });
+      return futuras?.n ?? 0;
+    });
+
+    return { ok: true, dados: { status: "suspenso", consultasFuturas } };
+  });
+
+  app.post("/membros/:id/reativar", { preHandler: soAdmin }, async (req): Promise<Resposta<{ status: string }>> => {
+    const { id } = z.object({ id: z.string().uuid("id inválido") }).parse(req.params);
+    const reativados = await banco
+      .update(vinculos)
+      .set({ status: "ativo", atualizadoEm: new Date() })
+      .where(and(eq(vinculos.perfilId, id), eq(vinculos.clinicaId, req.contexto.clinicaId), inArray(vinculos.papel, ["medico", "recepcao", "admin_clinica"]), eq(vinculos.status, "suspenso")))
+      .returning({ papel: vinculos.papel });
+    if (reativados.length === 0) throw new ErroHttp(404, "MEMBRO_NAO_ENCONTRADO", "Esta pessoa não está suspensa nesta clínica.");
+    await registrarAuditoria(banco, {
+      quem: req.usuario.id,
+      clinicaId: req.contexto.clinicaId,
+      acao: "membro.reativado",
+      tabela: "vinculos",
+      registroId: id,
+      detalhes: { papeis: reativados.map((r) => r.papel) },
+      ip: req.ip,
+    });
+    return { ok: true, dados: { status: "ativo" } };
   });
 
   app.get("/medicos", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<MedicoResumo[]>> => {
@@ -313,7 +388,7 @@ export async function rotasEquipe(
     if (!perfil) throw new ErroHttp(400, "PERFIL_NECESSARIO", "Complete seu perfil antes de aceitar o convite.");
 
     const [convite] = await banco
-      .select({ id: convites.id, clinicaId: convites.clinicaId, papel: convites.papel, status: convites.status, expiraEm: convites.expiraEm, slug: clinicas.slug, nomeFantasia: clinicas.nomeFantasia })
+      .select({ id: convites.id, clinicaId: convites.clinicaId, email: convites.email, papel: convites.papel, status: convites.status, expiraEm: convites.expiraEm, slug: clinicas.slug, nomeFantasia: clinicas.nomeFantasia })
       .from(convites)
       .innerJoin(clinicas, eq(clinicas.id, convites.clinicaId))
       .where(eq(convites.codigoHash, hashDoCodigo(codigo)))
@@ -324,21 +399,41 @@ export async function rotasEquipe(
     if (!convite || convite.status !== "pendente") throw new ErroHttp(404, "CONVITE_INVALIDO", "Este convite não existe, já foi usado ou foi revogado.");
     if (convite.expiraEm < new Date()) {
       await banco.update(convites).set({ status: "expirado" }).where(eq(convites.id, convite.id));
-      throw new ErroHttp(410, "CONVITE_EXPIRADO", "Este convite venceu. Peca outro a administração da clínica.");
+      throw new ErroHttp(410, "CONVITE_EXPIRADO", "Este convite venceu. Peça outro à administração da clínica.");
+    }
+
+    // O convite e para uma pessoa. Sem isto, um link encaminhado ou vazado daria
+    // acesso a quem o tivesse, inclusive como administracao.
+    if (convite.email.toLowerCase() !== (req.usuario.email ?? "").toLowerCase()) {
+      throw new ErroHttp(403, "CONVITE_DE_OUTRA_PESSOA", "Este convite foi enviado para outro e-mail. Entre com a conta do e-mail convidado ou peça um novo convite.");
     }
 
     // Medico precisa ter CRM cadastrado antes de atender (CFM 2.314/2022).
     if (convite.papel === "medico") {
       const [m] = await banco.select({ crm: medicos.crm }).from(medicos).where(eq(medicos.perfilId, req.usuario.id)).limit(1);
-      if (!m) throw new ErroHttp(400, "CRM_NECESSARIO", "Para entrar como medico(a), cadastre seu CRM no seu perfil antes de aceitar.");
+      if (!m) throw new ErroHttp(400, "CRM_NECESSARIO", "Para entrar como médico(a), cadastre seu CRM no seu perfil antes de aceitar.");
     }
 
     await banco.transaction(async (tx) => {
-      await tx
+      // Primeiro consome o convite: com dois aceites ao mesmo tempo, so um passa.
+      const usados = await tx
+        .update(convites)
+        .set({ status: "aceito", aceitoPor: req.usuario.id, aceitoEm: new Date() })
+        .where(and(eq(convites.id, convite.id), eq(convites.status, "pendente")))
+        .returning({ id: convites.id });
+      if (usados.length === 0) throw new ErroHttp(404, "CONVITE_INVALIDO", "Este convite não existe, já foi usado ou foi revogado.");
+      // Quem foi suspenso so volta pela rota de reativar: um convite antigo nao
+      // pode devolver o acesso de quem a clinica desligou.
+      const vinculo = await tx
         .insert(vinculos)
         .values({ perfilId: req.usuario.id, clinicaId: convite.clinicaId, papel: convite.papel })
-        .onConflictDoUpdate({ target: [vinculos.perfilId, vinculos.clinicaId, vinculos.papel], set: { status: "ativo", atualizadoEm: new Date() } });
-      await tx.update(convites).set({ status: "aceito", aceitoPor: req.usuario.id, aceitoEm: new Date() }).where(eq(convites.id, convite.id));
+        .onConflictDoUpdate({
+          target: [vinculos.perfilId, vinculos.clinicaId, vinculos.papel],
+          set: { status: "ativo", atualizadoEm: new Date() },
+          where: ne(vinculos.status, "suspenso"),
+        })
+        .returning({ id: vinculos.id });
+      if (vinculo.length === 0) throw new ErroHttp(409, "VINCULO_SUSPENSO", "Seu acesso a esta clínica está suspenso. Fale com a administração.");
       await registrarAuditoria(tx, {
         quem: req.usuario.id,
         clinicaId: convite.clinicaId,

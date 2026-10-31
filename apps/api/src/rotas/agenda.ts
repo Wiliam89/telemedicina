@@ -16,11 +16,11 @@
  * Tudo dentro de uma clinica: exige login + cabecalho X-Clinica.
  */
 import { randomUUID } from "node:crypto";
-import { and, asc, between, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, between, eq, gte, inArray, lte, notInArray, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { bloqueios, consultas, disponibilidades, medicos, perfis, precos, vinculos, type Banco } from "@tele/db";
+import { bloqueios, consultas, disponibilidades, filaAtendimento, medicos, pagamentos, perfis, precos, vinculos, type Banco } from "@tele/db";
 import {
   type BlocoDaGrade,
   type ConsultaResumo,
@@ -35,6 +35,8 @@ import { criarExigirClinica, exigirPapel } from "../contexto.js";
 import { exigirCrmVerificado } from "../crm.js";
 import { fusoDaClinica, notificar, quandoNaClinica } from "../notificacoes/index.js";
 import { ErroHttp } from "../erros.js";
+import { clinicaTemRecebimento } from "../pagamento/index.js";
+import { liberarReservasVencidas, registrarPendenciaDeEstorno } from "../reservas.js";
 import { MINUTOS_DE_RESERVA } from "./pagamentos.js";
 
 /** Quanto tempo antes do horario ainda da para marcar. */
@@ -72,7 +74,7 @@ export const esquemaMarcar = z.object({
 
 export const esquemaCancelar = z.object({ motivo: z.string().trim().min(3, "diga o motivo do cancelamento").max(300) });
 
-export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; autenticar: Autenticador }): Promise<void> {
+export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; autenticar: Autenticador; producao: boolean }): Promise<void> {
   const { banco } = opcoes;
   const dentroDaClinica = criarExigirClinica(banco, opcoes.autenticar);
   const soMedico = [...dentroDaClinica, exigirPapel("medico")];
@@ -217,6 +219,11 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     // ADR-0016: medico com CRM nao conferido nao recebe marcacao.
     await exigirCrmVerificado(banco, req.contexto.clinicaId, medicoId, "terceiro");
 
+    return { ok: true, dados: await horariosLivres(req.contexto.clinicaId, req.contexto.fusoHorario, medicoId, data) };
+  });
+
+  /** Os horarios livres de um medico num dia, ja descontado o que esta ocupado. */
+  async function horariosLivres(clinicaId: string, fuso: string, medicoId: string, data: string): Promise<HorarioLivre[]> {
     const grade = await banco
       .select({
         diaSemana: disponibilidades.diaSemana,
@@ -225,7 +232,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
         duracaoMinutos: disponibilidades.duracaoMinutos,
       })
       .from(disponibilidades)
-      .where(and(eq(disponibilidades.medicoId, medicoId), eq(disponibilidades.clinicaId, req.contexto.clinicaId)));
+      .where(and(eq(disponibilidades.medicoId, medicoId), eq(disponibilidades.clinicaId, clinicaId)));
 
     // Janela generosa: pega tudo do dia pedido, com folga para os dois lados.
     const de = new Date(`${data}T00:00:00Z`);
@@ -254,16 +261,24 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
       .from(bloqueios)
       .where(and(eq(bloqueios.medicoId, medicoId), lte(bloqueios.inicio, ate), gte(bloqueios.fim, antes)));
 
-    const livres = calcularHorariosLivres({
+    return calcularHorariosLivres({
       data,
-      fuso: req.contexto.fusoHorario,
+      fuso,
       grade: grade.map((g) => ({ ...g, horaInicio: g.horaInicio, horaFim: g.horaFim })) as BlocoDaGrade[],
       ocupado: [...marcadas, ...fora].map((p) => ({ inicio: p.inicio.toISOString(), fim: p.fim.toISOString() })),
       antecedenciaMinutos: ANTECEDENCIA_MINUTOS,
     });
+  }
 
-    return { ok: true, dados: livres };
-  });
+  /**
+   * O motivo da consulta e informacao de saude: so o medico e o paciente daquela
+   * consulta o veem (LGPD, art. 6, III). Compara com a PESSOA, e nao com o papel:
+   * a medica dona do consultorio tambem e administracao, e continua vendo os
+   * motivos das proprias consultas, mas nao os dos colegas.
+   */
+  function paraQuemPede(c: ConsultaResumo, usuarioId: string): ConsultaResumo {
+    return c.paciente.id === usuarioId || c.medico.id === usuarioId ? c : { ...c, motivo: null };
+  }
 
   // --- consultas ------------------------------------------------------------
 
@@ -296,24 +311,26 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     // marca "09:07" mandando JSON na mao, nem fura a grade do medico.
     const inicio = new Date(dados.inicio);
     const dia = new Intl.DateTimeFormat("en-CA", { timeZone: req.contexto.fusoHorario }).format(inicio);
-    const resposta = await app.inject({
-      method: "GET",
-      url: `/horarios?medicoId=${dados.medicoId}&data=${dia}`,
-      headers: { authorization: req.headers.authorization ?? "", "x-clinica": req.contexto.slug },
-    });
-    const livres = (resposta.json() as Resposta<HorarioLivre[]>).ok ? (resposta.json() as { dados: HorarioLivre[] }).dados : [];
+    const livres = await horariosLivres(req.contexto.clinicaId, req.contexto.fusoHorario, dados.medicoId, dia);
     const escolhido = livres.find((h) => new Date(h.inicio).getTime() === inicio.getTime());
     if (!escolhido) throw new ErroHttp(409, "HORARIO_INDISPONIVEL", "Este horário não está mais disponível. Recarregue a agenda e escolha outro.");
+
+    // A trava do banco ainda conta reservas vencidas: sem liberar antes, este
+    // horario pareceria livre e a gravacao falharia para sempre.
+    await liberarReservasVencidas(banco, { medicoId: dados.medicoId, pacienteId });
 
     // A clinica cobra por consulta? Entao o horario nasce RESERVADO, nao
     // agendado: ele fica preso enquanto o paciente paga, e o pagamento e
     // que confirma (Modulo 10). Clinica sem preco definido continua
-    // agendando direto - e o caso de quem cobra fora da plataforma.
+    // agendando direto - e o caso de quem cobra fora da plataforma. O mesmo
+    // vale para quem tem preco, mas nao conectou conta de recebimento: em
+    // producao ninguem conseguiria pagar, e o paciente ficaria preso na tela.
     const [temPreco] = await banco
       .select({ id: precos.id })
       .from(precos)
       .where(and(eq(precos.clinicaId, req.contexto.clinicaId), eq(precos.tipo, "agendada")))
       .limit(1);
+    const cobraNaPlataforma = Boolean(temPreco) && (!opcoes.producao || (await clinicaTemRecebimento(banco, req.contexto.clinicaId)));
 
     const id = randomUUID();
     try {
@@ -327,7 +344,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
           fim: new Date(escolhido.fim),
           motivo: dados.motivo ?? null,
           marcadoPor: req.usuario.id,
-          ...(temPreco
+          ...(cobraNaPlataforma
             ? { status: "aguardando_pagamento" as const, expiraReservaEm: new Date(Date.now() + MINUTOS_DE_RESERVA * 60000) }
             : {}),
         });
@@ -379,10 +396,10 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
       },
     ]);
     void reply.code(201);
-    return { ok: true, dados: criada! };
+    return { ok: true, dados: paraQuemPede(criada!, req.usuario.id) };
   });
 
-  app.get("/consultas", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<ConsultaResumo[]>> => {
+  app.get("/consultas",{ preHandler: dentroDaClinica }, async (req): Promise<Resposta<ConsultaResumo[]>> => {
     const { de, ate } = z
       .object({ de: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), ate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() })
       .parse(req.query);
@@ -390,7 +407,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     const inicio = de ? new Date(`${de}T00:00:00Z`) : new Date(Date.now() - 24 * 3600 * 1000);
     const fim = ate ? new Date(`${ate}T23:59:59Z`) : new Date(inicio.getTime() + 30 * 24 * 3600 * 1000);
     if (fim.getTime() - inicio.getTime() > JANELA_MAXIMA_DIAS * 24 * 3600 * 1000) {
-      throw new ErroHttp(400, "JANELA_GRANDE_DEMAIS", `Peca no máximo ${JANELA_MAXIMA_DIAS} dias por vez.`);
+      throw new ErroHttp(400, "JANELA_GRANDE_DEMAIS", `Peça no máximo ${JANELA_MAXIMA_DIAS} dias por vez.`);
     }
 
     /**
@@ -438,7 +455,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
       .where(and(eq(consultas.clinicaId, req.contexto.clinicaId), between(consultas.inicio, inicio, fim), soMinhas))
       .orderBy(asc(consultas.inicio));
 
-    return { ok: true, dados: linhas.map(formatarConsulta) };
+    return { ok: true, dados: linhas.map(formatarConsulta).map((c) => paraQuemPede(c, req.usuario.id)) };
   });
 
   app.post("/consultas/:id/cancelar", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<ConsultaResumo>> => {
@@ -452,11 +469,18 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
 
     const envolvido = consulta.pacienteId === req.usuario.id || consulta.medicoId === req.usuario.id;
     if (!envolvido && !["recepcao", "admin_clinica"].includes(req.contexto.papel)) {
-      throw new ErroHttp(403, "NAO_ENVOLVIDO", "So o paciente, o médico ou a recepção cancelam esta consulta.");
+      throw new ErroHttp(403, "NAO_ENVOLVIDO", "Só o paciente, o médico ou a recepção cancelam esta consulta.");
     }
 
     await banco.transaction(async (tx) => {
-      await tx.update(consultas).set({ status: "cancelada", canceladoEm: new Date(), canceladoPor: req.usuario.id, motivoCancelamento: motivo, atualizadoEm: new Date() }).where(eq(consultas.id, id));
+      // A condicao de estado evita cancelar o que acabou de ser concluido.
+      const canceladas = await tx
+        .update(consultas)
+        .set({ status: "cancelada", canceladoEm: new Date(), canceladoPor: req.usuario.id, motivoCancelamento: motivo, expiraReservaEm: null, atualizadoEm: new Date() })
+        .where(and(eq(consultas.id, id), notInArray(consultas.status, ["cancelada", "concluida"])))
+        .returning({ id: consultas.id });
+      if (canceladas.length === 0) throw new ErroHttp(409, "ESTADO_MUDOU", "Esta consulta acabou de mudar. Recarregue a página.");
+
       await registrarAuditoria(tx, {
         quem: req.usuario.id,
         clinicaId: req.contexto.clinicaId,
@@ -466,6 +490,18 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
         detalhes: { motivo, horasDeAntecedencia: Math.round((consulta.inicio.getTime() - Date.now()) / 3600000) },
         ip: req.ip,
       });
+
+      // Consulta ja paga: o estorno e decisao da clinica, mas nao pode ficar esquecido.
+      // A busca e pelo pagamento, porque a consulta nascida da fila nao aponta para ele.
+      const pagos = await tx.select({ id: pagamentos.id }).from(pagamentos).where(and(eq(pagamentos.consultaId, id), inArray(pagamentos.status, ["confirmado", "autorizado"])));
+      for (const pago of pagos) {
+        await registrarPendenciaDeEstorno(tx, { clinicaId: req.contexto.clinicaId, pagamentoId: pago.id, pacienteId: consulta.pacienteId, consultaId: id, motivo: "consulta paga foi cancelada", ip: req.ip });
+      }
+      // Quem veio da fila nao foi atendido: a entrada se encerra como tal.
+      await tx
+        .update(filaAtendimento)
+        .set({ status: "desistiu", encerradoEm: new Date(), observacao: "consulta cancelada" })
+        .where(and(eq(filaAtendimento.consultaId, id), eq(filaAtendimento.status, "em_atendimento")));
     });
 
     const [atualizada] = await consultasPorId(banco, [id]);
@@ -486,21 +522,21 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
           chave: `consulta_cancelada:${id}`,
         })),
     );
-    return { ok: true, dados: atualizada! };
+    return { ok: true, dados: paraQuemPede(atualizada!, req.usuario.id) };
   });
 
-  app.post("/consultas/:id/status", { preHandler: soMedico }, async (req): Promise<Resposta<ConsultaResumo>> => {
+  app.post("/consultas/:id/status",{ preHandler: soMedico }, async (req): Promise<Resposta<ConsultaResumo>> => {
     const { id } = z.object({ id: z.string().uuid("id invalido") }).parse(req.params);
     const { status } = z.object({ status: z.enum(["em_andamento", "concluida"], { message: "status deve ser em_andamento ou concluida" }) }).parse(req.body);
 
     const [consulta] = await banco.select({ status: consultas.status, medicoId: consultas.medicoId }).from(consultas).where(and(eq(consultas.id, id), eq(consultas.clinicaId, req.contexto.clinicaId))).limit(1);
     if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta não encontrada nesta clínica.");
-    if (consulta.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "So o médico da consulta muda o andamento dela.");
+    if (consulta.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "Só o médico da consulta muda o andamento dela.");
 
     // agendada -> em_andamento -> concluida. Sem pular etapa e sem voltar.
     const permitido: Record<string, string[]> = { agendada: ["em_andamento"], em_andamento: ["concluida"], concluida: [], cancelada: [] };
     if (!permitido[consulta.status]?.includes(status)) {
-      throw new ErroHttp(409, "TRANSICAO_INVALIDA", `Não da para ir de "${consulta.status}" para "${status}".`);
+      throw new ErroHttp(409, "TRANSICAO_INVALIDA", `Não dá para ir de "${consulta.status}" para "${status}".`);
     }
 
     await banco.transaction(async (tx) => {

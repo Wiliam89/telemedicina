@@ -24,6 +24,16 @@ export interface ContextoDePagamento {
   avisoDeVencimento: string | null;
 }
 
+/** A clinica ja conectou uma conta para receber? */
+export async function clinicaTemRecebimento(banco: Banco, clinicaId: string): Promise<boolean> {
+  const [c] = await banco
+    .select({ provedor: clinicas.pagamentoProvedor, contaId: clinicas.pagamentoContaId, token: clinicas.pagamentoTokenCifrado })
+    .from(clinicas)
+    .where(eq(clinicas.id, clinicaId))
+    .limit(1);
+  return Boolean(c?.provedor && c.contaId && c.token);
+}
+
 export class ResolvedorDePagamento {
   constructor(
     private readonly banco: Banco,
@@ -48,7 +58,7 @@ export class ResolvedorDePagamento {
       if (this.ambiente.NODE_ENV === "production") {
         throw new ErroDePagamento(
           "CLINICA_SEM_RECEBIMENTO",
-          "Esta clinica ainda nao conectou uma conta para receber pagamentos. A administracao precisa fazer isso antes de aceitar atendimentos.",
+          "Esta clínica ainda não conectou uma conta para receber pagamentos.",
         );
       }
       return {

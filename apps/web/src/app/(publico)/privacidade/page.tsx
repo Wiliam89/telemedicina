@@ -99,7 +99,8 @@ export default function PaginaPrivacidade() {
               </p>
               <ul>
                 <li>a clínica e os profissionais que atendem você (cada clínica vê só os próprios registros);</li>
-                <li>provedores de infraestrutura que guardam os dados no Brasil (banco de dados e arquivos em São Paulo);</li>
+                <li>o provedor que guarda o banco de dados e os arquivos, em São Paulo, Brasil;</li>
+                <li>os provedores de hospedagem do site e da API, que processam os dados durante o uso e podem estar fora do Brasil, sem guardá-los de forma permanente;</li>
                 <li>o provedor de videochamada, só durante a consulta - a chamada não é gravada;</li>
                 <li>o provedor de assinatura digital ICP-Brasil, que recebe apenas o resumo criptográfico do documento, nunca o conteúdo;</li>
                 <li>o provedor de pagamento, para processar a cobrança;</li>
@@ -113,7 +114,7 @@ export default function PaginaPrivacidade() {
           titulo: "Como protegemos",
           conteudo: (
             <ul>
-              <li>Dados hospedados no Brasil (região São Paulo), com criptografia em trânsito e em repouso.</li>
+              <li>Banco de dados e arquivos guardados no Brasil (região São Paulo), com criptografia em trânsito e em repouso.</li>
               <li>Isolamento entre clínicas garantido no próprio banco de dados (segurança por linha).</li>
               <li>Recepção e administração da clínica não acessam o prontuário: só o médico que atende e o próprio paciente.</li>
               <li>O prontuário finalizado não pode ser alterado nem apagado; correções são feitas por adendo.</li>

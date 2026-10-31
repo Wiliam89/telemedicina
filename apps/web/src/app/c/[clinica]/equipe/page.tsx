@@ -7,6 +7,7 @@ import { Avatar, CabecalhoDaPagina, Cartao, Etiqueta, type Tom } from "@/compone
 import { chamarApi } from "@/lib/api";
 import { contextoDaClinica } from "@/lib/clinica";
 import { NOME_DO_PAPEL, temPapel } from "@/lib/papeis";
+import { AcoesDoMembro } from "./AcoesDoMembro";
 import { PainelConvites } from "./PainelConvites";
 import { SituacaoDaClinica } from "./SituacaoDaClinica";
 import { VerificarCrm } from "./VerificarCrm";
@@ -89,9 +90,9 @@ export default async function PaginaEquipe({ params }: { params: Promise<{ clini
           ) : (
             <ul className="divide-y divide-linha">
               {membros.dados.map((m) => (
-                <li key={m.vinculoId} className="flex items-center gap-3 px-5 py-3.5">
+                <li key={m.vinculoId} className="flex flex-wrap items-center gap-3 px-5 py-3.5">
                   <Avatar nome={m.nomeCompleto} tamanho="p" />
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-[10rem] flex-1">
                     <p className="truncate font-medium">{m.nomeCompleto}</p>
                     <p className="text-sm text-tinta-suave">desde {new Date(m.desde).toLocaleDateString("pt-BR")}</p>
                   </div>
@@ -103,6 +104,7 @@ export default async function PaginaEquipe({ params }: { params: Promise<{ clini
                     ))}
                     {m.status !== "ativo" ? <Etiqueta tom="alerta">{m.status}</Etiqueta> : null}
                   </div>
+                  <AcoesDoMembro slug={slug} perfilId={m.perfilId} nome={m.nomeCompleto} suspenso={m.status === "suspenso"} />
                 </li>
               ))}
             </ul>

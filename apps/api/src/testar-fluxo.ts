@@ -15,6 +15,7 @@
  * Nao deixa nada para tras. Se algo falhar, diz em qual passo.
  */
 import { createClient } from "@supabase/supabase-js";
+import { exigirConfirmacaoDeBancoRemoto } from "@tele/db";
 import { config } from "dotenv";
 import { resolve } from "node:path";
 
@@ -26,6 +27,7 @@ const CHAVE_SECRETA = process.env.SUPABASE_SECRET_KEY!;
 const CHAVE_PUBLICA = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const API = `http://localhost:${process.env.PORT ?? "3333"}`;
 
+exigirConfirmacaoDeBancoRemoto(SUPABASE_URL, "pnpm api:testar-fluxo");
 if (!CHAVE_PUBLICA) {
   console.error("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY nao encontrada em apps/web/.env.local. Rode: pnpm verificar");
   process.exit(1);

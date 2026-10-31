@@ -23,3 +23,5 @@ coverage/
 # acessos gerados por pnpm demo:criar
 *.local.md
 .next-build/
+# o projeto usa pnpm: um segundo lockfile so causaria conflito
+package-lock.json

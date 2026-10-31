@@ -21,16 +21,18 @@
  * O FLUXO DO PACIENTE, na ordem que o mercado usa:
  *   queixa -> pagamento -> CONSENTIMENTO -> fila -> chamada -> video
  */
-import { and, asc, count, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, gte, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { consultas, filaAtendimento, medicos, pagamentos, perfis, plantoes, precos, vinculos, type Banco } from "@tele/db";
+import { consultas, filaAtendimento, medicos, pagamentos, perfis, plantoes, type Banco } from "@tele/db";
 import type { Resposta } from "@tele/shared";
 import { registrarAuditoria } from "../auditoria.js";
 import type { Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
 import { exigirCrmVerificado } from "../crm.js";
 import { ErroHttp } from "../erros.js";
+import { clinicaTemRecebimento } from "../pagamento/index.js";
+import { expirarEsquecidosDaFila, registrarPendenciaDeEstorno } from "../reservas.js";
 
 /**
  * A versao vem de @tele/shared, junto com o TEXTO que a tela mostra. Uma
@@ -42,10 +44,7 @@ import { VERSAO_DO_CONSENTIMENTO } from "@tele/shared/consentimento";
 /** Duracao presumida de um atendimento de plantao, para montar a consulta. */
 const MINUTOS_DO_ATENDIMENTO = 20;
 
-/** Fila sem chamada por mais tempo que isto vira desistencia por espera. */
-const MINUTOS_ATE_EXPIRAR = 120;
-
-export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; autenticar: Autenticador }): Promise<void> {
+export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; autenticar: Autenticador; producao: boolean }): Promise<void> {
   const { banco } = opcoes;
   const dentroDaClinica = criarExigirClinica(banco, opcoes.autenticar);
   const soMedico = [...dentroDaClinica, exigirPapel("medico")];
@@ -96,7 +95,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       .where(and(eq(plantoes.id, id), eq(plantoes.clinicaId, req.contexto.clinicaId)))
       .limit(1);
     if (!p) throw new ErroHttp(404, "PLANTAO_NAO_ENCONTRADO", "Plantão não encontrado nesta clínica.");
-    if (p.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "So quem esta escalado abre o próprio plantão.");
+    if (p.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "Só quem está escalado abre o próprio plantão.");
     if (p.status !== "escalado") throw new ErroHttp(409, "JA_ABERTO", `Este plantão já está "${p.status}".`);
     if (p.fim < new Date()) throw new ErroHttp(409, "PLANTAO_VENCIDO", "Este plantão já passou.");
 
@@ -117,7 +116,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       .where(and(eq(plantoes.id, id), eq(plantoes.clinicaId, req.contexto.clinicaId)))
       .limit(1);
     if (!p) throw new ErroHttp(404, "PLANTAO_NAO_ENCONTRADO", "Plantão não encontrado nesta clínica.");
-    if (p.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "So quem esta escalado encerra o próprio plantão.");
+    if (p.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "Só quem está escalado encerra o próprio plantão.");
 
     // Encerrar com paciente em atendimento deixaria alguem no vacuo.
     const [emAtendimento] = await banco
@@ -166,67 +165,74 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       .parse(req.body);
 
     if (req.contexto.papel !== "paciente") {
-      throw new ErroHttp(403, "SO_PACIENTE", "So paciente entra na fila de atendimento.");
+      throw new ErroHttp(403, "SO_PACIENTE", "Só paciente entra na fila de atendimento.");
     }
 
-    // Ja esta na fila? Nao entra duas vezes.
-    const [existente] = await banco
-      .select({ id: filaAtendimento.id })
-      .from(filaAtendimento)
-      .where(
-        and(
-          eq(filaAtendimento.pacienteId, req.usuario.id),
-          eq(filaAtendimento.clinicaId, req.contexto.clinicaId),
-          inArray(filaAtendimento.status, ["aguardando", "chamado", "em_atendimento"]),
-        ),
-      )
-      .limit(1);
-    if (existente) throw new ErroHttp(409, "JA_NA_FILA", "Você já está na fila desta clínica.");
+    // Conferir e gravar acontecem sob a mesma trava, por paciente nesta clinica:
+    // com clique duplo, o segundo pedido espera o primeiro e encontra a entrada.
+    const entrada = await banco.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`fila:${req.usuario.id}:${req.contexto.clinicaId}`}))`);
 
-    // O pagamento precisa estar CONFIRMADO, ser desta pessoa, desta clinica,
-    // e nao ter sido usado antes. Sem isso, entrar na fila seria de graca.
-    const [pagamento] = await banco
-      .select({ id: pagamentos.id, status: pagamentos.status, pagadorId: pagamentos.pagadorId, consultaId: pagamentos.consultaId })
-      .from(pagamentos)
-      .where(and(eq(pagamentos.id, dados.pagamentoId), eq(pagamentos.clinicaId, req.contexto.clinicaId)))
-      .limit(1);
-    if (!pagamento) throw new ErroHttp(404, "PAGAMENTO_NAO_ENCONTRADO", "Pagamento não encontrado nesta clínica.");
-    if (pagamento.pagadorId !== req.usuario.id) throw new ErroHttp(403, "PAGAMENTO_DE_OUTRO", "Este pagamento não é seu.");
-    if (pagamento.status !== "confirmado") {
-      throw new ErroHttp(409, "PAGAMENTO_NAO_CONFIRMADO", "O pagamento ainda não foi confirmado. Aguarde a confirmação para entrar na fila.");
-    }
+      // Ja esta na fila? Nao entra duas vezes.
+      const [existente] = await tx
+        .select({ id: filaAtendimento.id })
+        .from(filaAtendimento)
+        .where(
+          and(
+            eq(filaAtendimento.pacienteId, req.usuario.id),
+            eq(filaAtendimento.clinicaId, req.contexto.clinicaId),
+            inArray(filaAtendimento.status, ["aguardando", "chamado", "em_atendimento"]),
+          ),
+        )
+        .limit(1);
+      if (existente) throw new ErroHttp(409, "JA_NA_FILA", "Você já está na fila desta clínica.");
 
-    const [jaUsado] = await banco
-      .select({ id: filaAtendimento.id })
-      .from(filaAtendimento)
-      .where(eq(filaAtendimento.pagamentoId, dados.pagamentoId))
-      .limit(1);
-    if (jaUsado || pagamento.consultaId) {
-      throw new ErroHttp(409, "PAGAMENTO_JA_USADO", "Este pagamento já foi usado em outro atendimento.");
-    }
+      // O pagamento precisa estar CONFIRMADO, ser desta pessoa, desta clinica,
+      // e nao ter sido usado antes. Sem isso, entrar na fila seria de graca.
+      const [pagamento] = await tx
+        .select({ id: pagamentos.id, status: pagamentos.status, pagadorId: pagamentos.pagadorId, consultaId: pagamentos.consultaId })
+        .from(pagamentos)
+        .where(and(eq(pagamentos.id, dados.pagamentoId), eq(pagamentos.clinicaId, req.contexto.clinicaId)))
+        .limit(1);
+      if (!pagamento) throw new ErroHttp(404, "PAGAMENTO_NAO_ENCONTRADO", "Pagamento não encontrado nesta clínica.");
+      if (pagamento.pagadorId !== req.usuario.id) throw new ErroHttp(403, "PAGAMENTO_DE_OUTRO", "Este pagamento não é seu.");
+      if (pagamento.status !== "confirmado") {
+        throw new ErroHttp(409, "PAGAMENTO_NAO_CONFIRMADO", "O pagamento ainda não foi confirmado. Aguarde a confirmação para entrar na fila.");
+      }
 
-    const [entrada] = await banco
-      .insert(filaAtendimento)
-      .values({
+      const [jaUsado] = await tx
+        .select({ id: filaAtendimento.id })
+        .from(filaAtendimento)
+        .where(eq(filaAtendimento.pagamentoId, dados.pagamentoId))
+        .limit(1);
+      if (jaUsado || pagamento.consultaId) {
+        throw new ErroHttp(409, "PAGAMENTO_JA_USADO", "Este pagamento já foi usado em outro atendimento.");
+      }
+
+      const [nova] = await tx
+        .insert(filaAtendimento)
+        .values({
+          clinicaId: req.contexto.clinicaId,
+          pacienteId: req.usuario.id,
+          pagamentoId: dados.pagamentoId,
+          queixa: dados.queixa,
+          consentimentoEm: new Date(),
+          consentimentoVersao: VERSAO_DO_CONSENTIMENTO,
+        })
+        .returning({ id: filaAtendimento.id, entrouEm: filaAtendimento.entrouEm });
+
+      await registrarAuditoria(tx, {
+        quem: req.usuario.id,
         clinicaId: req.contexto.clinicaId,
-        pacienteId: req.usuario.id,
-        pagamentoId: dados.pagamentoId,
-        queixa: dados.queixa,
-        consentimentoEm: new Date(),
-        consentimentoVersao: VERSAO_DO_CONSENTIMENTO,
-      })
-      .returning({ id: filaAtendimento.id, entrouEm: filaAtendimento.entrouEm });
-
-    await registrarAuditoria(banco, {
-      quem: req.usuario.id,
-      clinicaId: req.contexto.clinicaId,
-      acao: "fila.entrou",
-      tabela: "fila_atendimento",
-      registroId: entrada!.id,
-      // O consentimento entra na auditoria: e o que prova, depois, que ele
-      // existiu e sobre qual texto.
-      detalhes: { consentimentoVersao: VERSAO_DO_CONSENTIMENTO },
-      ip: req.ip,
+        acao: "fila.entrou",
+        tabela: "fila_atendimento",
+        registroId: nova!.id,
+        // O consentimento entra na auditoria: e o que prova, depois, que ele
+        // existiu e sobre qual texto.
+        detalhes: { consentimentoVersao: VERSAO_DO_CONSENTIMENTO },
+        ip: req.ip,
+      });
+      return nova;
     });
 
     void reply.code(201);
@@ -237,7 +243,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
    * A fila. O paciente ve so a propria posicao; a equipe ve todo mundo.
    */
   app.get("/fila", { preHandler: dentroDaClinica }, async (req) => {
-    await expirarEsquecidos(banco, req.contexto.clinicaId);
+    await expirarEsquecidosDaFila(banco, req.contexto.clinicaId);
 
     const aguardando = await banco
       .select({
@@ -256,14 +262,18 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
     const [medicosDisponiveis] = await banco
       .select({ n: count() })
       .from(plantoes)
-      .where(and(eq(plantoes.clinicaId, req.contexto.clinicaId), eq(plantoes.status, "aberto")));
+      .where(and(eq(plantoes.clinicaId, req.contexto.clinicaId), eq(plantoes.status, "aberto"), gte(plantoes.fim, new Date())));
 
     const souEquipe = ["medico", "recepcao", "admin_clinica"].includes(req.contexto.papel);
     const minha = aguardando.findIndex((f) => f.pacienteId === req.usuario.id);
+    // A queixa e informacao de saude: da equipe, so o medico le (LGPD, art. 6, III).
+    const leQueixa = req.contexto.papeis.includes("medico");
 
     return {
       ok: true as const,
       dados: {
+        // Sem como receber, a tela avisa antes de o paciente contar o que sente.
+        pagamentoDisponivel: !opcoes.producao || (await clinicaTemRecebimento(banco, req.contexto.clinicaId)),
         // Estimativa simples e honesta: quantos estao na frente, dividido
         // pelos medicos de plantao, vezes a duracao presumida.
         totalAguardando: aguardando.filter((f) => f.status === "aguardando").length,
@@ -279,7 +289,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
         // A lista completa e so para quem trabalha na clinica.
         lista: souEquipe
           ? aguardando.map((f, i) => ({
-              id: f.id, posicao: i + 1, nome: f.nome, queixa: f.queixa, status: f.status, consultaId: f.consultaId,
+              id: f.id, posicao: i + 1, nome: f.nome, queixa: leQueixa ? f.queixa : null, status: f.status, consultaId: f.consultaId,
               entrouEm: f.entrouEm.toISOString(),
               esperandoMinutos: Math.round((Date.now() - f.entrouEm.getTime()) / 60000),
             }))
@@ -301,38 +311,66 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
    * paciente diferente, sem ninguem esperar.
    */
   app.post("/fila/proximo", { preHandler: soMedico }, async (req) => {
+    // ADR-0016: o CRM pode ter vencido depois de o plantao abrir.
+    await exigirCrmVerificado(banco, req.contexto.clinicaId, req.usuario.id);
+
     const [plantao] = await banco
       .select({ id: plantoes.id })
       .from(plantoes)
-      .where(and(eq(plantoes.clinicaId, req.contexto.clinicaId), eq(plantoes.medicoId, req.usuario.id), eq(plantoes.status, "aberto")))
+      .where(and(eq(plantoes.clinicaId, req.contexto.clinicaId), eq(plantoes.medicoId, req.usuario.id), eq(plantoes.status, "aberto"), gte(plantoes.fim, new Date())))
       .limit(1);
     if (!plantao) throw new ErroHttp(409, "SEM_PLANTAO_ABERTO", "Abra seu plantão antes de chamar pacientes.");
 
     const resultado = await banco.transaction(async (tx) => {
-      const proximos = await tx.execute<{ id: string; paciente_id: string }>(sql`
-        select id, paciente_id from fila_atendimento
-        where clinica_id = ${req.contexto.clinicaId} and status = 'aguardando'
-        order by prioridade asc, entrou_em asc
-        limit 1
-        for update skip locked
-      `);
-      const proximo = (proximos as unknown as { id: string; paciente_id: string }[])[0];
-      if (!proximo) return null;
-
+      /**
+       * Paciente com outra consulta neste horario esbarra na trava do banco. Ele
+       * e pulado nesta chamada; sem isto, a fila inteira travaria nele. Se quem
+       * esta ocupado e o proprio medico, ninguem adianta tentar.
+       */
+      const pulados: string[] = [];
+      let proximo: { id: string; paciente_id: string } | undefined;
+      let consulta: { id: string } | undefined;
       const agora = new Date();
-      const [consulta] = await tx
-        .insert(consultas)
-        .values({
-          clinicaId: req.contexto.clinicaId,
-          pacienteId: proximo.paciente_id,
-          medicoId: req.usuario.id,
-          inicio: agora,
-          fim: new Date(agora.getTime() + MINUTOS_DO_ATENDIMENTO * 60000),
-          status: "em_andamento",
-          motivo: "Pronto atendimento",
-          marcadoPor: req.usuario.id,
-        })
-        .returning({ id: consultas.id });
+
+      for (;;) {
+        const proximos = await tx.execute<{ id: string; paciente_id: string }>(sql`
+          select id, paciente_id from fila_atendimento
+          where clinica_id = ${req.contexto.clinicaId} and status = 'aguardando'
+          ${pulados.length ? sql`and id not in (${sql.join(pulados.map((p) => sql`${p}::uuid`), sql`, `)})` : sql``}
+          order by prioridade asc, entrou_em asc
+          limit 1
+          for update skip locked
+        `);
+        proximo = (proximos as unknown as { id: string; paciente_id: string }[])[0];
+        if (!proximo) return null;
+
+        try {
+          const pacienteId = proximo.paciente_id;
+          [consulta] = await tx.transaction((sub) =>
+            sub
+              .insert(consultas)
+              .values({
+                clinicaId: req.contexto.clinicaId,
+                pacienteId,
+                medicoId: req.usuario.id,
+                inicio: agora,
+                fim: new Date(agora.getTime() + MINUTOS_DO_ATENDIMENTO * 60000),
+                status: "em_andamento",
+                motivo: "Pronto atendimento",
+                marcadoPor: req.usuario.id,
+              })
+              .returning({ id: consultas.id }),
+          );
+          break;
+        } catch (erro) {
+          const causa = (erro as { cause?: { code?: string; constraint_name?: string; constraint?: string } }).cause;
+          if (causa?.code !== "23P01") throw erro;
+          if (String(causa.constraint_name ?? causa.constraint ?? "").includes("medico")) {
+            throw new ErroHttp(409, "MEDICO_COM_CONSULTA", "Você tem outra consulta neste horário. Conclua-a antes de chamar o próximo.");
+          }
+          pulados.push(proximo.id);
+        }
+      }
 
       await tx
         .update(filaAtendimento)
@@ -369,7 +407,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
     const motivo = z.object({ motivo: z.string().trim().max(200).optional() }).parse(req.body ?? {});
 
     const [f] = await banco
-      .select({ status: filaAtendimento.status, pacienteId: filaAtendimento.pacienteId })
+      .select({ status: filaAtendimento.status, pacienteId: filaAtendimento.pacienteId, pagamentoId: filaAtendimento.pagamentoId })
       .from(filaAtendimento)
       .where(and(eq(filaAtendimento.id, id), eq(filaAtendimento.clinicaId, req.contexto.clinicaId)))
       .limit(1);
@@ -377,12 +415,15 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
 
     const souEquipe = ["recepcao", "admin_clinica"].includes(req.contexto.papel);
     if (f.pacienteId !== req.usuario.id && !souEquipe) throw new ErroHttp(403, "NAO_E_SUA", "Esta entrada da fila não é sua.");
-    if (f.status !== "aguardando") throw new ErroHttp(409, "JA_EM_ATENDIMENTO", "O atendimento já comecou - fale com o profissional.");
+    if (f.status !== "aguardando") throw new ErroHttp(409, "JA_EM_ATENDIMENTO", "O atendimento já começou. Fale com o profissional.");
 
-    await banco
+    // A condicao de estado evita apagar a chamada que um medico acabou de fazer.
+    const desistiu = await banco
       .update(filaAtendimento)
       .set({ status: "desistiu", encerradoEm: new Date(), observacao: motivo.motivo ?? null })
-      .where(eq(filaAtendimento.id, id));
+      .where(and(eq(filaAtendimento.id, id), eq(filaAtendimento.status, "aguardando")))
+      .returning({ id: filaAtendimento.id });
+    if (desistiu.length === 0) throw new ErroHttp(409, "JA_EM_ATENDIMENTO", "O atendimento acabou de começar. Fale com o profissional.");
 
     await registrarAuditoria(banco, {
       quem: req.usuario.id, clinicaId: req.contexto.clinicaId,
@@ -392,16 +433,8 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       detalhes: { motivo: motivo.motivo ?? null, pendenteDeEstorno: true },
       ip: req.ip,
     });
+    await registrarPendenciaDeEstorno(banco, { clinicaId: req.contexto.clinicaId, pagamentoId: f.pagamentoId, pacienteId: f.pacienteId, motivo: "fila: desistencia", ip: req.ip });
 
     return { ok: true, dados: { status: "desistiu" } };
   });
-
-  /** Quem entrou e nunca foi chamado nao pode ficar esperando para sempre. */
-  async function expirarEsquecidos(b: Banco, clinicaId: string): Promise<void> {
-    const limite = new Date(Date.now() - MINUTOS_ATE_EXPIRAR * 60000);
-    await b
-      .update(filaAtendimento)
-      .set({ status: "expirado", encerradoEm: new Date(), observacao: "tempo de espera excedido" })
-      .where(and(eq(filaAtendimento.clinicaId, clinicaId), eq(filaAtendimento.status, "aguardando"), lte(filaAtendimento.entrouEm, limite)));
-  }
 }

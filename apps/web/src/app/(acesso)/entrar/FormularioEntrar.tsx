@@ -50,6 +50,11 @@ export function FormularioEntrar({ destino }: { destino: string }) {
       <Botao type="submit" carregando={carregando} className="w-full">
         Entrar
       </Botao>
+      <p className="text-sm">
+        <Link href="/recuperar-senha" className="text-selo underline underline-offset-4">
+          Esqueci minha senha
+        </Link>
+      </p>
       <p className="text-sm text-tinta-suave">
         Ainda não tem conta?{" "}
         <Link href="/criar-conta" className="text-selo underline underline-offset-4">

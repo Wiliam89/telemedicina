@@ -16,6 +16,7 @@
  * projeto (fora do Git). NUNCA rode contra um banco com paciente real.
  */
 import { createClient } from "@supabase/supabase-js";
+import { exigirConfirmacaoDeBancoRemoto } from "@tele/db";
 import { config } from "dotenv";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -34,6 +35,7 @@ if (process.env.NODE_ENV === "production") {
   console.error("Recusado: a demonstracao cria pessoas ficticias e nao roda com NODE_ENV=production.");
   process.exit(1);
 }
+exigirConfirmacaoDeBancoRemoto(SUPABASE_URL, "pnpm demo:criar");
 if (!CHAVE_PUBLICA) {
   console.error("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY nao encontrada em apps/web/.env.local. Rode: pnpm verificar");
   process.exit(1);

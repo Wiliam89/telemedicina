@@ -4,10 +4,9 @@
 #    1. tipos nos 4 pacotes
 #    2. testes de unidade (os de banco sao pulados)
 #    3. compilacao de producao da API e do site
-#    4. testes contra Postgres de verdade - SO se o segredo
-#       DATABASE_URL_TESTE estiver configurado no GitHub (Settings >
-#       Secrets and variables > Actions). Use um projeto Supabase SEPARADO,
-#       so para testes: eles criam e apagam dados.
+#    4. testes contra um Postgres descartavel, que nasce e morre com o job.
+#       Nao precisa de segredo e nunca toca em dado real.
+#    5. dependencias com falha critica conhecida barram a entrega
 # =============================================================================
 name: CI
 
@@ -15,6 +14,9 @@ on:
   push:
     branches: [main]
   pull_request:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -36,6 +38,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Tipos
         run: pnpm typecheck
+      - name: Falhas criticas nas dependencias
+        run: pnpm audit --prod --audit-level=critical
       - name: Testes de unidade
         run: pnpm test
       - name: Compilar a API
@@ -53,29 +57,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: verificar
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: teste
+          POSTGRES_DB: tele_teste
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL_TESTE }}
+      DATABASE_URL: postgresql://postgres:teste@localhost:5432/tele_teste
+      DATABASE_URL_TESTE: postgresql://postgres:teste@localhost:5432/tele_teste
     steps:
-      - name: Sem banco de teste configurado?
-        if: env.DATABASE_URL == ''
-        run: echo "DATABASE_URL_TESTE nao configurado - testes de banco pulados."
       - uses: actions/checkout@v4
-        if: env.DATABASE_URL != ''
       - uses: pnpm/action-setup@v4
-        if: env.DATABASE_URL != ''
         with:
           version: 10.15.0
       - uses: actions/setup-node@v4
-        if: env.DATABASE_URL != ''
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-        if: env.DATABASE_URL != ''
+      - name: Preparar o banco
+        run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/preparar-banco-de-teste.sql
       - name: Migracoes
-        if: env.DATABASE_URL != ''
         run: pnpm --filter @tele/db migrar
       - name: Testes contra o Postgres
-        if: env.DATABASE_URL != ''
-        working-directory: apps/api
-        run: node node_modules/vitest/vitest.mjs run --no-file-parallelism
+        run: pnpm test:banco

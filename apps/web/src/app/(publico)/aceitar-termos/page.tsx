@@ -1,3 +1,4 @@
+import { destinoSeguro } from "@/lib/validacao";
 import { ScrollText } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
@@ -16,7 +17,7 @@ export const metadata: Metadata = { title: "Termos atualizados" };
  */
 export default async function PaginaAceitarTermos({ searchParams }: { searchParams: Promise<{ depois?: string }> }) {
   const { depois } = await searchParams;
-  const destino = depois && depois.startsWith("/") && !depois.startsWith("//") ? depois : "/clinicas";
+  const destino = destinoSeguro(depois);
   const r = await chamarApi<PerfilResposta>("/perfis/eu", { token: await tokenAtual() });
   if (!r.ok && r.status === 404) redirect(`/completar-perfil?depois=${encodeURIComponent(destino)}`);
   if (r.ok && r.dados.consentimentosPendentes.length === 0) redirect(destino);

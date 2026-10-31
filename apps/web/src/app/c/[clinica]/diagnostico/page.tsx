@@ -40,7 +40,7 @@ async function consultarApi(): Promise<{ estado: "ok"; dados: StatusSaude } | { 
 function descreverBanco(banco: StatusSaude["banco"]): string {
   switch (banco.estado) {
     case "migrado":
-      return `${banco.migracoesAplicadas} migrações aplicadas. Tabelas: ${banco.tabelas.join(", ")}.`;
+      return `${banco.migracoesAplicadas} migrações aplicadas.${banco.tabelas.length ? ` Tabelas: ${banco.tabelas.join(", ")}.` : ""}`;
     case "faltam_migracoes":
       return `${banco.migracoesAplicadas} de ${banco.migracoesEsperadas} migrações aplicadas. Rode: pnpm db:migrar`;
     case "sem_tabelas":
@@ -54,7 +54,7 @@ function descreverBanco(banco: StatusSaude["banco"]): string {
 function descreverSeguranca(seg: StatusSaude["seguranca"]): string {
   switch (seg.estado) {
     case "protegido":
-      return `RLS ligado nas 5 tabelas, ${seg.politicas} políticas. Um usuário só ve o que as políticas permitem.`;
+      return `RLS ligado em todas as tabelas, ${seg.politicas} políticas. Um usuário só ve o que as políticas permitem.`;
     case "incompleto":
       return seg.tabelasSemRls.length > 0
         ? `RLS DESLIGADO em: ${seg.tabelasSemRls.join(", ")}. Rode: pnpm db:migrar (ou pnpm db:verificar-rls para detalhes)`

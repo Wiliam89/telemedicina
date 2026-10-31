@@ -96,13 +96,16 @@ export async function rotasAssinatura(
       .limit(1);
 
     if (!doc) throw new ErroHttp(404, "DOCUMENTO_NAO_ENCONTRADO", "Documento não encontrado nesta clínica.");
-    if (doc.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "So quem emitiu o documento pode assina-lo.");
+    if (doc.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "Só quem emitiu o documento pode assiná-lo.");
     if (doc.status === "assinado") throw new ErroHttp(409, "JA_ASSINADO", "Este documento já está assinado.");
     if (doc.status === "cancelado") throw new ErroHttp(409, "CANCELADO", "Documento cancelado não se assina.");
 
     // O certificado e da PESSOA. Assinar com o CPF de outra pessoa seria
     // atribuir a ela um documento que ela nao emitiu.
-    if (doc.medicoCpf && doc.medicoCpf !== credenciais.cpf) {
+    if (!doc.medicoCpf) {
+      throw new ErroHttp(400, "CPF_NECESSARIO", "Cadastre seu CPF em Minha conta antes de assinar: é ele que confirma que o certificado é seu.");
+    }
+    if (doc.medicoCpf !== credenciais.cpf) {
       throw new ErroHttp(400, "CPF_DIVERGENTE", "O CPF informado não é o do seu cadastro. O certificado tem de ser seu.");
     }
 
@@ -150,7 +153,7 @@ export async function rotasAssinatura(
     const guardado = await armazenamento.guardar(caminho, pdfAssinado);
 
     await banco.transaction(async (tx) => {
-      await tx
+      const assinados = await tx
         .update(documentos)
         .set({
           status: "assinado",
@@ -163,7 +166,10 @@ export async function rotasAssinatura(
           assinanteNome: conferencia.titular?.nome ?? null,
           assinanteCpf: conferencia.titular?.cpf ?? null,
         })
-        .where(eq(documentos.id, id));
+        // A condicao de estado impede a assinatura de desfazer um cancelamento feito no meio do caminho.
+        .where(and(eq(documentos.id, id), eq(documentos.status, "emitido")))
+        .returning({ id: documentos.id });
+      if (assinados.length === 0) throw new ErroHttp(409, "ESTADO_MUDOU", "Este documento mudou enquanto era assinado. Recarregue a página.");
 
       await registrarAuditoria(tx, {
         quem: req.usuario.id,
@@ -319,7 +325,7 @@ export async function rotasAssinatura(
     const idNoProvedor = `externa-${guardado.hash.slice(0, 16)}`;
 
     await banco.transaction(async (tx) => {
-      await tx
+      const assinados = await tx
         .update(documentos)
         .set({
           status: "assinado",
@@ -332,7 +338,9 @@ export async function rotasAssinatura(
           assinanteNome: r.conferencia.titular?.nome ?? null,
           assinanteCpf: r.conferencia.titular?.cpf ?? null,
         })
-        .where(eq(documentos.id, id));
+        .where(and(eq(documentos.id, id), eq(documentos.status, "emitido")))
+        .returning({ id: documentos.id });
+      if (assinados.length === 0) throw new ErroHttp(409, "ESTADO_MUDOU", "Este documento mudou enquanto era assinado. Recarregue a página.");
       await registrarAuditoria(tx, {
         quem: req.usuario.id,
         clinicaId: req.contexto.clinicaId,
@@ -385,16 +393,18 @@ export async function rotasAssinatura(
     const { id } = z.object({ id: z.string().uuid("id invalido") }).parse(req.params);
 
     const [doc] = await banco
-      .select({ arquivoUrl: documentos.arquivoUrl, arquivoHash: documentos.arquivoHash, pacienteId: documentos.pacienteId, medicoId: documentos.medicoId })
+      .select({ arquivoUrl: documentos.arquivoUrl, arquivoHash: documentos.arquivoHash, pacienteId: documentos.pacienteId, medicoId: documentos.medicoId, status: documentos.status })
       .from(documentos)
       .where(and(eq(documentos.id, id), eq(documentos.clinicaId, req.contexto.clinicaId)))
       .limit(1);
 
-    if (!doc?.arquivoUrl) throw new ErroHttp(404, "SEM_ARQUIVO", "Este documento ainda não foi assinado, entao não ha PDF.");
+    if (!doc?.arquivoUrl) throw new ErroHttp(404, "SEM_ARQUIVO", "Este documento ainda não foi assinado, então não há PDF.");
     // So o paciente e o medico do documento baixam. Recepcao nao.
     if (doc.pacienteId !== req.usuario.id && doc.medicoId !== req.usuario.id) {
       throw new ErroHttp(403, "NAO_E_SEU", "Este documento não é seu.");
     }
+
+    if (doc.status === "cancelado") throw new ErroHttp(409, "CANCELADO", "Este documento foi cancelado pelo médico e não vale mais.");
 
     // Confere que o arquivo guardado ainda e o que foi assinado.
     const bytes = await armazenamento.ler(doc.arquivoUrl);

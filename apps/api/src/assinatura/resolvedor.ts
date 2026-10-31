@@ -28,6 +28,27 @@ import type { ProvedorDeAssinatura } from "./provedor.js";
 
 const VALIDADE_DO_CACHE_MS = 5 * 60 * 1000;
 
+/**
+ * Para onde a API pode mandar o segredo da clinica, o CPF e o codigo do medico.
+ *
+ * Qualquer pessoa pode abrir uma clinica e virar administradora dela. Se a URL
+ * fosse livre, bastaria apontar para um servidor proprio para colher o codigo de
+ * uso unico do medico, ou fazer a API chamar um endereco da rede interna. Por
+ * isso: so https, e so o host da plataforma ou os de ASSINATURA_HOSTS_PERMITIDOS.
+ */
+export function urlDeAssinaturaPermitida(url: string, ambiente: Pick<Ambiente, "ASSINATURA_URL" | "ASSINATURA_HOSTS_PERMITIDOS">): boolean {
+  let destino: URL;
+  try {
+    destino = new URL(url);
+  } catch {
+    return false;
+  }
+  if (destino.protocol !== "https:") return false;
+  const permitidos = (ambiente.ASSINATURA_HOSTS_PERMITIDOS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+  if (ambiente.ASSINATURA_URL) permitidos.push(new URL(ambiente.ASSINATURA_URL).hostname.toLowerCase());
+  return permitidos.includes(destino.hostname.toLowerCase());
+}
+
 export class ResolvedorDeProvedor {
   private readonly cache = new Map<string, { provedor: ProvedorDeAssinatura; ate: number }>();
   private readonly padrao: ProvedorDeAssinatura;
@@ -58,6 +79,10 @@ export class ResolvedorDeProvedor {
     let provedor = this.padrao;
 
     if (c?.provedor === "birdid" && c.url && c.clientId && c.secretCifrado) {
+      // Vale tambem para URL gravada antes de esta conferencia existir.
+      if (!urlDeAssinaturaPermitida(c.url, this.ambiente)) {
+        throw new Error("O endereço do provedor de assinatura desta clínica não está autorizado. A administração precisa revisar a configuração.");
+      }
       if (!this.ambiente.CHAVE_CRIPTOGRAFIA) {
         throw new Error("Esta clínica tem credenciais próprias de assinatura, mas CHAVE_CRIPTOGRAFIA não está definida em apps/api/.env.");
       }

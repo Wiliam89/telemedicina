@@ -60,13 +60,23 @@ export class ArmazenamentoDeDocumentos {
 
   async guardar(caminho: string, pdf: Uint8Array): Promise<{ caminho: string; hash: string }> {
     await this.garantirBalde();
+    const hash = createHash("sha256").update(pdf).digest("hex");
     const { error } = await this.supabase.storage.from(BALDE_DOCUMENTOS).upload(caminho, pdf, {
       contentType: "application/pdf",
       // Documento assinado nunca e substituido: se ja existe, algo esta errado.
       upsert: false,
     });
-    if (error) throw new Error(`Falha ao guardar o documento assinado: ${error.message}`);
-    return { caminho, hash: createHash("sha256").update(pdf).digest("hex") };
+    if (error) {
+      if (!/exist|duplicate/i.test(error.message)) throw new Error(`Falha ao guardar o documento assinado: ${error.message}`);
+      // Queda entre o envio e a gravacao no banco deixa um arquivo sem dono. Ele
+      // nao e sobrescrito: esta versao ganha outro nome, derivado do proprio
+      // conteudo, e o banco grava o caminho de quem de fato assinou.
+      const alternativo = caminho.replace(/\.pdf$/, `-${hash.slice(0, 16)}.pdf`);
+      const segundo = await this.supabase.storage.from(BALDE_DOCUMENTOS).upload(alternativo, pdf, { contentType: "application/pdf", upsert: false });
+      if (segundo.error && !/exist|duplicate/i.test(segundo.error.message)) throw new Error(`Falha ao guardar o documento assinado: ${segundo.error.message}`);
+      return { caminho: alternativo, hash };
+    }
+    return { caminho, hash };
   }
 
   /** Baixa o arquivo - usado para conferir a assinatura e para o download. */

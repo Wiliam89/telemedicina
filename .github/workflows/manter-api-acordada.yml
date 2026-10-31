@@ -1,0 +1,24 @@
+# =============================================================================
+#  O plano gratuito do Render hiberna a API depois de 15 minutos sem pedidos, e
+#  com ela param os lembretes e a liberacao de reservas (ADR-0021). Este chamado
+#  periodico a mantem acordada sem custo.
+#
+#  Limites: o GitHub pode atrasar o agendamento e desliga o workflow depois de 60
+#  dias sem atividade no repositorio. Um monitor externo com alerta e melhor
+#  (secao 12 do manual). Com plano pago sem hibernacao, apague este arquivo.
+# =============================================================================
+name: Manter API acordada
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  chamar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - run: curl --silent --show-error --fail --max-time 120 --retry 2 https://telemedicina-4b3h.onrender.com/vivo

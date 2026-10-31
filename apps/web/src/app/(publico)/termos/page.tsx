@@ -71,7 +71,7 @@ export default function PaginaTermos() {
                 <li>o médico pode, a qualquer momento, recomendar atendimento presencial ou de urgência;</li>
                 <li>em emergência (dor no peito, falta de ar, desmaio, sangramento intenso, sinais de AVC), ligue 192 (SAMU) ou vá ao pronto-socorro;</li>
                 <li>a videochamada é feita em sala exclusiva da consulta e <strong>não é gravada</strong>;</li>
-                <li>o atendimento é registrado em prontuário, guardado com segurança no Brasil, ao qual você tem acesso;</li>
+                <li>o atendimento é registrado em prontuário, guardado com segurança em banco de dados no Brasil, ao qual você tem acesso;</li>
                 <li>você pode revogar este consentimento em Minha conta; sem ele, o atendimento a distância não pode ser feito.</li>
               </ul>
             </>

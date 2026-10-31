@@ -55,7 +55,7 @@ export default async function LayoutPublico({ children }: { children: ReactNode 
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-8 text-sm text-tinta-suave sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <div className="space-y-1">
             <Marca />
-            <p>Dados hospedados no Brasil (São Paulo). Resolução CFM 2.314/2022 e LGPD.</p>
+            <p>Banco de dados e arquivos guardados em São Paulo.</p>
           </div>
           <nav aria-label="Rodapé" className="flex flex-wrap gap-x-5 gap-y-2">
             <Link href="/validar" className="hover:text-tinta">Validar documento</Link>

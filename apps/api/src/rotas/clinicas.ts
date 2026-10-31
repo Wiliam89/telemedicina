@@ -10,13 +10,15 @@
  * se torna cliente. O que exige e ter perfil - a pessoa precisa existir
  * antes de abrir uma clinica.
  */
-import { eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { clinicas, medicos, pacientes, perfis, vinculos, type Banco } from "@tele/db";
 import type { ClinicaResumo, Resposta } from "@tele/shared";
 import { registrarAuditoria } from "../auditoria.js";
+import type { Ambiente } from "../ambiente.js";
 import type { ResolvedorDeProvedor } from "../assinatura/index.js";
+import { urlDeAssinaturaPermitida } from "../assinatura/resolvedor.js";
 import { cifrar } from "../criptografia.js";
 import { criarExigirLogin, type Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
@@ -84,7 +86,7 @@ const esquemaCriarClinica = z.object({
 
 export async function rotasClinicas(
   app: FastifyInstance,
-  opcoes: { banco: Banco; autenticar: Autenticador; resolvedor: ResolvedorDeProvedor; chaveDeCriptografia: Buffer | null },
+  opcoes: { banco: Banco; autenticar: Autenticador; resolvedor: ResolvedorDeProvedor; chaveDeCriptografia: Buffer | null; ambiente: Ambiente },
 ): Promise<void> {
   const exigirLogin = criarExigirLogin(opcoes.autenticar);
   const dentroDaClinica = criarExigirClinica(opcoes.banco, opcoes.autenticar);
@@ -189,7 +191,7 @@ export async function rotasClinicas(
 
     const [atual] = await banco.select({ status: clinicas.status }).from(clinicas).where(eq(clinicas.id, req.contexto.clinicaId)).limit(1);
     if (atual?.status === "suspensa" || atual?.status === "encerrada") {
-      throw new ErroHttp(409, "CLINICA_BLOQUEADA", "Esta clínica esta suspensa ou encerrada pela plataforma e não pode ser reaberta por aqui.");
+      throw new ErroHttp(409, "CLINICA_BLOQUEADA", "Esta clínica está suspensa ou encerrada pela plataforma e não pode ser reaberta por aqui.");
     }
 
     const [c] = await banco
@@ -248,6 +250,10 @@ export async function rotasClinicas(
         ip: req.ip,
       });
       return { ok: true, dados: { configurado: false, provedor: null } };
+    }
+
+    if (!urlDeAssinaturaPermitida(dados.url!, opcoes.ambiente)) {
+      throw new ErroHttp(400, "URL_NAO_AUTORIZADA", "Este endereço de provedor de assinatura não está autorizado. Fale com o suporte da plataforma.");
     }
 
     if (!opcoes.chaveDeCriptografia) {
@@ -335,7 +341,12 @@ export async function rotasClinicas(
       await tx
         .insert(vinculos)
         .values({ perfilId: req.usuario.id, clinicaId: c.id, papel: "paciente" })
-        .onConflictDoUpdate({ target: [vinculos.perfilId, vinculos.clinicaId, vinculos.papel], set: { status: "ativo", atualizadoEm: new Date() } });
+        // Vinculo suspenso pela clinica nao se reativa sozinho por esta porta.
+        .onConflictDoUpdate({
+          target: [vinculos.perfilId, vinculos.clinicaId, vinculos.papel],
+          set: { status: "ativo", atualizadoEm: new Date() },
+          where: ne(vinculos.status, "suspenso"),
+        });
       await registrarAuditoria(tx, {
         quem: req.usuario.id,
         clinicaId: c.id,

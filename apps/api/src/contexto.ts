@@ -60,7 +60,7 @@ export function criarExigirClinica(banco: Banco, autenticar: Autenticador) {
   async function exigirClinica(req: FastifyRequest, reply: FastifyReply): Promise<void> {
     const slug = String(req.headers["x-clinica"] ?? "").trim().toLowerCase();
     if (!slug) {
-      await erro(reply, 400, "CLINICA_NAO_INFORMADA", "Informe a clinica no cabecalho X-Clinica.");
+      await erro(reply, 400, "CLINICA_NAO_INFORMADA", "Informe a clínica no cabeçalho X-Clinica.");
       return;
     }
 
@@ -79,18 +79,18 @@ export function criarExigirClinica(banco: Banco, autenticar: Autenticador) {
       .where(eq(clinicas.slug, slug));
 
     if (linhas.length === 0) {
-      await erro(reply, 404, "CLINICA_NAO_ENCONTRADA", `Nao existe clinica com o endereco "${slug}".`);
+      await erro(reply, 404, "CLINICA_NAO_ENCONTRADA", `Não existe clínica com o endereço "${slug}".`);
       return;
     }
     const clinica = linhas[0]!;
     if (clinica.status === "encerrada" || clinica.status === "suspensa") {
-      await erro(reply, 403, "CLINICA_INDISPONIVEL", `A clinica ${clinica.nomeFantasia} esta ${clinica.status}. Fale com a administracao.`);
+      await erro(reply, 403, "CLINICA_INDISPONIVEL", `A clínica ${clinica.nomeFantasia} está ${clinica.status}. Fale com a administração.`);
       return;
     }
 
     const ativos = linhas.filter((l) => l.papel && l.statusVinculo === "ativo");
     if (ativos.length === 0) {
-      await erro(reply, 403, "SEM_VINCULO", `Voce nao tem acesso a ${clinica.nomeFantasia}.`);
+      await erro(reply, 403, "SEM_VINCULO", `Você não tem acesso a ${clinica.nomeFantasia}.`);
       return;
     }
     const maior = ativos.sort((a, b) => FORCA[b.papel!] - FORCA[a.papel!])[0]!;
@@ -112,7 +112,7 @@ export function criarExigirClinica(banco: Banco, autenticar: Autenticador) {
 export function exigirPapel(...aceitos: PapelVinculo[]) {
   return async function verificar(req: FastifyRequest, reply: FastifyReply): Promise<void> {
     if (!aceitos.some((p) => req.contexto.papeis.includes(p))) {
-      await erro(reply, 403, "PAPEL_INSUFICIENTE", `Esta acao e de ${aceitos.join(" ou ")}. Voce e ${req.contexto.papel} nesta clinica.`);
+      await erro(reply, 403, "PAPEL_INSUFICIENTE", `Esta ação é de ${aceitos.join(" ou ")}. Você é ${req.contexto.papel} nesta clínica.`);
     }
   };
 }

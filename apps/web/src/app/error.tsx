@@ -11,7 +11,7 @@ import { Botao, LinkBotao } from "@/componentes/Botao";
  */
 export default function Erro({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => console.error(error), [error]);
-  const apiFora = /API.*(nao|não) respondeu|falar com a API/i.test(error.message);
+  const apiFora = /API.*(nao|não) respondeu|falar com (a API|o servidor)/i.test(error.message);
 
   return (
     <div className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-4 px-4 text-center">

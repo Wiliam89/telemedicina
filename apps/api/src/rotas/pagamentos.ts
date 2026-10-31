@@ -15,16 +15,18 @@
  * e conferido por assinatura antes de qualquer coisa.
  */
 import { randomUUID } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notExists, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { clinicas, consultas, pagamentos, perfis, precos, vinculos, type Banco } from "@tele/db";
+import { consultas, filaAtendimento, pagamentos, perfis, precos, vinculos, type Banco } from "@tele/db";
 import type { Resposta } from "@tele/shared";
-import { calcularComissao, ErroDePagamento, escolherPreco, type ResolvedorDePagamento } from "../pagamento/index.js";
+import { calcularComissao, clinicaTemRecebimento, ErroDePagamento, escolherPreco, type Cobranca, type ContextoDePagamento, type PedidoDeCobranca, type ResolvedorDePagamento } from "../pagamento/index.js";
 import { registrarAuditoria } from "../auditoria.js";
 import type { Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
 import { ErroHttp } from "../erros.js";
+import { notificar } from "../notificacoes/index.js";
+import { liberarReservasVencidas, MOTIVO_RESERVA_VENCIDA, registrarPendenciaDeEstorno, type Transacao } from "../reservas.js";
 
 /** Quanto tempo o horario fica reservado esperando o pagamento. */
 const MINUTOS_DE_RESERVA = 20;
@@ -52,7 +54,7 @@ function traduzir(erro: unknown): never {
 
 export async function rotasPagamentos(
   app: FastifyInstance,
-  opcoes: { banco: Banco; autenticar: Autenticador; resolvedor: ResolvedorDePagamento; urlPublicaDaApi: string; segredoDoWebhook: string },
+  opcoes: { banco: Banco; autenticar: Autenticador; resolvedor: ResolvedorDePagamento; urlPublicaDaApi: string; segredoDoWebhook: string | null; producao: boolean },
 ): Promise<void> {
   const { banco, resolvedor } = opcoes;
   const dentroDaClinica = criarExigirClinica(banco, opcoes.autenticar);
@@ -69,7 +71,7 @@ export async function rotasPagamentos(
     return { ok: true, dados: linhas };
   });
 
-  app.put("/precos", { preHandler: [...dentroDaClinica, exigirPapel("admin_clinica")] }, async (req): Promise<Resposta<{ itens: number }>> => {
+  app.put("/precos", { preHandler: [...dentroDaClinica, exigirPapel("admin_clinica")] }, async (req): Promise<Resposta<{ itens: number; aviso: string | null }>> => {
     const { itens } = esquemaPrecos.parse(req.body);
 
     await banco.transaction(async (tx) => {
@@ -96,10 +98,100 @@ export async function rotasPagamentos(
       });
     });
 
-    return { ok: true, dados: { itens: itens.length } };
+    const semRecebimento = opcoes.producao && itens.length > 0 && !(await clinicaTemRecebimento(banco, req.contexto.clinicaId));
+    return {
+      ok: true,
+      dados: {
+        itens: itens.length,
+        aviso: semRecebimento
+          ? "Sua clínica ainda não tem conta de recebimento conectada. Até lá, as consultas agendadas são confirmadas sem cobrança pela plataforma, e o pronto atendimento fica indisponível."
+          : null,
+      },
+    };
   });
 
   // --- cobranca -------------------------------------------------------------
+
+  /**
+   * Cartao fica recusado em producao ate existir a captura: a pre-autorizacao
+   * reservaria o valor do paciente e nunca seria cobrada nem devolvida.
+   */
+  function exigirMetodoDisponivel(metodo: string): void {
+    if (opcoes.producao && metodo === "cartao_credito") {
+      throw new ErroHttp(409, "CARTAO_INDISPONIVEL", "Pagamento com cartão ainda não está disponível. Use o Pix.");
+    }
+  }
+
+  /** O que a tela recebe sobre uma cobranca que ja existe: nao se cobra de novo. */
+  function respostaDe(p: { id: string; status: string; valorCentavos: number; pixCopiaECola: string | null; pixQrBase64: string | null; expiraEm: Date | null }, avisoDaClinica: string | null = null) {
+    return {
+      ok: true as const,
+      dados: {
+        pagamentoId: p.id,
+        status: p.status,
+        valorCentavos: p.valorCentavos,
+        pixCopiaECola: p.pixCopiaECola,
+        pixQrBase64: p.pixQrBase64,
+        expiraEm: p.expiraEm?.toISOString() ?? null,
+        avisoDaClinica,
+      },
+    };
+  }
+
+  /**
+   * Chama o provedor com a chave de idempotencia gravada e guarda o resultado.
+   * Fica fora de transacao: nao se segura conexao do banco esperando a rede.
+   *
+   * Sem resposta do provedor nao da para saber se a cobranca nasceu. O registro
+   * continua pendente, e a proxima tentativa usa a MESMA chave, entao o provedor
+   * nao cria outra. So recusa definitiva vira "recusado".
+   */
+  async function efetivarCobranca(
+    registroId: string,
+    contexto: ContextoDePagamento,
+    pedido: PedidoDeCobranca,
+    aoGravar: { quem: string; clinicaId: string; ip: string; detalhes: Record<string, unknown> },
+  ) {
+    let cobranca: Cobranca;
+    try {
+      cobranca = await contexto.provedor.cobrar(contexto.credenciais, pedido);
+    } catch (erro) {
+      if (!(erro instanceof ErroDePagamento && erro.codigo === "PROVEDOR_INDISPONIVEL")) {
+        await banco.update(pagamentos).set({ status: "recusado", atualizadoEm: new Date() }).where(eq(pagamentos.id, registroId));
+      }
+      traduzir(erro);
+    }
+
+    await banco.transaction(async (tx) => {
+      await tx
+        .update(pagamentos)
+        .set({
+          provedorId: cobranca.idNoProvedor,
+          // O estado real: uma cobranca recusada ficaria "pendente" para sempre.
+          status: cobranca.status,
+          pixCopiaECola: cobranca.pixCopiaECola ?? null,
+          pixQrBase64: cobranca.pixQrBase64 ?? null,
+          expiraEm: cobranca.expiraEm ?? null,
+          provedorPayload: cobranca.bruto,
+          ...(cobranca.status === "autorizado" ? { autorizadoEm: new Date() } : {}),
+          ...(cobranca.status === "confirmado" ? { confirmadoEm: new Date() } : {}),
+          ...(cobranca.status === "estornado" ? { estornadoEm: new Date(), motivoEstorno: "informado pelo provedor" } : {}),
+          atualizadoEm: new Date(),
+        })
+        .where(eq(pagamentos.id, registroId));
+
+      await registrarAuditoria(tx, {
+        quem: aoGravar.quem,
+        clinicaId: aoGravar.clinicaId,
+        acao: "pagamento.criado",
+        tabela: "pagamentos",
+        registroId,
+        detalhes: { ...aoGravar.detalhes, provedor: contexto.provedor.nome },
+        ip: aoGravar.ip,
+      });
+    });
+    return cobranca;
+  }
 
   app.post("/consultas/:id/pagamento", { preHandler: dentroDaClinica }, async (req, reply) => {
     const { id } = z.object({ id: z.string().uuid("id invalido") }).parse(req.params);
@@ -110,11 +202,12 @@ export async function rotasPagamentos(
         parcelas: z.number().int().min(1).max(12).optional(),
       })
       .parse(req.body);
+    exigirMetodoDisponivel(dados.metodo);
 
     const [consulta] = await banco
       .select({
         id: consultas.id, status: consultas.status, pacienteId: consultas.pacienteId, medicoId: consultas.medicoId,
-        inicio: consultas.inicio, pagamentoId: consultas.pagamentoId,
+        inicio: consultas.inicio, pagamentoId: consultas.pagamentoId, expiraReservaEm: consultas.expiraReservaEm,
         pagadorNome: perfis.nomeCompleto, pagadorCpf: perfis.cpf,
       })
       .from(consultas)
@@ -124,10 +217,16 @@ export async function rotasPagamentos(
 
     if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta não encontrada nesta clínica.");
     if (consulta.pacienteId !== req.usuario.id && !["recepcao", "admin_clinica"].includes(req.contexto.papel)) {
-      throw new ErroHttp(403, "NAO_E_SUA", "So o paciente ou a recepção pagam esta consulta.");
+      throw new ErroHttp(403, "NAO_E_SUA", "Só o paciente ou a recepção pagam esta consulta.");
     }
     if (consulta.status !== "aguardando_pagamento") {
-      throw new ErroHttp(409, "NAO_AGUARDA_PAGAMENTO", `Esta consulta esta "${consulta.status}" - não ha o que pagar.`);
+      throw new ErroHttp(409, "NAO_AGUARDA_PAGAMENTO", `Esta consulta está "${consulta.status}": não há o que pagar.`);
+    }
+    // Reserva vencida nao se paga: o horario pode ja ser de outra pessoa.
+    const fimDaReserva = consulta.expiraReservaEm;
+    if (!fimDaReserva || fimDaReserva.getTime() <= Date.now()) {
+      await liberarReservasVencidas(banco, { medicoId: consulta.medicoId, pacienteId: consulta.pacienteId });
+      throw new ErroHttp(409, "RESERVA_VENCIDA", "O prazo para pagar este horário terminou. Marque a consulta novamente.");
     }
 
     // Preco: o do medico, se houver; senao o padrao da clinica.
@@ -139,7 +238,6 @@ export async function rotasPagamentos(
     if (!preco) throw new ErroHttp(409, "SEM_PRECO", "Esta clínica ainda não definiu o valor da consulta. Fale com a administração.");
 
     const divisao = calcularComissao(preco.valorCentavos, preco.comissaoPlataformaBps);
-    const chaveIdempotencia = randomUUID();
 
     let contexto;
     try {
@@ -148,90 +246,84 @@ export async function rotasPagamentos(
       traduzir(erro);
     }
 
-    // Grava ANTES de chamar o provedor: se a chamada cair no meio, existe
-    // registro do que foi tentado, com a chave de idempotencia.
-    const [registro] = await banco
-      .insert(pagamentos)
-      .values({
-        clinicaId: req.contexto.clinicaId,
-        pagadorId: req.usuario.id,
-        consultaId: consulta.id,
-        metodo: dados.metodo,
-        valorCentavos: preco.valorCentavos,
-        valorClinicaCentavos: divisao.clinica,
-        valorPlataformaCentavos: divisao.plataforma,
-        provedor: contexto.provedor.nome,
-        chaveIdempotencia,
-      })
-      .returning({ id: pagamentos.id });
+    /**
+     * Clique duplo, duas abas ou a tela repetindo depois de um tempo esgotado:
+     * tudo isso chega aqui como pedidos iguais, e o paciente nao pode pagar
+     * duas vezes. A trava na linha da consulta faz o segundo pedido esperar o
+     * primeiro gravar e encontrar a cobranca dele. A transacao termina antes de
+     * chamar o provedor.
+     */
+    const registro = await banco.transaction(async (tx) => {
+      const [travada] = await tx.select({ status: consultas.status }).from(consultas).where(eq(consultas.id, consulta.id)).for("update");
+      if (travada?.status !== "aguardando_pagamento") throw new ErroHttp(409, "NAO_AGUARDA_PAGAMENTO", "Esta consulta não está mais aguardando pagamento.");
 
-    let cobranca;
-    try {
-      cobranca = await contexto.provedor.cobrar(contexto.credenciais, {
-        chaveIdempotencia,
-        metodo: dados.metodo,
-        valorCentavos: preco.valorCentavos,
-        comissaoPlataformaCentavos: divisao.plataforma,
+      const [ativa] = await tx
+        .select()
+        .from(pagamentos)
+        .where(and(eq(pagamentos.consultaId, consulta.id), inArray(pagamentos.status, ["pendente", "autorizado", "confirmado"])))
+        .orderBy(desc(pagamentos.criadoEm))
+        .limit(1);
+      if (ativa) {
+        const vencida = ativa.status === "pendente" && ativa.expiraEm !== null && ativa.expiraEm.getTime() <= Date.now();
+        if (!vencida) return { ...ativa, reaproveitada: true };
+        await tx.update(pagamentos).set({ status: "expirado", atualizadoEm: new Date() }).where(eq(pagamentos.id, ativa.id));
+      }
+
+      // Grava ANTES de chamar o provedor: se a chamada cair no meio, existe
+      // registro do que foi tentado, com a chave de idempotencia.
+      const [novo] = await tx
+        .insert(pagamentos)
+        .values({
+          clinicaId: req.contexto.clinicaId,
+          pagadorId: req.usuario.id,
+          consultaId: consulta.id,
+          metodo: dados.metodo,
+          valorCentavos: preco.valorCentavos,
+          valorClinicaCentavos: divisao.clinica,
+          valorPlataformaCentavos: divisao.plataforma,
+          provedor: contexto.provedor.nome,
+          chaveIdempotencia: randomUUID(),
+        })
+        .returning();
+      await tx.update(consultas).set({ pagamentoId: novo!.id }).where(eq(consultas.id, consulta.id));
+      return { ...novo!, reaproveitada: false };
+    });
+
+    // Ja existe cobranca: devolve a mesma. Sem provedorId, a tentativa anterior
+    // ficou sem resposta e segue adiante com a mesma chave.
+    if (registro.reaproveitada && registro.provedorId) return respostaDe(registro, contexto.avisoDeVencimento);
+
+    const cobranca = await efetivarCobranca(
+      registro.id,
+      contexto,
+      {
+        chaveIdempotencia: registro.chaveIdempotencia,
+        metodo: registro.metodo === "cartao_credito" ? "cartao_credito" : "pix",
+        valorCentavos: registro.valorCentavos,
+        comissaoPlataformaCentavos: registro.valorPlataformaCentavos,
         descricao: `Consulta em ${req.contexto.nomeFantasia}`,
         pagador: { nome: consulta.pagadorNome, email: req.usuario.email ?? "sem-email@exemplo.com", cpf: consulta.pagadorCpf },
         ...(dados.tokenDoCartao ? { tokenDoCartao: dados.tokenDoCartao } : {}),
         ...(dados.parcelas ? { parcelas: dados.parcelas } : {}),
-        expiraEmMinutos: MINUTOS_DE_RESERVA,
+        // O Pix nao pode valer mais que a reserva, senao o paciente paga por um
+        // horario que ja foi liberado.
+        expiraEmMinutos: Math.max(1, Math.ceil((fimDaReserva.getTime() - Date.now()) / 60000)),
         urlDeNotificacao: `${opcoes.urlPublicaDaApi}/webhooks/pagamento`,
-      });
-    } catch (erro) {
-      await banco.update(pagamentos).set({ status: "recusado", atualizadoEm: new Date() }).where(eq(pagamentos.id, registro!.id));
-      traduzir(erro);
-    }
-
-    await banco.transaction(async (tx) => {
-      await tx
-        .update(pagamentos)
-        .set({
-          provedorId: cobranca.idNoProvedor,
-          status: cobranca.status === "confirmado" ? "confirmado" : cobranca.status === "autorizado" ? "autorizado" : "pendente",
-          pixCopiaECola: cobranca.pixCopiaECola ?? null,
-          pixQrBase64: cobranca.pixQrBase64 ?? null,
-          expiraEm: cobranca.expiraEm ?? null,
-          provedorPayload: cobranca.bruto,
-          ...(cobranca.status === "autorizado" ? { autorizadoEm: new Date() } : {}),
-          ...(cobranca.status === "confirmado" ? { confirmadoEm: new Date() } : {}),
-          atualizadoEm: new Date(),
-        })
-        .where(eq(pagamentos.id, registro!.id));
-
-      await tx.update(consultas).set({ pagamentoId: registro!.id }).where(eq(consultas.id, consulta.id));
-
-      await registrarAuditoria(tx, {
-        quem: req.usuario.id,
-        clinicaId: req.contexto.clinicaId,
-        acao: "pagamento.criado",
-        tabela: "pagamentos",
-        registroId: registro!.id,
-        detalhes: { metodo: dados.metodo, valorCentavos: preco.valorCentavos, provedor: contexto.provedor.nome },
-        ip: req.ip,
-      });
-    });
+      },
+      { quem: req.usuario.id, clinicaId: req.contexto.clinicaId, ip: req.ip, detalhes: { metodo: dados.metodo, valorCentavos: registro.valorCentavos } },
+    );
 
     // Cartao autorizado ja confirma a consulta: o valor esta reservado, e a
     // captura acontece quando o atendimento e concluido.
     if (cobranca.status === "autorizado" || cobranca.status === "confirmado") {
-      await confirmarConsultaPaga(banco, registro!.id);
+      await banco.transaction((tx) => confirmarConsultaPaga(tx, registro.id));
     }
 
     void reply.code(201);
-    return {
-      ok: true as const,
-      dados: {
-        pagamentoId: registro!.id,
-        status: cobranca.status,
-        valorCentavos: preco.valorCentavos,
-        pixCopiaECola: cobranca.pixCopiaECola ?? null,
-        pixQrBase64: cobranca.pixQrBase64 ?? null,
-        expiraEm: cobranca.expiraEm?.toISOString() ?? null,
-        avisoDaClinica: contexto.avisoDeVencimento,
-      },
-    };
+    return respostaDe(
+      { id: registro.id, status: cobranca.status, valorCentavos: registro.valorCentavos, pixCopiaECola: cobranca.pixCopiaECola ?? null, pixQrBase64: cobranca.pixQrBase64 ?? null, expiraEm: cobranca.expiraEm ?? null },
+      contexto.avisoDeVencimento,
+    );
   });
 
   /**
@@ -246,9 +338,10 @@ export async function rotasPagamentos(
     const dados = z
       .object({ metodo: z.enum(["pix", "cartao_credito"]), tokenDoCartao: z.string().min(1).optional() })
       .parse(req.body);
+    exigirMetodoDisponivel(dados.metodo);
 
     if (req.contexto.papel !== "paciente") {
-      throw new ErroHttp(403, "SO_PACIENTE", "So paciente paga pronto atendimento.");
+      throw new ErroHttp(403, "SO_PACIENTE", "Só paciente paga pronto atendimento.");
     }
 
     const tabela = await banco
@@ -265,7 +358,6 @@ export async function rotasPagamentos(
       .limit(1);
 
     const divisao = calcularComissao(preco.valorCentavos, preco.comissaoPlataformaBps);
-    const chaveIdempotencia = randomUUID();
 
     let contexto;
     try {
@@ -274,75 +366,66 @@ export async function rotasPagamentos(
       traduzir(erro);
     }
 
-    const [registro] = await banco
-      .insert(pagamentos)
-      .values({
-        clinicaId: req.contexto.clinicaId,
-        pagadorId: req.usuario.id,
-        metodo: dados.metodo,
-        valorCentavos: preco.valorCentavos,
-        valorClinicaCentavos: divisao.clinica,
-        valorPlataformaCentavos: divisao.plataforma,
-        provedor: contexto.provedor.nome,
-        chaveIdempotencia,
-      })
-      .returning({ id: pagamentos.id });
+    // Aqui nao ha consulta para travar: a trava e por paciente nesta clinica.
+    // Cobranca em aberto, ou ja paga e ainda nao usada na fila, e reaproveitada.
+    const registro = await banco.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`pronto:${req.usuario.id}:${req.contexto.clinicaId}`}))`);
+      const [ativa] = await tx
+        .select()
+        .from(pagamentos)
+        .where(
+          and(
+            eq(pagamentos.pagadorId, req.usuario.id),
+            eq(pagamentos.clinicaId, req.contexto.clinicaId),
+            isNull(pagamentos.consultaId),
+            inArray(pagamentos.status, ["pendente", "confirmado"]),
+            notExists(tx.select({ id: filaAtendimento.id }).from(filaAtendimento).where(eq(filaAtendimento.pagamentoId, pagamentos.id))),
+          ),
+        )
+        .orderBy(desc(pagamentos.criadoEm))
+        .limit(1);
+      if (ativa) {
+        const vencida = ativa.status === "pendente" && ativa.expiraEm !== null && ativa.expiraEm.getTime() <= Date.now();
+        if (!vencida) return { ...ativa, reaproveitada: true };
+        await tx.update(pagamentos).set({ status: "expirado", atualizadoEm: new Date() }).where(eq(pagamentos.id, ativa.id));
+      }
+      const [novo] = await tx
+        .insert(pagamentos)
+        .values({
+          clinicaId: req.contexto.clinicaId,
+          pagadorId: req.usuario.id,
+          metodo: dados.metodo,
+          valorCentavos: preco.valorCentavos,
+          valorClinicaCentavos: divisao.clinica,
+          valorPlataformaCentavos: divisao.plataforma,
+          provedor: contexto.provedor.nome,
+          chaveIdempotencia: randomUUID(),
+        })
+        .returning();
+      return { ...novo!, reaproveitada: false };
+    });
 
-    let cobranca;
-    try {
-      cobranca = await contexto.provedor.cobrar(contexto.credenciais, {
-        chaveIdempotencia,
-        metodo: dados.metodo,
-        valorCentavos: preco.valorCentavos,
-        comissaoPlataformaCentavos: divisao.plataforma,
+    if (registro.reaproveitada && registro.provedorId) return respostaDe(registro);
+
+    const cobranca = await efetivarCobranca(
+      registro.id,
+      contexto,
+      {
+        chaveIdempotencia: registro.chaveIdempotencia,
+        metodo: registro.metodo === "cartao_credito" ? "cartao_credito" : "pix",
+        valorCentavos: registro.valorCentavos,
+        comissaoPlataformaCentavos: registro.valorPlataformaCentavos,
         descricao: `Pronto atendimento em ${req.contexto.nomeFantasia}`,
         pagador: { nome: pessoa?.nome ?? "Paciente", email: req.usuario.email ?? "sem-email@exemplo.com", cpf: pessoa?.cpf ?? null },
         ...(dados.tokenDoCartao ? { tokenDoCartao: dados.tokenDoCartao } : {}),
         expiraEmMinutos: 20,
         urlDeNotificacao: `${opcoes.urlPublicaDaApi}/webhooks/pagamento`,
-      });
-    } catch (erro) {
-      await banco.update(pagamentos).set({ status: "recusado", atualizadoEm: new Date() }).where(eq(pagamentos.id, registro!.id));
-      traduzir(erro);
-    }
-
-    await banco.transaction(async (tx) => {
-      await tx
-        .update(pagamentos)
-        .set({
-          provedorId: cobranca.idNoProvedor,
-          status: cobranca.status === "confirmado" ? "confirmado" : cobranca.status === "autorizado" ? "autorizado" : "pendente",
-          pixCopiaECola: cobranca.pixCopiaECola ?? null,
-          pixQrBase64: cobranca.pixQrBase64 ?? null,
-          expiraEm: cobranca.expiraEm ?? null,
-          provedorPayload: cobranca.bruto,
-          ...(cobranca.status === "confirmado" ? { confirmadoEm: new Date() } : {}),
-          atualizadoEm: new Date(),
-        })
-        .where(eq(pagamentos.id, registro!.id));
-      await registrarAuditoria(tx, {
-        quem: req.usuario.id,
-        clinicaId: req.contexto.clinicaId,
-        acao: "pagamento.criado",
-        tabela: "pagamentos",
-        registroId: registro!.id,
-        detalhes: { tipo: "pronto_atendimento", valorCentavos: preco.valorCentavos },
-        ip: req.ip,
-      });
-    });
+      },
+      { quem: req.usuario.id, clinicaId: req.contexto.clinicaId, ip: req.ip, detalhes: { tipo: "pronto_atendimento", valorCentavos: registro.valorCentavos } },
+    );
 
     void reply.code(201);
-    return {
-      ok: true as const,
-      dados: {
-        pagamentoId: registro!.id,
-        status: cobranca.status,
-        valorCentavos: preco.valorCentavos,
-        pixCopiaECola: cobranca.pixCopiaECola ?? null,
-        pixQrBase64: cobranca.pixQrBase64 ?? null,
-        expiraEm: cobranca.expiraEm?.toISOString() ?? null,
-      },
-    };
+    return respostaDe({ id: registro.id, status: cobranca.status, valorCentavos: registro.valorCentavos, pixCopiaECola: cobranca.pixCopiaECola ?? null, pixQrBase64: cobranca.pixQrBase64 ?? null, expiraEm: cobranca.expiraEm ?? null });
   });
 
   app.get("/pagamentos/:id", { preHandler: dentroDaClinica }, async (req) => {
@@ -384,14 +467,22 @@ export async function rotasPagamentos(
    * aceita o que vem assinado.
    */
   app.post("/webhooks/pagamento", { config: { rawBody: true } }, async (req, reply) => {
+    // Sem segredo nao ha como conferir nada: melhor recusar e o provedor reenviar.
+    const segredo = opcoes.segredoDoWebhook;
+    if (!segredo) {
+      req.log.error("webhook de pagamento recebido, mas PAGAMENTO_WEBHOOK_SEGREDO nao esta definido");
+      return reply.code(503).send({ ok: false });
+    }
+
     const corpoBruto = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
     const cabecalhos = req.headers as Record<string, string | undefined>;
 
-    // Qual provedor assinou? Tentamos os que conhecemos.
+    // Qual provedor assinou? Tentamos os que conhecemos. O simulado nao entra
+    // em producao: ele so existe para testar sem contratar um gateway.
     const { ProvedorLocalDePagamento } = await import("../pagamento/provedor-local.js");
     const { ProvedorMercadoPago } = await import("../pagamento/provedor-mercadopago.js");
-    const candidatos = [new ProvedorMercadoPago(), new ProvedorLocalDePagamento()];
-    const provedor = candidatos.find((p) => p.conferirNotificacao(cabecalhos, corpoBruto, opcoes.segredoDoWebhook));
+    const candidatos = opcoes.producao ? [new ProvedorMercadoPago()] : [new ProvedorMercadoPago(), new ProvedorLocalDePagamento()];
+    const provedor = candidatos.find((p) => p.conferirNotificacao(cabecalhos, corpoBruto, segredo));
 
     if (!provedor) {
       req.log.warn({ ip: req.ip }, "webhook de pagamento com assinatura invalida");
@@ -407,11 +498,12 @@ export async function rotasPagamentos(
       .where(and(eq(pagamentos.provedor, provedor.nome), eq(pagamentos.provedorId, aviso.idNoProvedor)))
       .limit(1);
 
-    // Pagamento que nao conhecemos: respondemos 200 para o provedor parar
-    // de reenviar, mas registramos - pode ser sinal de configuracao errada.
+    // Pagamento que nao conhecemos: pode ser so o aviso chegando antes de a API
+    // gravar o id que o provedor acabou de devolver. Responder 200 perderia esse
+    // pagamento para sempre; o 404 faz o provedor tentar de novo mais tarde.
     if (!registro) {
       req.log.warn({ idNoProvedor: aviso.idNoProvedor }, "webhook de pagamento desconhecido");
-      return reply.code(200).send({ ok: true, desconhecido: true });
+      return reply.code(404).send({ ok: false, desconhecido: true });
     }
 
     // Vamos ao provedor perguntar o estado real: o corpo da notificacao diz
@@ -423,7 +515,7 @@ export async function rotasPagamentos(
       const atual = await contexto.provedor.consultar(contexto.credenciais, aviso.idNoProvedor);
       await aplicarEstado(banco, registro.id, atual.status, atual.bruto);
     } catch (erro) {
-      req.log.error({ erro }, "falha ao conferir pagamento no provedor");
+      req.log.error({ err: erro }, "falha ao conferir pagamento no provedor");
       // 500 faz o provedor reenviar - que e o que queremos aqui.
       return reply.code(500).send({ ok: false });
     }
@@ -433,62 +525,175 @@ export async function rotasPagamentos(
 
   // --- apoio ----------------------------------------------------------------
 
-  /** Aplica o estado vindo do provedor. Idempotente por construcao. */
+  /**
+   * Aplica o estado vindo do provedor, tudo numa transacao so: se o processo
+   * cair no meio, nada fica pela metade e o reenvio do aviso refaz o trabalho.
+   *
+   * O provedor pode avisar fora de ordem, entao so as mudancas abaixo valem. Um
+   * aviso atrasado de "pendente" nao pode desfazer um "confirmado".
+   */
   async function aplicarEstado(b: Banco, pagamentoId: string, status: string, bruto: Record<string, unknown>): Promise<void> {
-    const mapa: Record<string, "pendente" | "autorizado" | "confirmado" | "recusado" | "estornado" | "expirado"> = {
-      pendente: "pendente", autorizado: "autorizado", confirmado: "confirmado",
-      recusado: "recusado", estornado: "estornado", expirado: "expirado",
-    };
-    const novo = mapa[status] ?? "pendente";
+    const novo = ESTADOS_CONHECIDOS.find((e) => e === status);
+    if (!novo) return;
 
-    const [atual] = await b.select({ status: pagamentos.status, clinicaId: pagamentos.clinicaId }).from(pagamentos).where(eq(pagamentos.id, pagamentoId)).limit(1);
-    if (!atual || atual.status === novo) return; // ja aplicado: nada a fazer
+    await b.transaction(async (tx) => {
+      const [atual] = await tx.select({ status: pagamentos.status, clinicaId: pagamentos.clinicaId }).from(pagamentos).where(eq(pagamentos.id, pagamentoId)).for("update");
+      if (!atual) return;
 
-    await b
-      .update(pagamentos)
-      .set({
-        status: novo,
-        provedorPayload: bruto,
-        ...(novo === "confirmado" ? { confirmadoEm: new Date() } : {}),
-        ...(novo === "autorizado" ? { autorizadoEm: new Date() } : {}),
-        atualizadoEm: new Date(),
-      })
-      .where(eq(pagamentos.id, pagamentoId));
+      if (atual.status !== novo) {
+        if (!TRANSICOES_DO_PAGAMENTO[atual.status].includes(novo)) return;
 
-    await registrarAuditoria(b, {
-      quem: null, // foi o provedor, nao uma pessoa
-      clinicaId: atual.clinicaId,
-      acao: `pagamento.${novo}`,
-      tabela: "pagamentos",
-      registroId: pagamentoId,
-      detalhes: { de: atual.status, para: novo },
+        const agora = new Date();
+        await tx
+          .update(pagamentos)
+          .set({
+            status: novo,
+            provedorPayload: bruto,
+            ...(novo === "confirmado" ? { confirmadoEm: agora } : {}),
+            ...(novo === "autorizado" ? { autorizadoEm: agora } : {}),
+            ...(novo === "estornado" ? { estornadoEm: agora, motivoEstorno: "informado pelo provedor" } : {}),
+            atualizadoEm: agora,
+          })
+          .where(eq(pagamentos.id, pagamentoId));
+
+        await registrarAuditoria(tx, {
+          quem: null, // foi o provedor, nao uma pessoa
+          clinicaId: atual.clinicaId,
+          acao: `pagamento.${novo}`,
+          tabela: "pagamentos",
+          registroId: pagamentoId,
+          detalhes: { de: atual.status, para: novo },
+        });
+      }
+
+      if (novo === "confirmado" || novo === "autorizado") await confirmarConsultaPaga(tx, pagamentoId);
+      if (novo === "recusado" || novo === "expirado" || novo === "estornado") await liberarConsulta(tx, pagamentoId);
+      if (novo === "estornado" && atual.status !== novo) await tratarEstorno(tx, pagamentoId, atual.clinicaId);
     });
-
-    if (novo === "confirmado" || novo === "autorizado") await confirmarConsultaPaga(b, pagamentoId);
-    if (novo === "recusado" || novo === "expirado" || novo === "estornado") await liberarConsulta(b, pagamentoId);
   }
 
-  /** Pagamento em ordem: a consulta sai da reserva e vira agendada. */
-  async function confirmarConsultaPaga(b: Banco, pagamentoId: string): Promise<void> {
-    await b
-      .update(consultas)
-      .set({ status: "agendada", expiraReservaEm: null, atualizadoEm: new Date() })
-      .where(and(eq(consultas.pagamentoId, pagamentoId), eq(consultas.status, "aguardando_pagamento")));
+  /**
+   * Pagamento em ordem: a consulta sai da reserva e vira agendada.
+   *
+   * PAGAMENTO TARDIO: a reserva pode ter vencido enquanto o banco processava o
+   * Pix. Se o horario continua livre, a consulta volta. Se ja e de outra pessoa,
+   * ou se alguem cancelou de proposito, o dinheiro fica registrado como pendencia
+   * e a clinica e avisada. Sem isto, o paciente pagaria e ficaria sem consulta,
+   * sem nenhum aviso.
+   */
+  async function confirmarConsultaPaga(tx: Transacao, pagamentoId: string): Promise<void> {
+    // A busca sai do pagamento: a consulta pode apontar para uma cobranca mais
+    // nova, que substituiu este Pix vencido, e ele ainda assim pode ter sido pago.
+    const [c] = await tx
+      .select({ id: consultas.id, status: consultas.status, motivo: consultas.motivoCancelamento, inicio: consultas.inicio, clinicaId: consultas.clinicaId, pacienteId: consultas.pacienteId, pagamentoAtual: consultas.pagamentoId })
+      .from(pagamentos)
+      .innerJoin(consultas, eq(consultas.id, pagamentos.consultaId))
+      .where(eq(pagamentos.id, pagamentoId))
+      .limit(1);
+    if (!c) return; // pagamento da fila, ainda sem consulta
+
+    if (c.status === "aguardando_pagamento") {
+      await tx.update(consultas).set({ status: "agendada", expiraReservaEm: null, pagamentoId, atualizadoEm: new Date() }).where(eq(consultas.id, c.id));
+      return;
+    }
+    if (c.status !== "cancelada") {
+      // Consulta ja garantida por outra cobranca: este dinheiro entrou a mais.
+      if (c.pagamentoAtual && c.pagamentoAtual !== pagamentoId) {
+        await registrarPendenciaDeEstorno(tx, { clinicaId: c.clinicaId, pagamentoId, pacienteId: c.pacienteId, consultaId: c.id, motivo: "segundo pagamento da mesma consulta" });
+      }
+      return;
+    }
+
+    if (c.motivo === MOTIVO_RESERVA_VENCIDA && c.inicio.getTime() > Date.now()) {
+      try {
+        // Subtransacao: se a trava do banco recusar, so esta parte e desfeita.
+        await tx.transaction(async (sub) => {
+          await sub
+            .update(consultas)
+            .set({ status: "agendada", canceladoEm: null, canceladoPor: null, motivoCancelamento: null, pagamentoId, atualizadoEm: new Date() })
+            .where(eq(consultas.id, c.id));
+          await registrarAuditoria(sub, { quem: null, clinicaId: c.clinicaId, acao: "consulta.reativada_por_pagamento", tabela: "consultas", registroId: c.id, detalhes: { pagamentoId } });
+          await notificar(sub, {
+            perfilId: c.pacienteId,
+            clinicaId: c.clinicaId,
+            tipo: "consulta_marcada",
+            titulo: "Pagamento confirmado: sua consulta está marcada",
+            corpo: "O pagamento chegou depois do prazo, mas o horário ainda estava livre e foi confirmado para você.",
+            link: null,
+            chave: `consulta_reativada:${c.id}:${pagamentoId}`,
+          });
+        });
+        return;
+      } catch (erro) {
+        const codigo = (erro as { cause?: { code?: string } }).cause?.code ?? (erro as { code?: string }).code;
+        if (codigo !== "23P01") throw erro;
+      }
+    }
+
+    await registrarPendenciaDeEstorno(tx, {
+      clinicaId: c.clinicaId,
+      pagamentoId,
+      pacienteId: c.pacienteId,
+      consultaId: c.id,
+      motivo: c.motivo === MOTIVO_RESERVA_VENCIDA ? "pagamento depois do prazo, horario indisponivel" : "pagamento de consulta cancelada",
+    });
+  }
+
+  /**
+   * O provedor devolveu o dinheiro. Quem esta na fila sai dela, e a clinica fica
+   * sabendo das consultas ja marcadas: cancelar ou manter e decisao dela (ADR-0021).
+   */
+  async function tratarEstorno(tx: Transacao, pagamentoId: string, clinicaId: string): Promise<void> {
+    await tx
+      .update(filaAtendimento)
+      .set({ status: "desistiu", encerradoEm: new Date(), observacao: "pagamento estornado" })
+      .where(and(eq(filaAtendimento.pagamentoId, pagamentoId), eq(filaAtendimento.status, "aguardando")));
+
+    const administradores = await tx
+      .select({ perfilId: vinculos.perfilId })
+      .from(vinculos)
+      .where(and(eq(vinculos.clinicaId, clinicaId), eq(vinculos.papel, "admin_clinica"), eq(vinculos.status, "ativo")));
+    await notificar(
+      tx,
+      administradores.map((a) => ({
+        perfilId: a.perfilId,
+        clinicaId,
+        tipo: "consulta_cancelada" as const,
+        titulo: "Pagamento estornado",
+        corpo: "O provedor devolveu um pagamento. Se havia consulta marcada, confira na agenda se ela deve continuar.",
+        link: null,
+        chave: `estorno:${pagamentoId}`,
+      })),
+    );
   }
 
   /** Pagamento que nao veio: o horario volta a ficar livre. */
-  async function liberarConsulta(b: Banco, pagamentoId: string): Promise<void> {
-    await b
+  async function liberarConsulta(tx: Transacao, pagamentoId: string): Promise<void> {
+    await tx
       .update(consultas)
       .set({
         status: "cancelada",
         canceladoEm: new Date(),
-        motivoCancelamento: "pagamento nao confirmado",
+        motivoCancelamento: MOTIVO_RESERVA_VENCIDA,
         expiraReservaEm: null,
         atualizadoEm: new Date(),
       })
       .where(and(eq(consultas.pagamentoId, pagamentoId), eq(consultas.status, "aguardando_pagamento")));
   }
 }
+
+type EstadoDoPagamento = "pendente" | "autorizado" | "confirmado" | "recusado" | "estornado" | "expirado";
+
+const ESTADOS_CONHECIDOS: EstadoDoPagamento[] = ["pendente", "autorizado", "confirmado", "recusado", "estornado", "expirado"];
+
+const TRANSICOES_DO_PAGAMENTO: Record<EstadoDoPagamento, EstadoDoPagamento[]> = {
+  pendente: ["autorizado", "confirmado", "recusado", "estornado", "expirado"],
+  autorizado: ["confirmado", "recusado", "estornado", "expirado"],
+  confirmado: ["estornado"],
+  // O provedor tem a palavra final: Pix dado como vencido aqui pode ter sido pago la.
+  recusado: ["confirmado", "autorizado"],
+  expirado: ["confirmado", "autorizado"],
+  estornado: [],
+};
 
 export { MINUTOS_DE_RESERVA };

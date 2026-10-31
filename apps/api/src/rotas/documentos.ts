@@ -16,7 +16,7 @@
  */
 import { randomInt } from "node:crypto";
 import { createHash } from "node:crypto";
-import { and, desc, eq, or, sql } from "drizzle-orm";
+import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { clinicas, consultas, documentos, medicos, pacientes, perfis, type Banco } from "@tele/db";
@@ -87,7 +87,7 @@ export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Ban
       .limit(1);
 
     if (!ctx) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta não encontrada nesta clínica.");
-    if (ctx.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "So o médico da consulta emite documento dela.");
+    if (ctx.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "Só o médico da consulta emite documento dela.");
     if (ctx.statusConsulta === "cancelada") throw new ErroHttp(409, "CONSULTA_CANCELADA", "Consulta cancelada não emite documento.");
 
     const [eu] = await banco
@@ -169,10 +169,10 @@ export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Ban
           or(eq(documentos.pacienteId, req.usuario.id), eq(documentos.medicoId, req.usuario.id)),
         ),
       )
-      .orderBy(desc(documentos.criadoEm));
+      .orderBy(desc(documentos.criadoEm))
+      .limit(300);
 
-    const comNome = await Promise.all(linhas.map(async (l) => l));
-    return { ok: true, dados: comNome.map(formatar) };
+    return { ok: true, dados: linhas.map(formatar) };
   });
 
   app.post("/documentos/:id/cancelar", { preHandler: soMedico }, async (req): Promise<Resposta<DocumentoResumo>> => {
@@ -181,11 +181,12 @@ export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Ban
 
     const [d] = await banco.select({ status: documentos.status, medicoId: documentos.medicoId }).from(documentos).where(and(eq(documentos.id, id), eq(documentos.clinicaId, req.contexto.clinicaId))).limit(1);
     if (!d) throw new ErroHttp(404, "DOCUMENTO_NAO_ENCONTRADO", "Documento não encontrado nesta clínica.");
-    if (d.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "So quem emitiu o documento pode cancela-lo.");
+    if (d.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU", "Só quem emitiu o documento pode cancelá-lo.");
     if (d.status === "cancelado") throw new ErroHttp(409, "JA_CANCELADO", "Este documento já estava cancelado.");
 
     await banco.transaction(async (tx) => {
-      await tx.update(documentos).set({ status: "cancelado", canceladoEm: new Date(), canceladoPor: req.usuario.id, motivoCancelamento: motivo }).where(eq(documentos.id, id));
+      const cancelados = await tx.update(documentos).set({ status: "cancelado", canceladoEm: new Date(), canceladoPor: req.usuario.id, motivoCancelamento: motivo }).where(and(eq(documentos.id, id), ne(documentos.status, "cancelado"))).returning({ id: documentos.id });
+      if (cancelados.length === 0) throw new ErroHttp(409, "JA_CANCELADO", "Este documento já estava cancelado.");
       await registrarAuditoria(tx, {
         quem: req.usuario.id,
         clinicaId: req.contexto.clinicaId,
@@ -220,6 +221,7 @@ export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Ban
         hash: documentos.hash,
         criadoEm: documentos.criadoEm,
         assinadoEm: documentos.assinadoEm,
+        assinaturaProvedor: documentos.assinaturaProvedor,
         pacienteNome: perfis.nomeCompleto,
         medicoNome: sql<string>`medico_perfil.nome_completo`,
         crm: medicos.crm,
@@ -234,9 +236,9 @@ export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Ban
       .where(eq(documentos.codigoValidacao, normalizado))
       .limit(1);
 
-    if (!d) return { ok: true, dados: { valido: false, motivo: "Nao existe documento com este codigo." } };
+    if (!d) return { ok: true, dados: { valido: false, motivo: "Não existe documento com este código." } };
     if (d.status === "cancelado") {
-      return { ok: true, dados: { valido: false, motivo: "Este documento foi CANCELADO pelo medico que o emitiu.", numero: `${d.numero}/${d.ano}` } };
+      return { ok: true, dados: { valido: false, motivo: "Este documento foi CANCELADO pelo médico que o emitiu.", numero: `${d.numero}/${d.ano}` } };
     }
 
     return {
@@ -251,6 +253,9 @@ export async function rotasDocumentos(app: FastifyInstance, opcoes: { banco: Ban
         clinica: d.clinicaNome,
         assinado: d.status === "assinado",
         assinadoEm: d.assinadoEm?.toISOString() ?? null,
+        // Na assinatura enviada de fora, e no provedor de teste, a cadeia ICP-Brasil
+        // nao e conferida aqui: a tela manda confirmar no validador oficial.
+        cadeiaIcpConferida: d.assinaturaProvedor === "birdid",
         hash: d.hash,
       },
     };

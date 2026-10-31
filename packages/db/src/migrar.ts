@@ -9,11 +9,13 @@
  * drizzle/ nao existe para o projeto (ADR-0004).
  */
 import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { exigirConfirmacaoDeBancoRemoto } from "./banco-remoto.js";
 import { criarBanco } from "./conexao.js";
 import { explicarErroDeConexao, lerDatabaseUrl } from "./ambiente-db.js";
 import { inspecionarBanco, PASTA_MIGRACOES } from "./estado-banco.js";
 
 const url = lerDatabaseUrl();
+exigirConfirmacaoDeBancoRemoto(url, "pnpm db:migrar");
 const db = criarBanco(url);
 
 try {

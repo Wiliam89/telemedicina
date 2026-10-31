@@ -10,6 +10,7 @@
  * nao tem historico nem e reproduzivel (ADR-0004).
  */
 export { criarBanco, type Banco } from "./conexao.js";
+export { ehEnderecoLocal, exigirConfirmacaoDeBancoRemoto } from "./banco-remoto.js";
 export * from "./schema/index.js";
 export {
   inspecionarBanco,

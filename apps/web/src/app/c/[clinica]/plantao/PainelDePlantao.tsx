@@ -128,7 +128,7 @@ export function PainelDePlantao({
                   <span className="font-mono text-lg text-tinta-suave">{f.posicao}</span>
                   <div>
                     <p className="font-medium">{f.nome}</p>
-                    <p className="text-sm text-tinta-suave">{f.queixa ?? "sem queixa informada"}</p>
+                    <p className="text-sm text-tinta-suave">{f.queixa ?? "Queixa visível apenas para o médico"}</p>
                   </div>
                 </div>
                 <span className={"text-sm " + (f.esperandoMinutos > 30 ? "text-alerta" : "text-tinta-suave")}>

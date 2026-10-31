@@ -48,6 +48,7 @@ export function FormularioPerfil({ destino }: { destino: string }) {
     }
     if (!dataNascimentoValida(dataNascimento)) e.dataNascimento = "Informe uma data de nascimento válida.";
     if (cpf && !cpfValido(cpf)) e.cpf = "Este CPF não é válido. Confira os dígitos.";
+    if (souMedico && !cpf) e.cpf = "O médico precisa do CPF para assinar documentos.";
     return e;
   }
 
@@ -107,7 +108,7 @@ export function FormularioPerfil({ destino }: { destino: string }) {
 
       <div className="grid gap-5 sm:grid-cols-2">
         <Campo id="dataNascimento" rotulo="Data de nascimento" type="date" required value={dataNascimento} onChange={(e) => setDataNascimento(e.target.value)} erro={erros.dataNascimento} />
-        <Campo id="cpf" rotulo="CPF (opcional por enquanto)" inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(e.target.value)} erro={erros.cpf} ajuda="Será pedido antes da primeira prescrição." />
+        <Campo id="cpf" rotulo={souMedico ? "CPF" : "CPF (opcional por enquanto)"} inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" value={cpf} onChange={(e) => setCpf(e.target.value)} erro={erros.cpf} ajuda="Será pedido antes da primeira prescrição." />
       </div>
 
       <label className="flex items-start gap-3 rounded-xl border border-linha bg-superficie shadow-cartao px-4 py-3">

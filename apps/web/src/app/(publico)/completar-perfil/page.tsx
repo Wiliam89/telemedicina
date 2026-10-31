@@ -1,3 +1,4 @@
+import { destinoSeguro } from "@/lib/validacao";
 import type { Metadata } from "next";
 import { UserRound } from "lucide-react";
 import { Folha } from "@/componentes/Folha";
@@ -16,7 +17,7 @@ export const metadata: Metadata = { title: "Completar perfil" };
  */
 export default async function PaginaCompletarPerfil({ searchParams }: { searchParams: Promise<{ depois?: string }> }) {
   const { depois } = await searchParams;
-  const destino = depois && depois.startsWith("/") ? depois : "/clinicas";
+  const destino = destinoSeguro(depois);
 
   const token = await tokenAtual();
   const r = await chamarApi<PerfilResposta>("/perfis/eu", { token });

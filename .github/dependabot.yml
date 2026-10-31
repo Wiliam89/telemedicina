@@ -1,0 +1,16 @@
+# Avisa sobre atualizacoes de seguranca toda semana, agrupadas num pull request.
+# Sem merge automatico: a main publica sozinha na Vercel e no Render.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      dependencias:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

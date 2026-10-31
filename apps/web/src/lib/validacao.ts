@@ -5,6 +5,27 @@
  * erro na hora, no campo certo, sem esperar a rede. Nunca confie so nela.
  */
 
+/**
+ * O destino de ?depois= so pode ser uma pagina DESTE site. Sem isto,
+ * /entrar?depois=//site-falso.com levaria a pessoa, ja logada e confiante,
+ * para uma copia da plataforma. "/\site" e tratado como "//site" pelos
+ * navegadores, e o %2F%2F vira "//" depois de decodificado.
+ */
+export function destinoSeguro(depois: string | undefined | null, padrao = "/clinicas"): string {
+  if (!depois) return padrao;
+  let d: string;
+  try {
+    d = decodeURIComponent(depois);
+  } catch {
+    return padrao;
+  }
+  if (!depois.startsWith("/") || depois.startsWith("//") || d.startsWith("//") || d.includes("\\")) return padrao;
+  // Tab e quebra de linha sao removidos pelo navegador: "/\t/site" vira "//site".
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(d)) return padrao;
+  return depois;
+}
+
 /** Deixa so os digitos: "123.456.789-01" -> "12345678901". */
 export function soDigitos(texto: string): string {
   return texto.replace(/\D/g, "");

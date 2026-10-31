@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import { isIP } from "node:net";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
@@ -30,6 +31,7 @@ import { rotasVideo } from "./rotas/video.js";
 import { criarProvedorDeVideo } from "./video/resolvedor.js";
 import type { ProvedorDeVideo } from "./video/provedor.js";
 import { ArmazenamentoSupabaseDeAnexos, type ArmazenamentoDeAnexos } from "./anexos/armazenamento.js";
+import { rodarManutencao } from "./reservas.js";
 
 /**
  * =====================================================================
@@ -65,6 +67,7 @@ export interface OpcoesServidor {
 
 export async function criarServidor(opcoes: OpcoesServidor = {}) {
   const ambiente = opcoes.ambiente ?? carregarAmbiente();
+  const producao = ambiente.NODE_ENV === "production";
   const autenticar = opcoes.autenticar ?? criarAutenticadorSupabase(ambiente);
 
   // Uma unica conexao com o banco para a API inteira (Modulo 3).
@@ -85,7 +88,7 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
       // NUNCA registrar tokens nem cookies no log.
       redact: ["req.headers.authorization", "req.headers.cookie"],
     },
-    trustProxy: true,
+    trustProxy: ambiente.PROXIES_CONFIAVEIS === undefined ? true : (_endereco: string, salto: number) => salto < ambiente.PROXIES_CONFIAVEIS!,
     // Identificador da requisicao: vem do balanceador (x-request-id) ou e
     // gerado aqui, aparece em todo log e volta no cabecalho da resposta -
     // e com ele que se acha, no log, o erro que o usuario relatou.
@@ -96,6 +99,36 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
   app.addHook("onSend", async (req, reply) => {
     void reply.header("x-request-id", req.id);
   });
+
+  /**
+   * O site, ao gerar pagina no servidor, conta qual e o IP de quem navega. So se
+   * acredita com o segredo combinado: sem ele, qualquer um forjaria o proprio IP.
+   */
+  if (ambiente.SEGREDO_SITE_API) {
+    const esperado = Buffer.from(ambiente.SEGREDO_SITE_API);
+    app.addHook("onRequest", async (req) => {
+      const recebido = Buffer.from(String(req.headers["x-segredo-do-site"] ?? ""));
+      const ip = req.headers["x-ip-do-usuario"];
+      if (typeof ip === "string" && isIP(ip) && recebido.length === esperado.length && timingSafeEqual(recebido, esperado)) {
+        Object.defineProperty(req, "ip", { value: ip });
+      }
+    });
+  }
+
+  // Medicao para definir PROXIES_CONFIAVEIS: quantos saltos chegam e quais
+  // cabecalhos existem. Nunca os valores, que sao dados pessoais.
+  if (producao && ambiente.PROXIES_CONFIAVEIS === undefined) {
+    let restantes = 20;
+    app.addHook("onRequest", async (req) => {
+      if (restantes <= 0) return;
+      restantes--;
+      const xff = String(req.headers["x-forwarded-for"] ?? "");
+      req.log.info(
+        { saltosXff: xff ? xff.split(",").length : 0, cfConnectingIp: Boolean(req.headers["cf-connecting-ip"]), trueClientIp: Boolean(req.headers["true-client-ip"]) },
+        "medicao de proxies",
+      );
+    });
+  }
 
   await app.register(helmet);
   await app.register(cors, {
@@ -129,7 +162,7 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
       await Promise.race([banco.$client`select 1`, new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 2000))]);
       return { ok: true };
     } catch {
-      return reply.code(503).send({ ok: false, erro: { codigo: "BANCO_INDISPONIVEL", mensagem: "O banco nao respondeu." } });
+      return reply.code(503).send({ ok: false, erro: { codigo: "BANCO_INDISPONIVEL", mensagem: "O banco não respondeu." } });
     }
   });
 
@@ -149,7 +182,7 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
       });
       if (resposta.ok) supabase = "conectado";
     } catch (erro) {
-      app.log.warn({ erro }, "Supabase nao respondeu ao /auth/v1/health");
+      app.log.warn({ err: erro }, "Supabase nao respondeu ao /auth/v1/health");
     }
 
     try {
@@ -162,15 +195,16 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
         estado: resumirEstado(e),
         migracoesAplicadas: e.migracoesAplicadas,
         migracoesEsperadas: e.migracoesEsperadas,
-        tabelas: e.tabelasEncontradas,
+        // Rota publica: em producao nao entrega a estrutura interna do banco.
+        tabelas: producao ? [] : e.tabelasEncontradas,
       };
       seguranca = {
         estado: rlsCompleto(e) ? "protegido" : "incompleto",
-        tabelasSemRls: e.tabelasSemRls,
+        tabelasSemRls: producao ? [] : e.tabelasSemRls,
         politicas: e.politicas,
       };
     } catch (erro) {
-      app.log.warn({ erro }, "Postgres nao respondeu (DATABASE_URL)");
+      app.log.warn({ err: erro }, "Postgres nao respondeu (DATABASE_URL)");
     }
 
     return {
@@ -201,10 +235,17 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
       if (rodando) return; // um ciclo lento nao empilha outro
       rodando = true;
       try {
+        // Falha aqui nao pode impedir os avisos de sair.
+        try {
+          const m = await rodarManutencao(banco);
+          if (m.reservas || m.fila || m.atendimentos) app.log.info({ manutencao: m }, "manutencao da agenda e da fila");
+        } catch (erro) {
+          app.log.error({ err: erro }, "manutencao da agenda e da fila falhou");
+        }
         const r = await rodarAgendador(banco, enviador, { urlDoSite, plataforma: ambiente.NOME_PLATAFORMA });
         if (r.lembretes || r.enviados || r.falhas) app.log.info({ agendador: r }, "agendador de avisos");
       } catch (erro) {
-        app.log.error({ erro }, "agendador de avisos falhou");
+        app.log.error({ err: erro }, "agendador de avisos falhou");
       } finally {
         rodando = false;
       }
@@ -215,16 +256,18 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
   const resolvedor = new ResolvedorDeProvedor(banco, ambiente);
   const chaveDeCriptografia = ambiente.CHAVE_CRIPTOGRAFIA ? lerChave(ambiente.CHAVE_CRIPTOGRAFIA) : null;
 
-  await app.register(rotasClinicas, { banco, autenticar, resolvedor, chaveDeCriptografia });
+  await app.register(rotasClinicas, { banco, autenticar, resolvedor, chaveDeCriptografia, ambiente });
   await app.register(rotasEquipe, { banco, autenticar, urlDoSite: ambiente.ORIGEM_PERMITIDA.split(",")[0]!.trim() });
-  await app.register(rotasAgenda, { banco, autenticar });
-  await app.register(rotasFila, { banco, autenticar });
+  await app.register(rotasAgenda, { banco, autenticar, producao });
+  await app.register(rotasFila, { banco, autenticar, producao });
   await app.register(rotasPagamentos, {
     banco,
     autenticar,
     resolvedor: new ResolvedorDePagamento(banco, ambiente),
     urlPublicaDaApi: ambiente.URL_PUBLICA_API ?? `http://localhost:${ambiente.PORT}`,
-    segredoDoWebhook: ambiente.PAGAMENTO_WEBHOOK_SEGREDO ?? "segredo-de-desenvolvimento",
+    // Em producao nunca ha valor padrao: um segredo conhecido nao protege nada.
+    segredoDoWebhook: ambiente.PAGAMENTO_WEBHOOK_SEGREDO ?? (producao ? null : "segredo-de-desenvolvimento"),
+    producao,
   });
   await app.register(rotasProntuario, { banco, autenticar });
   await app.register(rotasDocumentos, { banco, autenticar });

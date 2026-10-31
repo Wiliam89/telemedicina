@@ -17,6 +17,7 @@ interface Estado {
   /** Modulo 12: a consulta que nasceu da chamada - o destino da sala de video. */
   minhaConsultaId: string | null;
   esperaEstimadaMinutos: number | null;
+  pagamentoDisponivel?: boolean;
 }
 
 type Passo = "queixa" | "termo" | "pagamento" | "esperando";
@@ -150,7 +151,11 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
     <div className="max-w-lg space-y-5">
       {emergencia}
 
-      {passo === "queixa" ? (
+      {passo === "queixa" && estado.pagamentoDisponivel === false ? (
+        <Aviso>O pronto atendimento desta clínica está indisponível no momento, porque ela ainda não recebe pagamentos pela plataforma. Fale com a clínica ou marque uma consulta.</Aviso>
+      ) : null}
+
+      {passo === "queixa" && estado.pagamentoDisponivel !== false ? (
         <>
           <div className="space-y-1.5">
             <label htmlFor="queixa" className="block text-sm font-medium">O que você está sentindo?</label>
@@ -164,6 +169,9 @@ export function ProntoAtendimento({ slug, estado, valorCentavos }: { slug: strin
               placeholder="Estou com dor de garganta ha 2 dias, piora ao engolir..."
             />
           </div>
+          {estado.medicosDePlantao === 0 ? (
+            <Aviso>Nenhum profissional está de plantão agora. Você pode entrar na fila, mas a espera pode ser longa. Se ninguém chamar em 2 horas, sua entrada expira e a clínica é avisada sobre o reembolso.</Aviso>
+          ) : null}
           {valorCentavos !== null ? (
             <div className="rounded-xl border border-linha bg-superficie shadow-cartao p-4">
               <p className="text-sm text-tinta-suave">Valor do atendimento</p>

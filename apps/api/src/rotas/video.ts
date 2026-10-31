@@ -27,10 +27,11 @@
  * credencial parada esperando vazamento - e, pior, uma credencial que
  * continuaria valendo depois de quem a pediu perder o direito de entrar.
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { consentimentosPendentes } from "@tele/shared/lgpd";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { consultas, filaAtendimento, perfis, salasDeVideo, type Banco } from "@tele/db";
+import { consentimentos, consultas, filaAtendimento, perfis, salasDeVideo, type Banco } from "@tele/db";
 import type { EntradaNaSala, Resposta } from "@tele/shared";
 import { decidirEntrada, janelaDaSala } from "@tele/shared/video";
 import { registrarAuditoria } from "../auditoria.js";
@@ -100,7 +101,7 @@ export async function rotasVideo(
       throw new ErroHttp(
         403,
         "FORA_DA_CONSULTA",
-        "Somente o paciente e o medico desta consulta entram na sala de atendimento.",
+        "Somente o paciente e o médico desta consulta entram na sala de atendimento.",
       );
     }
 
@@ -133,6 +134,39 @@ export async function rotasVideo(
         abreEm: decisao.abreEm.toISOString(),
         fechaEm: decisao.fechaEm.toISOString(),
       });
+    }
+
+    /**
+     * O paciente precisa ter aceitado o termo de telemedicina na versao atual
+     * (CFM 2.314/2022). Quem entrou pelo pronto atendimento aceitou ao entrar na fila.
+     */
+    if (!souMedico) {
+      const aceites = await banco
+        .select({ tipo: consentimentos.tipo, acao: consentimentos.acao, versao: consentimentos.versao, criadoEm: consentimentos.criadoEm })
+        .from(consentimentos)
+        .where(eq(consentimentos.perfilId, req.usuario.id));
+      if (consentimentosPendentes(aceites).includes("telemedicina")) {
+        const [naFila] = await banco
+          .select({ em: filaAtendimento.consentimentoEm })
+          .from(filaAtendimento)
+          .where(eq(filaAtendimento.consultaId, consultaId))
+          .limit(1);
+        if (!naFila?.em) {
+          throw new ErroHttp(403, "CONSENTIMENTO_PENDENTE", "Antes de entrar na sala, aceite o termo de telemedicina.");
+        }
+      }
+    }
+
+    // Sala encerrada nao abre de novo. Conferir ANTES de falar com o provedor:
+    // senao, insistir em entrar recriaria la a sala que o medico fechou, e um
+    // token vazado voltaria a valer.
+    const [jaEncerrada] = await banco
+      .select({ em: salasDeVideo.encerradaEm })
+      .from(salasDeVideo)
+      .where(and(eq(salasDeVideo.consultaId, consultaId), isNotNull(salasDeVideo.encerradaEm)))
+      .limit(1);
+    if (jaEncerrada) {
+      throw new ErroHttp(409, "SALA_ENCERRADA", "O médico encerrou este atendimento. A sala foi fechada e não abre de novo.");
     }
 
     const { fechaEm } = janelaDaSala(consulta.inicio, consulta.fim);
@@ -281,7 +315,7 @@ export async function rotasVideo(
     { preHandler: dentroDaClinica },
     async (req): Promise<Resposta<{ encerrada: true }>> => {
       const { id: consultaId } = z.object({ id: z.string().uuid() }).parse(req.params);
-      const { souMedico } = await conferirAcesso(req.contexto.clinicaId, consultaId, req.usuario.id);
+      const { souMedico, consulta } = await conferirAcesso(req.contexto.clinicaId, consultaId, req.usuario.id);
 
       if (!souMedico) {
         throw new ErroHttp(403, "SO_O_MEDICO_ENCERRA", "Somente o médico da consulta encerra o atendimento.");
@@ -293,6 +327,12 @@ export async function rotasVideo(
         .where(eq(salasDeVideo.consultaId, consultaId))
         .limit(1);
 
+      // Sem sala aberta, uma consulta agendada ainda nao aconteceu: encerrar aqui
+      // daria como concluida uma consulta futura.
+      if (!sala && consulta.status === "agendada") {
+        throw new ErroHttp(409, "SALA_NAO_ABERTA", "A sala desta consulta ainda não foi aberta.");
+      }
+
       if (sala && !sala.encerradaEm) {
         try {
           await provedor.apagarSala(sala.nome);
@@ -300,7 +340,7 @@ export async function rotasVideo(
           // O provedor nao respondeu. Seguimos marcando o encerramento: a
           // sala expira sozinha no fim da janela, e deixar a consulta
           // "em_andamento" para sempre seria pior.
-          req.log.warn({ erro, consultaId }, "nao foi possivel apagar a sala no provedor");
+          req.log.warn({ err: erro, consultaId }, "nao foi possivel apagar a sala no provedor");
         }
 
         await banco
@@ -313,7 +353,8 @@ export async function rotasVideo(
       await banco
         .update(consultas)
         .set({ status: "concluida", atualizadoEm: agora })
-        .where(and(eq(consultas.id, consultaId), eq(consultas.status, "em_andamento")));
+        // Inclui "agendada": a sala fecha para sempre, entao a consulta nao pode ficar pendente.
+        .where(and(eq(consultas.id, consultaId), inArray(consultas.status, ["agendada", "em_andamento"])));
 
       /**
        * Atendimento de plantao: a linha da fila tambem se encerra. Sem isto,

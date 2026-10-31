@@ -152,6 +152,8 @@ export interface ResultadoValidacao {
   clinica?: string;
   assinado?: boolean;
   assinadoEm?: string | null;
+  /** A cadeia ICP-Brasil foi conferida pela plataforma? Se nao, vale o validador oficial. */
+  cadeiaIcpConferida?: boolean;
   hash?: string;
   motivo?: string;
 }

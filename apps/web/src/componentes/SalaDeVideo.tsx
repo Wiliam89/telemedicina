@@ -92,6 +92,8 @@ export function SalaDeVideo({ slug, consultaId, comoMedico = false, aoEncerrar }
       });
       if (!r.ok) {
         setErro(r.erro.mensagem);
+        // O termo muda de versao: quem nao aceitou a atual vai aceitar e volta para ca.
+        if (r.erro.codigo === "CONSENTIMENTO_PENDENTE") window.location.href = `/aceitar-termos?depois=${encodeURIComponent(window.location.pathname)}`;
         return;
       }
       setEntrada(r.dados);
@@ -139,7 +141,7 @@ export function SalaDeVideo({ slug, consultaId, comoMedico = false, aoEncerrar }
       await quadro.join({ url: r.dados.url, token: r.dados.token });
       setFase("na_sala");
     } catch {
-      setErro("Não foi possível abrir a sala. Verifique se o navegador tem permissao para usar câmera e microfone.");
+      setErro("Não foi possível abrir a sala. Verifique se o navegador tem permissão para usar câmera e microfone: toque no cadeado ao lado do endereço do site, libere os dois e tente de novo.");
       desmontar();
       setFase("fechada");
     } finally {
@@ -177,7 +179,7 @@ export function SalaDeVideo({ slug, consultaId, comoMedico = false, aoEncerrar }
   }
 
   return (
-    <section className="space-y-3" aria-label="Sala de atendimento por vídeo">
+    <section className="space-y-3" aria-label="Sala de atendimento por vídeo" data-em-chamada={fase === "na_sala" || fase === "entrando" ? "sim" : "nao"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-titulo text-xl tracking-tight">Atendimento por vídeo</h2>
@@ -228,13 +230,8 @@ export function SalaDeVideo({ slug, consultaId, comoMedico = false, aoEncerrar }
             Este ambiente não faz videochamada. Nenhuma câmera foi aberta.
           </p>
           <p className="text-sm text-tinta-suave">
-            O provedor de vídeo esta no modo simulado, usado para rodar o projeto sem contratar um servico de vídeo.
-            Todo o resto do atendimento funciona normalmente: o prontuário, a receita e o encerramento.
-          </p>
-          <p className="text-sm text-tinta-suave">
-            Para ter vídeo de verdade, configure <code className="rounded bg-papel px-1">VIDEO_PROVEDOR=daily</code> e{" "}
-            <code className="rounded bg-papel px-1">VIDEO_API_KEY</code> em{" "}
-            <code className="rounded bg-papel px-1">apps/api/.env</code>.
+            Este é um ambiente de demonstração. Todo o resto do atendimento funciona normalmente: o prontuário, a
+            receita e o encerramento.
           </p>
           {comoMedico ? null : (
             <p className="text-sm text-tinta-suave">

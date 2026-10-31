@@ -65,7 +65,7 @@ export function criarExigirLogin(autenticar: Autenticador) {
     if (!usuario) {
       const corpo: RespostaErro = {
         ok: false,
-        erro: { codigo: "NAO_AUTENTICADO", mensagem: "Faca login e envie o token em Authorization: Bearer <token>." },
+        erro: { codigo: "NAO_AUTENTICADO", mensagem: "Faça login e envie o token em Authorization: Bearer <token>." },
       };
       await reply.code(401).send(corpo);
       return;

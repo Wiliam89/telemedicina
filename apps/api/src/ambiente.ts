@@ -83,6 +83,12 @@ const esquema = z.object({
   ASSINATURA_URL: z.string().url("deve ser a URL do provedor de assinatura").optional(),
   ASSINATURA_CLIENT_ID: z.string().min(1).optional(),
   ASSINATURA_CLIENT_SECRET: z.string().min(1).optional(),
+  /**
+   * Hosts aceitos quando uma clinica informa o proprio provedor de assinatura,
+   * separados por virgula. O host de ASSINATURA_URL ja entra sozinho. Vazio, so
+   * o provedor da plataforma e aceito.
+   */
+  ASSINATURA_HOSTS_PERMITIDOS: z.string().optional(),
 
   /**
    * Endereco PUBLICO desta API - e para ca que o provedor de pagamento
@@ -147,6 +153,21 @@ const esquema = z.object({
   LIMITE_POR_MINUTO: z.coerce.number().int().min(30).max(100000).default(600),
 
   ORIGEM_PERMITIDA: z.string().default("http://localhost:3000"),
+
+  /**
+   * Quantos proxies confiaveis ha na frente da API. Define de onde vem o IP da
+   * pessoa, usado no limite de requisicoes e na auditoria. Sem definir, vale o
+   * comportamento antigo: confiar em todo X-Forwarded-For, que qualquer um pode
+   * forjar. Meca antes de definir: um numero errado faria todos parecerem o
+   * mesmo IP. A API registra os saltos nos primeiros pedidos depois de subir.
+   */
+  PROXIES_CONFIAVEIS: z.coerce.number().int().min(0).max(10).optional(),
+  /**
+   * Segredo combinado com o site (SEGREDO_SITE_API na Vercel). Com ele, o site
+   * informa o IP de quem esta navegando. Sem isto, as paginas geradas no servidor
+   * aparecem com o IP da Vercel na auditoria e dividem o mesmo limite.
+   */
+  SEGREDO_SITE_API: z.string().min(16, "SEGREDO_SITE_API: use ao menos 16 caracteres").optional(),
 });
 
 export type Ambiente = z.infer<typeof esquema>;

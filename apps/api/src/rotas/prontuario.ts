@@ -50,7 +50,7 @@ export async function rotasProntuario(app: FastifyInstance, opcoes: { banco: Ban
   async function minhaEvolucao(id: string, clinicaId: string, medicoId: string) {
     const [e] = await banco.select().from(evolucoes).where(and(eq(evolucoes.id, id), eq(evolucoes.clinicaId, clinicaId))).limit(1);
     if (!e) throw new ErroHttp(404, "EVOLUCAO_NAO_ENCONTRADA", "Evolução não encontrada nesta clínica.");
-    if (e.medicoId !== medicoId) throw new ErroHttp(403, "NAO_E_SUA", "So quem escreveu a evolução pode altera-la.");
+    if (e.medicoId !== medicoId) throw new ErroHttp(403, "NAO_E_SUA", "Só quem escreveu a evolução pode alterá-la.");
     return e;
   }
 
@@ -63,7 +63,7 @@ export async function rotasProntuario(app: FastifyInstance, opcoes: { banco: Ban
       .where(and(eq(consultas.id, id), eq(consultas.clinicaId, req.contexto.clinicaId)))
       .limit(1);
     if (!consulta) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta não encontrada nesta clínica.");
-    if (consulta.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "So o médico da consulta escreve o prontuário dela.");
+    if (consulta.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "Só o médico da consulta escreve o prontuário dela.");
     if (consulta.status === "cancelada") throw new ErroHttp(409, "CONSULTA_CANCELADA", "Consulta cancelada não gera prontuário.");
 
     // Uma evolucao principal por consulta (adendos vem depois, com adendo_de).

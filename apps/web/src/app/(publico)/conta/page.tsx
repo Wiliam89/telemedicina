@@ -84,7 +84,7 @@ export default async function PaginaConta() {
             </div>
           ) : null}
         </dl>
-        <CorrigirDados nome={p.nomeCompleto} telefone={p.telefone} />
+        <CorrigirDados nome={p.nomeCompleto} telefone={p.telefone} semCpf={!p.cpf} />
       </Cartao>
 
       <Cartao titulo={<span className="flex items-center gap-2"><FileDown className="h-4 w-4 text-selo" aria-hidden="true" /> Cópia dos meus dados</span>} descricao="Tudo o que a plataforma guarda sobre você - cadastro, consultas, prontuário, documentos, consentimentos - num arquivo que você pode levar para outro serviço (portabilidade).">

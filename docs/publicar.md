@@ -68,6 +68,9 @@ temporariamente e rode `pnpm db:migrar` uma vez, para criar o schema.
 | `NOME_PLATAFORMA` | o nome que aparece nos e-mails |
 | `DB_POOL_MAX` | `10` por instância (ADR-0020) |
 | `LIMITE_POR_MINUTO` | `600` |
+| `PROXIES_CONFIAVEIS` | so depois de medir no log "medicao de proxies" (ADR-0021) |
+| `SEGREDO_SITE_API` | o mesmo valor na Vercel; gere um segredo longo |
+| `ASSINATURA_HOSTS_PERMITIDOS` | so se clinicas usarem provedor proprio de assinatura |
 
 > **Health check (ADR-0020):** em *Settings > Health Check Path* do Render,
 > use `/pronto`. Ele responde 503 quando o banco não responde, e o Render
@@ -124,6 +127,7 @@ temporariamente e rode `pnpm db:migrar` uma vez, para criar o schema.
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | do projeto novo — Settings > API Keys > Publishable |
 | `NEXT_PUBLIC_API_URL` | a URL do Render |
 | `NEXT_PUBLIC_AMBIENTE` | `homologacao` |
+| `SEGREDO_SITE_API` | o mesmo valor do Render. **Sem** `NEXT_PUBLIC_`: nunca vai para o navegador |
 | `NEXT_PUBLIC_NOME_PLATAFORMA` | o nome da sua plataforma |
 | `NEXT_PUBLIC_EMPRESA_RAZAO_SOCIAL`, `NEXT_PUBLIC_EMPRESA_CNPJ`, `NEXT_PUBLIC_EMPRESA_ENDERECO` | aparecem nos Termos e na Política |
 | `NEXT_PUBLIC_ENCARREGADO_NOME`, `NEXT_PUBLIC_ENCARREGADO_EMAIL` | o encarregado de dados (DPO) — LGPD art. 41 |
@@ -145,10 +149,12 @@ A partir daqui, cada `git push` na `main` atualiza os dois sozinho.
 Ele é bom para demonstrar, treinar e testar. **Não é produção**, e ainda
 não deve receber paciente real, porque faltam:
 
-- validação de CRM contra o CFM (Módulo 13) — hoje qualquer número passa
-- os direitos do titular da LGPD funcionando (Módulo 15)
-- backup com redundância e a guarda de 20 anos do prontuário (Módulo 18)
-- assinatura com valor legal (depende do certificado)
+- conta de vídeo, e-mail e recebimento configurados
+- banco de dados separado do ambiente de desenvolvimento
+- backup testado e a guarda de 20 anos do prontuário
+- assinatura com valor legal (certificado e conferência da cadeia ICP-Brasil, ADR-0021)
+- segundo fator de autenticação para quem lê dado clínico
+- revisão jurídica dos Termos, da Política e da transferência internacional
 
 ## Detalhes que economizam tempo
 
@@ -158,7 +164,12 @@ segundos. Para demonstração ao vivo, abra `/saude` alguns minutos antes.
 
 **Migrações não rodam sozinhas.** Ao entregar um módulo novo, aponte o
 `DATABASE_URL` da sua máquina para o Supabase publicado e rode
-`pnpm db:migrar` antes do push. Automatizar isso entra no Módulo 18.
+`pnpm db:migrar` antes do push, confirmando com `CONFIRMAR_BANCO_REMOTO=sim`.
+Automatizar isso entra no Módulo 18.
+
+**Recuperação de senha.** Em *Authentication > URL Configuration* do Supabase,
+inclua `https://SEU-SITE/auth/confirmar` nas Redirect URLs, e configure um SMTP
+próprio: o embutido só entrega para a equipe da organização.
 
 **Webhook de pagamento.** Com a API publicada, o `URL_PUBLICA_API` já é
 alcançável da internet — não precisa mais de túnel.

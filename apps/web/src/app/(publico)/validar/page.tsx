@@ -63,6 +63,11 @@ export default async function PaginaValidar({ searchParams }: { searchParams: Pr
               <dt className="text-tinta-suave">Assinatura digital</dt>
               <dd>{resultado.dados.assinado ? `sim, em ${new Date(resultado.dados.assinadoEm!).toLocaleDateString("pt-BR")}` : "ainda não assinado"}</dd>
             </dl>
+            {resultado.dados.assinado && !resultado.dados.cadeiaIcpConferida ? (
+              <p className="rounded-lg bg-espera-suave px-3 py-2 text-sm text-espera">
+                Esta consulta confirma que o documento existe nesta plataforma, mas a cadeia ICP-Brasil do certificado não foi conferida aqui. Confirme o PDF assinado no validador oficial do ITI, abaixo.
+              </p>
+            ) : null}
             <p className="break-all font-mono text-xs text-tinta-suave">SHA-256: {resultado.dados.hash}</p>
             <p className="text-xs text-tinta-suave">
               Por privacidade, o conteúdo clínico não é exibido aqui: ele consta apenas no documento em mãos do paciente.

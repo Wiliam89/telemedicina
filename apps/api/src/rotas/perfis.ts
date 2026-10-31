@@ -43,6 +43,18 @@ const esquemaCriarPerfil = z.object({
   consentimentos: z.array(z.enum(["termos_de_uso", "politica_de_privacidade", "telemedicina"])).optional(),
 });
 
+/** Os dois digitos verificadores da Receita. Sequencias repetidas nao valem. */
+export function cpfValido(cpf: string): boolean {
+  if (!/^\d{11}$/.test(cpf) || /^(\d)\1{10}$/.test(cpf)) return false;
+  const calc = (tamanho: number) => {
+    let soma = 0;
+    for (let i = 0; i < tamanho; i++) soma += Number(cpf[i]) * (tamanho + 1 - i);
+    const resto = (soma * 10) % 11;
+    return resto === 10 ? 0 : resto;
+  };
+  return calc(9) === Number(cpf[9]) && calc(10) === Number(cpf[10]);
+}
+
 export async function buscarPerfil(banco: Banco, id: string): Promise<PerfilResposta | null> {
   const [linha] = await banco
     .select({
@@ -134,15 +146,24 @@ export async function rotasPerfis(app: FastifyInstance, opcoes: { banco: Banco; 
       .object({
         nomeCompleto: z.string().trim().min(3, "nome com ao menos 3 letras").max(120).optional(),
         telefone: z.string().trim().regex(/^\d{10,11}$/, "telefone: só dígitos, com DDD (10 ou 11)").nullable().optional(),
+        /** So para quem ainda nao tem: o medico precisa dele para assinar. */
+        cpf: z.string().refine(cpfValido, "Este CPF não é válido. Confira os dígitos.").optional(),
       })
-      .refine((d) => d.nomeCompleto !== undefined || d.telefone !== undefined, "nada para corrigir")
+      .refine((d) => d.nomeCompleto !== undefined || d.telefone !== undefined || d.cpf !== undefined, "nada para corrigir")
       .parse(req.body);
-    const [antes] = await banco.select({ nome: perfis.nomeCompleto, telefone: perfis.telefone }).from(perfis).where(eq(perfis.id, req.usuario.id)).limit(1);
+    const [antes] = await banco.select({ nome: perfis.nomeCompleto, telefone: perfis.telefone, cpf: perfis.cpf }).from(perfis).where(eq(perfis.id, req.usuario.id)).limit(1);
     if (!antes) throw new ErroHttp(404, "PERFIL_NAO_ENCONTRADO", "Você ainda não tem perfil.");
-    await banco.transaction(async (tx) => {
+    // Depois de informado, o CPF identifica a pessoa em documentos ja emitidos:
+    // trocar e pedido ao controlador, com conferencia.
+    if (dados.cpf && antes.cpf) {
+      if (dados.cpf !== antes.cpf) throw new ErroHttp(409, "CPF_JA_CADASTRADO", "Seu CPF já está cadastrado. Para corrigi-lo, faça um pedido à clínica.");
+    }
+    const novoCpf = dados.cpf && !antes.cpf ? dados.cpf : undefined;
+    try {
+      await banco.transaction(async (tx) => {
       await tx
         .update(perfis)
-        .set({ ...(dados.nomeCompleto ? { nomeCompleto: dados.nomeCompleto } : {}), ...(dados.telefone !== undefined ? { telefone: dados.telefone } : {}), atualizadoEm: new Date() })
+        .set({ ...(dados.nomeCompleto ? { nomeCompleto: dados.nomeCompleto } : {}), ...(dados.telefone !== undefined ? { telefone: dados.telefone } : {}), ...(novoCpf ? { cpf: novoCpf } : {}), atualizadoEm: new Date() })
         .where(eq(perfis.id, req.usuario.id));
       await registrarAuditoria(tx, {
         quem: req.usuario.id,
@@ -153,7 +174,12 @@ export async function rotasPerfis(app: FastifyInstance, opcoes: { banco: Banco; 
         detalhes: { campos: Object.keys(dados) },
         ip: req.ip,
       });
-    });
+      });
+    } catch (erro) {
+      const codigo = (erro as { cause?: { code?: string } }).cause?.code ?? (erro as { code?: string }).code;
+      if (codigo === "23505") throw new ErroHttp(409, "CPF_EM_USO", "Este CPF já está em uso em outra conta.");
+      throw erro;
+    }
     return { ok: true, dados: (await buscarPerfil(banco, req.usuario.id))! };
   });
 
