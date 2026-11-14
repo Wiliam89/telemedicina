@@ -167,9 +167,64 @@ segundos. Para demonstração ao vivo, abra `/saude` alguns minutos antes.
 `pnpm db:migrar` antes do push, confirmando com `CONFIRMAR_BANCO_REMOTO=sim`.
 Automatizar isso entra no Módulo 18.
 
-**Recuperação de senha.** Em *Authentication > URL Configuration* do Supabase,
-inclua `https://SEU-SITE/auth/confirmar` nas Redirect URLs, e configure um SMTP
-próprio: o embutido só entrega para a equipe da organização.
+## E-mail de confirmação de cadastro e de recuperação de senha
+
+Sintoma conhecido: "às vezes o e-mail de confirmação não chega, ou chega e a
+página não carrega". O código já foi corrigido (o cadastro informa o endereço
+de retorno, oferece reenvio, e link vencido leva a uma tela que explica). O
+restante é configuração no **painel do Supabase**, e precisa ser feito uma vez:
+
+1. **Authentication > URL Configuration**
+   - *Site URL*: o endereço publicado do site (`https://SEU-SITE`), nunca
+     `http://localhost:3000`. Se ficar localhost, o link do e-mail abre uma
+     página que não carrega.
+   - *Redirect URLs*: inclua `https://SEU-SITE/auth/confirmar` e
+     `https://SEU-SITE/**` (e, para testar na máquina, `http://localhost:3000/**`).
+     Endereço fora da lista é trocado pelo Site URL.
+2. **Authentication > SMTP Settings: configure um SMTP próprio.** O SMTP
+   embutido do Supabase só entrega para os e-mails da equipe do projeto e tem
+   limite de poucos envios por hora: é a causa de "às vezes não chega". Opção
+   sem custo para começar: **Resend** (3.000 e-mails/mês grátis, exige domínio
+   verificado), em `smtp.resend.com`, porta 465, usuário `resend`, senha = a
+   API key. O mesmo domínio pode servir aos avisos da plataforma (`EMAIL_*`).
+3. **Authentication > Email Templates > Confirm signup** (recomendado). Troque
+   o link do modelo por:
+
+   ```html
+   <a href="{{ .SiteURL }}/auth/confirmar?token_hash={{ .TokenHash }}&type=email&proximo=/completar-perfil">Confirmar meu e-mail</a>
+   ```
+
+   E em **Reset Password**:
+
+   ```html
+   <a href="{{ .SiteURL }}/auth/confirmar?token_hash={{ .TokenHash }}&type=recovery&proximo=/redefinir-senha">Criar nova senha</a>
+   ```
+
+   Com esse modelo a confirmação funciona em **qualquer aparelho** (abrir o
+   e-mail no celular depois de se cadastrar no computador) e não é "gasta"
+   por leitores de e-mail que abrem links sozinhos: a conta só é confirmada
+   quando a pessoa toca no botão da tela `/confirmar-email`.
+
+Sem o passo 3, o link padrão continua funcionando, mas só abre a sessão no
+mesmo navegador do cadastro; em outro aparelho a pessoa vê "e-mail confirmado,
+entre com sua senha".
+
+## Plataforma como clínica única (ADR-0022)
+
+Na API (Render):
+
+| Variável | Valor |
+| --- | --- |
+| `PLATAFORMA_SLUG` | o endereço interno da clínica que é a plataforma (ex.: `telesaude`) |
+| `PLATAFORMA_ADMIN_EMAILS` | e-mails de quem pode fazer a configuração inicial, separados por vírgula. **Obrigatório em produção** |
+| `IDENTIDADE_PROVEDOR` | `manual` (padrão, sem custo) ou `externo` |
+| `PAGAMENTO_PROVEDOR`, `PAGAMENTO_ACCESS_TOKEN`, `PAGAMENTO_CHAVE_PUBLICA` | a conta de recebimento da plataforma (ADR-0023) |
+
+Depois do deploy, entre com um dos e-mails de administração: a primeira tela é
+a configuração inicial (razão social e CNPJ). A partir daí todo cadastro novo
+já é paciente da plataforma. Se o banco já tinha uma clínica, use o `slug` dela
+em `PLATAFORMA_SLUG`: pacientes e equipe dela continuam onde estão, e quem tinha
+conta em outra clínica passa a ser paciente desta no próximo acesso.
 
 **Webhook de pagamento.** Com a API publicada, o `URL_PUBLICA_API` já é
 alcançável da internet — não precisa mais de túnel.

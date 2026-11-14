@@ -34,6 +34,31 @@ Para cada item, peça evidência: teste, arquivo e linha, ou medição. Pense se
 - [ ] Segredo do webhook existe em produção, sem valor padrão conhecido
 - [ ] Clínica consegue, de fato, conectar uma conta de recebimento
 
+## Cartão cadastrado (ADR-0023)
+- [ ] Número de cartão recusado na API (só token)
+- [ ] Encerrar a consulta debita uma vez, mesmo com agendador e várias instâncias
+- [ ] Consulta cancelada não é cobrada
+- [ ] Recusa no final vira pendência, avisa o paciente e bloqueia novo atendimento
+- [ ] Cartão com consulta por cobrar não pode ser removido
+- [ ] Valor cobrado é o combinado, não o da tabela no dia
+
+## Credenciamento e identidade (ADR-0022)
+- [ ] Médico sem aprovação não vê paciente, agenda nem fila
+- [ ] Aprovação exige identidade confirmada; ninguém decide o próprio pedido
+- [ ] Aviso do serviço de reconhecimento facial: assinatura, validade e uma vez só
+- [ ] Documentos só por link temporário, leitura auditada
+
+## Despacho do atendimento imediato (ADR-0025)
+- [ ] Pedido chega a todos os médicos aptos online, e só a eles
+- [ ] Dois aceites ao mesmo tempo: um vence, o outro recebe "já aceito"
+- [ ] Médico offline não lê queixa de ninguém
+- [ ] Especialidade sem médico não aceita paciente na fila
+
+## Confirmação de e-mail
+- [ ] Cadastro informa `emailRedirectTo`; Site URL e Redirect URLs corretos no Supabase
+- [ ] Link aberto em outro aparelho, vencido ou já usado leva a tela que orienta
+- [ ] Reenvio disponível no cadastro e no login
+
 ## Teleconsulta
 - [ ] Permissão negada explica como resolver
 - [ ] Queda de conexão permite voltar

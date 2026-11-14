@@ -69,9 +69,22 @@ pnpm --filter web build
 ### 5. Relatar com honestidade
 Entregue: o que mudou e por quê, o resultado dos testes, a comparação com a referência, o que **não** foi testado, as decisões do Wiliam e os upgrades futuros com preço aproximado. Chame `supervisor-projeto` e `supervisor-telemedicina` antes de declarar pronto.
 
+## Modelo de negócio atual (ADR-0022 a ADR-0025)
+
+- **A plataforma é a clínica** (`PLATAFORMA_SLUG`). Paciente não escolhe nem é convidado por clínica; quem cria a conta já é paciente. O isolamento por `clinicaId` continua por baixo: não remova.
+- **Médico entra por credenciamento**: documentos + selfie comparada com o documento + CRM conferido. Sem identidade confirmada não há aprovação; ninguém aprova o próprio pedido. Convite de médico é recusado.
+- **Duas linhas**: pronto atendimento (clínico geral) e teleconsulta (especialista), cada uma imediata (fila) ou agendada. Quem atende o quê: `medicoAtende()` em `@tele/shared/atendimento`.
+- **Cobrança**: cartão cadastrado é debitado ao final (`cobrarConsultasConcluidas`); sem cartão, Pix antes. Recusa vira pendência que bloqueia novo atendimento.
+- **Despacho**: pedido imediato vai a todos os médicos aptos online; o primeiro aceite vence (`FOR UPDATE SKIP LOCKED`).
+
 ## Invariantes do TeleSaúde
 
 Quebrar qualquer um destes é regressão grave:
+
+- Número de cartão nunca passa pela API nem pelo site: só o token do provedor.
+- Cobrança ao final é idempotente: uma consulta, um débito, mesmo com várias instâncias e o agendador rodando junto.
+- Um pedido da fila é aceito por um médico só, e só por quem pode atendê-lo.
+- Selfie e documentos do médico: só a administração e o próprio médico, por link temporário, com leitura auditada.
 
 - Toda consulta ao banco pela API filtra por `clinicaId` e por quem pede. A API usa a credencial dona do banco, então o RLS é só a segunda tranca (ADR-0006).
 - Recepção e administração não leem dado clínico.

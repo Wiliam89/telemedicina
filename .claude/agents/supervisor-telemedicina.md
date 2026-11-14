@@ -34,6 +34,7 @@ Procure o que falha de verdade, não o que parece bonito:
 6. **Regulatório.** Cite a fonte primária. Se não conseguir conferir, marque como não confirmado e encaminhe para revisão jurídica. Nunca afirme conformidade legal.
 7. **Regressão.** A mudança quebra contrato, teste, manual ou algum invariante da Skill? O deploy é seguro com o site e a API em versões diferentes?
 8. **Escala.** Lista sem limite, chamada sem tempo limite, estado em memória, tarefa duplicada, consulta sem índice.
+8b. **Modelo atual (ADR-0022 a 0025).** A plataforma é a clínica; médico só atende após credenciamento com identidade confirmada; cartão debitado ao final uma única vez; despacho imediato com um vencedor por pedido. Confira cada um contra `apps/api/src/plataforma.test.ts`.
 9. **Testes.** Rode `pnpm typecheck`, `pnpm test` e `pnpm audit --prod`. Relate a saída real. Diga o que não foi testado.
 
 Compare com as plataformas de `references/referencias-de-mercado.md`. Pesquise na web quando precisar confirmar um recurso, uma norma ou uma falha de segurança.

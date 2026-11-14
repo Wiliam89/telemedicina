@@ -12,6 +12,7 @@ Monorepo pnpm: `apps/web` (Next.js, Vercel), `apps/api` (Fastify, Render), `pack
   2. Prontuário imutável com adendo, auditoria somente de inserção e guarda de 20 anos.
   3. Consentimento versionado e direitos do titular.
   4. Nada pode quebrar o que já funciona: toda mudança passa pelos testes e pelo manual.
+- Modelo de negócio (ADR-0022 a 0025): a plataforma é a própria clínica (`PLATAFORMA_SLUG`); médico entra por credenciamento com documentos e conferência facial; pronto atendimento (clínico geral) e teleconsulta (especialista), cada um imediato ou agendado; pedido imediato vai a todos os médicos aptos online e o primeiro que aceita atende; cartão opcional debitado ao final, sem cartão Pix antes.
 - Limitações conhecidas: hospedagem gratuita (Render hiberna e não tem região no Brasil); vídeo, assinatura integrada, e-mail e pagamento dependem de contas externas; a produção atual é de demonstração (`documentosComValorLegal=false`, `videoReal=false`).
 - Critérios de aceite: `pnpm typecheck`, `pnpm test`, `pnpm test:banco` e os dois builds passando; roteiro da seção 10 do manual conferido; aprovação do subagente `supervisor-telemedicina`.
 
