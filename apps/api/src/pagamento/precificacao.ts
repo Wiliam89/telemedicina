@@ -9,14 +9,22 @@ export interface PrecoAplicavel {
   valorCentavos: number;
   comissaoPlataformaBps: number;
   medicoId: string | null;
+  /** Preco de uma especialidade (ADR-0024). Ausente ou nulo = nao e por especialidade. */
+  especialidade?: string | null;
 }
 
 /**
  * O preco do medico especifico ganha do preco padrao da clinica.
  * Um cardiologista pode custar mais que a consulta geral.
  */
-export function escolherPreco(precos: PrecoAplicavel[], medicoId: string): PrecoAplicavel | null {
-  return precos.find((p) => p.medicoId === medicoId) ?? precos.find((p) => p.medicoId === null) ?? null;
+export function escolherPreco(precos: PrecoAplicavel[], medicoId: string | null, especialidade?: string | null): PrecoAplicavel | null {
+  // Do mais especifico para o mais geral: o medico, a especialidade, o padrao.
+  return (
+    (medicoId ? precos.find((p) => p.medicoId === medicoId) : undefined) ??
+    (especialidade ? precos.find((p) => p.medicoId === null && p.especialidade === especialidade) : undefined) ??
+    precos.find((p) => p.medicoId === null && !p.especialidade) ??
+    null
+  );
 }
 
 /**

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { PerfilResposta } from "@tele/shared";
+import type { ClinicaResumo, PerfilResposta, PlataformaPublica } from "@tele/shared";
 import { ArrowRight, Building2, Plus } from "lucide-react";
 import { Aviso } from "@/componentes/Aviso";
 import { LinkBotao } from "@/componentes/Botao";
@@ -10,11 +10,17 @@ import { chamarApi } from "@/lib/api";
 import { NOME_DO_PAPEL } from "@/lib/papeis";
 import { tokenAtual } from "@/lib/supabase-servidor";
 
-export const metadata: Metadata = { title: "Minhas clínicas" };
+export const metadata: Metadata = { title: "Entrando" };
 
 /**
- * A encruzilhada do sistema multi-clinica: escolher onde entrar.
- * Com uma clinica so, nao faz a pessoa clicar - vai direto.
+ * A porta de entrada de quem esta logado.
+ *
+ * PLATAFORMA UNICA (ADR-0022): a plataforma e a propria clinica. Ninguem
+ * escolhe, cria ou e convidado para clinica nenhuma para ser atendido - esta
+ * pagina so leva a pessoa para dentro. Quem ainda nao e paciente (conta
+ * antiga) passa a ser, aqui mesmo.
+ *
+ * VARIAS CLINICAS (modo antigo): a encruzilhada de escolher onde entrar.
  */
 export default async function PaginaClinicas() {
   const token = await tokenAtual();
@@ -29,6 +35,34 @@ export default async function PaginaClinicas() {
 
   if ((r.dados.consentimentosPendentes ?? []).length > 0) redirect("/aceitar-termos?depois=/clinicas");
   const { clinicas } = r.dados;
+
+  const plataforma = await chamarApi<PlataformaPublica>("/plataforma");
+  if (plataforma.ok && plataforma.dados.unica) {
+    const { slug, configurada } = plataforma.dados;
+    // Ainda sem a clinica da plataforma: so a administracao consegue cria-la.
+    if (!configurada) redirect("/clinicas/nova");
+
+    let dentro = clinicas.some((c) => c.slug === slug);
+    if (!dentro) {
+      const entrada = await chamarApi<ClinicaResumo>("/plataforma/entrar", { metodo: "POST", token });
+      if (!entrada.ok) {
+        return (
+          <Folha Icone={Building2} titulo="Quase lá">
+            <div className="space-y-4">
+              <Aviso tipo="erro">{entrada.erro.mensagem}</Aviso>
+              {entrada.erro.codigo === "DADOS_DE_PACIENTE_NECESSARIOS" ? <LinkBotao href="/conta">Abrir Minha conta</LinkBotao> : null}
+            </div>
+          </Folha>
+        );
+      }
+      dentro = true;
+    }
+    // Medico que acabou de se cadastrar: o proximo passo dele e o credenciamento.
+    const atende = clinicas.find((c) => c.slug === slug)?.papeis?.includes("medico");
+    if (r.dados.medico && !atende && !r.dados.credenciamento) redirect(`/c/${slug}/credenciamento`);
+    redirect(`/c/${slug}/inicio`);
+  }
+
   if (clinicas.length === 1) redirect(`/c/${clinicas[0]!.slug}/inicio`);
 
   return (

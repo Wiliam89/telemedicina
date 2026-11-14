@@ -23,6 +23,7 @@ import { cifrar } from "../criptografia.js";
 import { criarExigirLogin, type Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
 import { ErroHttp } from "../erros.js";
+import type { ModoPlataforma } from "./plataforma.js";
 
 /** Confere os digitos verificadores do CNPJ (o mesmo algoritmo da Receita). */
 export function cnpjValido(cnpj: string): boolean {
@@ -86,7 +87,7 @@ const esquemaCriarClinica = z.object({
 
 export async function rotasClinicas(
   app: FastifyInstance,
-  opcoes: { banco: Banco; autenticar: Autenticador; resolvedor: ResolvedorDeProvedor; chaveDeCriptografia: Buffer | null; ambiente: Ambiente },
+  opcoes: { banco: Banco; autenticar: Autenticador; resolvedor: ResolvedorDeProvedor; chaveDeCriptografia: Buffer | null; ambiente: Ambiente; modo?: ModoPlataforma },
 ): Promise<void> {
   const exigirLogin = criarExigirLogin(opcoes.autenticar);
   const dentroDaClinica = criarExigirClinica(opcoes.banco, opcoes.autenticar);
@@ -103,6 +104,21 @@ export async function rotasClinicas(
       .limit(1);
     if (!perfil) throw new ErroHttp(400, "PERFIL_NECESSARIO", "Complete seu perfil antes de criar uma clínica.");
 
+    /**
+     * ADR-0022: quando a plataforma e a propria clinica, esta rota serve para
+     * UMA coisa so - a configuracao inicial, feita uma vez por quem a
+     * administra. Depois disso, ninguem cria clinica.
+     */
+    const modo = opcoes.modo;
+    if (modo?.slug) {
+      if (dados.slug !== modo.slug) throw new ErroHttp(403, "PLATAFORMA_UNICA", "Nesta plataforma não se criam clínicas: o atendimento é feito pela própria plataforma.");
+      const email = (req.usuario.email ?? "").toLowerCase();
+      // Em producao a lista e obrigatoria: sem ela, o primeiro visitante viraria o administrador.
+      if (modo.adminEmails.length === 0 ? opcoes.ambiente.NODE_ENV === "production" : !modo.adminEmails.includes(email)) {
+        throw new ErroHttp(403, "SO_A_ADMINISTRACAO", "A configuração inicial da plataforma é feita pela administração.");
+      }
+    }
+
     let criada: { id: string; slug: string; nomeFantasia: string; status: ClinicaResumo["status"]; fusoHorario: string };
     try {
       criada = await banco.transaction(async (tx) => {
@@ -112,9 +128,12 @@ export async function rotasClinicas(
           .returning({ id: clinicas.id, slug: clinicas.slug, nomeFantasia: clinicas.nomeFantasia, status: clinicas.status, fusoHorario: clinicas.fusoHorario });
         // Quem cria administra: sem isso a clinica nasceria sem dono.
         await tx.insert(vinculos).values({ perfilId: req.usuario.id, clinicaId: c!.id, papel: "admin_clinica" });
+        // ADR-0022: a plataforma nasce aberta - nao ha "link de entrada" a divulgar.
+        if (modo?.slug) await tx.update(clinicas).set({ status: "ativa" }).where(eq(clinicas.id, c!.id));
         // O medico que abre o proprio consultorio tambem ATENDE nele. Sem
         // isto ele administraria sem conseguir atender ninguem.
-        if (perfil.crm) await tx.insert(vinculos).values({ perfilId: req.usuario.id, clinicaId: c!.id, papel: "medico" });
+        // Na plataforma unica, nem quem a configura atende sem credenciamento (ADR-0022).
+        if (perfil.crm && !modo?.slug) await tx.insert(vinculos).values({ perfilId: req.usuario.id, clinicaId: c!.id, papel: "medico" });
         await registrarAuditoria(tx, {
           quem: req.usuario.id,
           clinicaId: c!.id,
@@ -137,7 +156,7 @@ export async function rotasClinicas(
     }
 
     void reply.code(201);
-    return { ok: true, dados: { ...criada, papel: "admin_clinica" } };
+    return { ok: true, dados: { ...criada, ...(modo?.slug ? { status: "ativa" as const } : {}), papel: "admin_clinica" } };
   });
 
   /**
@@ -315,6 +334,8 @@ export async function rotasClinicas(
    */
   app.post("/clinicas/:slug/entrar", { preHandler: exigirLogin }, async (req, reply): Promise<Resposta<ClinicaResumo>> => {
     const { slug } = z.object({ slug: z.string().trim().toLowerCase().min(3) }).parse(req.params);
+    // ADR-0022: na plataforma unica so existe uma porta, e e a dela.
+    if (opcoes.modo?.slug && slug !== opcoes.modo.slug) throw new ErroHttp(404, "CLINICA_NAO_ENCONTRADA", `Não existe clínica com o endereço "${slug}".`);
 
     const [perfil] = await banco
       .select({ id: perfis.id, nascimento: pacientes.dataNascimento })

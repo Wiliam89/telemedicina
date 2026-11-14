@@ -32,6 +32,12 @@ import { criarProvedorDeVideo } from "./video/resolvedor.js";
 import type { ProvedorDeVideo } from "./video/provedor.js";
 import { ArmazenamentoSupabaseDeAnexos, type ArmazenamentoDeAnexos } from "./anexos/armazenamento.js";
 import { rodarManutencao } from "./reservas.js";
+import { cobrarConsultasConcluidas } from "./cobranca.js";
+import { criarProvedorDeIdentidade, type ProvedorDeIdentidade } from "./identidade/provedor.js";
+import { rotasAtendimento } from "./rotas/atendimento.js";
+import { rotasCartoes } from "./rotas/cartoes.js";
+import { rotasCredenciamento } from "./rotas/credenciamento.js";
+import { lerModoPlataforma, rotasPlataforma } from "./rotas/plataforma.js";
 
 /**
  * =====================================================================
@@ -63,6 +69,8 @@ export interface OpcoesServidor {
   autenticar?: Autenticador;
   /** Padrao: decidido por VIDEO_PROVEDOR. Os testes passam um dublê. */
   provedorDeVideo?: ProvedorDeVideo;
+  /** Padrao: decidido por IDENTIDADE_PROVEDOR (ADR-0022). */
+  provedorDeIdentidade?: ProvedorDeIdentidade;
 }
 
 export async function criarServidor(opcoes: OpcoesServidor = {}) {
@@ -81,6 +89,10 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
    * consulta (Modulo 12).
    */
   const provedorDeVideo = opcoes.provedorDeVideo ?? criarProvedorDeVideo(ambiente);
+  // O mesmo vale para a conferencia de identidade do medico (ADR-0022).
+  const provedorDeIdentidade = opcoes.provedorDeIdentidade ?? criarProvedorDeIdentidade(ambiente);
+  /** ADR-0022: a plataforma e uma clinica so? Decidido aqui, uma vez. */
+  const modo = lerModoPlataforma(ambiente);
 
   const app = Fastify({
     logger: {
@@ -127,6 +139,20 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
         { saltosXff: xff ? xff.split(",").length : 0, cfConnectingIp: Boolean(req.headers["cf-connecting-ip"]), trueClientIp: Boolean(req.headers["true-client-ip"]) },
         "medicao de proxies",
       );
+    });
+  }
+
+  /**
+   * ADR-0022: quando a plataforma e a propria clinica, nao existe "outra"
+   * clinica para entrar - nem para quem ainda tem vinculo antigo em uma.
+   * Barrado aqui, num lugar so, antes de qualquer rota.
+   */
+  if (modo.slug) {
+    app.addHook("onRequest", async (req, reply) => {
+      const pedida = String(req.headers["x-clinica"] ?? "").trim().toLowerCase();
+      if (pedida && pedida !== modo.slug) {
+        await reply.code(404).send({ ok: false, erro: { codigo: "CLINICA_NAO_ENCONTRADA", mensagem: "O atendimento é feito pela própria plataforma." } });
+      }
     });
   }
 
@@ -213,7 +239,8 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
     };
   });
 
-  await app.register(rotasPerfis, { banco, autenticar });
+  await app.register(rotasPerfis, { banco, autenticar, modo });
+  await app.register(rotasPlataforma, { banco, autenticar, modo });
   await app.register(rotasLgpd, { banco, autenticar });
   await app.register(rotasNotificacoes, { banco, autenticar });
   await app.register(rotasIndicadores, { banco, autenticar });
@@ -228,6 +255,24 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
     app.log.warn("EMAIL_PROVEDOR=resend sem EMAIL_API_KEY/EMAIL_REMETENTE: os e-mails NAO serao enviados (so a central da plataforma).");
   }
   const urlDoSite = ambiente.ORIGEM_PERMITIDA.split(",")[0]!.trim();
+  // Um resolvedor de pagamento para a API inteira: rotas, cobranca ao final e agendador.
+  const resolvedorDePagamento = new ResolvedorDePagamento(banco, ambiente);
+  const urlPublicaDaApi = ambiente.URL_PUBLICA_API ?? `http://localhost:${ambiente.PORT}`;
+  const urlDoWebhookDePagamento = `${urlPublicaDaApi}/webhooks/pagamento`;
+  /**
+   * ADR-0023: consulta encerrada, cartao debitado. O gatilho nao segura a
+   * resposta do medico (o provedor pode demorar) e, se falhar, o agendador
+   * refaz no minuto seguinte. Nos testes nada roda sozinho: eles chamam
+   * cobrarConsultasConcluidas().
+   */
+  const aoConcluir =
+    ambiente.NODE_ENV === "test"
+      ? undefined
+      : (consultaId: string) => {
+          void cobrarConsultasConcluidas(banco, resolvedorDePagamento, { urlDeNotificacao: urlDoWebhookDePagamento, consultaId, log: app.log }).catch((erro) =>
+            app.log.error({ err: erro, consultaId }, "cobranca ao final da consulta falhou"),
+          );
+        };
   // Nos testes o agendador nao roda sozinho: eles chamam rodarAgendador().
   if (ambiente.NODE_ENV !== "test") {
     let rodando = false;
@@ -241,6 +286,13 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
           if (m.reservas || m.fila || m.atendimentos) app.log.info({ manutencao: m }, "manutencao da agenda e da fila");
         } catch (erro) {
           app.log.error({ err: erro }, "manutencao da agenda e da fila falhou");
+        }
+        // ADR-0023: debita o cartao das consultas concluidas que ainda nao foram cobradas.
+        try {
+          const c = await cobrarConsultasConcluidas(banco, resolvedorDePagamento, { urlDeNotificacao: urlDoWebhookDePagamento, log: app.log });
+          if (c.cobradas || c.recusadas || c.adiadas) app.log.info({ cobranca: c }, "cobranca ao final da consulta");
+        } catch (erro) {
+          app.log.error({ err: erro }, "cobranca ao final da consulta falhou");
         }
         const r = await rodarAgendador(banco, enviador, { urlDoSite, plataforma: ambiente.NOME_PLATAFORMA });
         if (r.lembretes || r.enviados || r.falhas) app.log.info({ agendador: r }, "agendador de avisos");
@@ -256,15 +308,26 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
   const resolvedor = new ResolvedorDeProvedor(banco, ambiente);
   const chaveDeCriptografia = ambiente.CHAVE_CRIPTOGRAFIA ? lerChave(ambiente.CHAVE_CRIPTOGRAFIA) : null;
 
-  await app.register(rotasClinicas, { banco, autenticar, resolvedor, chaveDeCriptografia, ambiente });
-  await app.register(rotasEquipe, { banco, autenticar, urlDoSite: ambiente.ORIGEM_PERMITIDA.split(",")[0]!.trim() });
-  await app.register(rotasAgenda, { banco, autenticar, producao });
-  await app.register(rotasFila, { banco, autenticar, producao });
+  const armazenamentoDeAnexos = opcoes.armazenamentoDeAnexos ?? new ArmazenamentoSupabaseDeAnexos(ambiente.SUPABASE_URL, ambiente.SUPABASE_SECRET_KEY);
+
+  await app.register(rotasClinicas, { banco, autenticar, resolvedor, chaveDeCriptografia, ambiente, modo });
+  await app.register(rotasEquipe, { banco, autenticar, urlDoSite: ambiente.ORIGEM_PERMITIDA.split(",")[0]!.trim(), plataformaUnica: Boolean(modo.slug) });
+  await app.register(rotasAgenda, { banco, autenticar, producao, resolvedor: resolvedorDePagamento, ...(aoConcluir ? { aoConcluir } : {}) });
+  await app.register(rotasFila, { banco, autenticar, producao, resolvedor: resolvedorDePagamento });
+  await app.register(rotasAtendimento, { banco, autenticar });
+  await app.register(rotasCartoes, { banco, autenticar, resolvedor: resolvedorDePagamento });
+  await app.register(rotasCredenciamento, {
+    banco,
+    autenticar,
+    armazenamento: armazenamentoDeAnexos,
+    identidade: provedorDeIdentidade,
+    segredoDaIdentidade: ambiente.IDENTIDADE_WEBHOOK_SEGREDO ?? null,
+  });
   await app.register(rotasPagamentos, {
     banco,
     autenticar,
-    resolvedor: new ResolvedorDePagamento(banco, ambiente),
-    urlPublicaDaApi: ambiente.URL_PUBLICA_API ?? `http://localhost:${ambiente.PORT}`,
+    resolvedor: resolvedorDePagamento,
+    urlPublicaDaApi,
     // Em producao nunca ha valor padrao: um segredo conhecido nao protege nada.
     segredoDoWebhook: ambiente.PAGAMENTO_WEBHOOK_SEGREDO ?? (producao ? null : "segredo-de-desenvolvimento"),
     producao,
@@ -274,9 +337,9 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
   await app.register(rotasPacientes, {
     banco,
     autenticar,
-    armazenamento: opcoes.armazenamentoDeAnexos ?? new ArmazenamentoSupabaseDeAnexos(ambiente.SUPABASE_URL, ambiente.SUPABASE_SECRET_KEY),
+    armazenamento: armazenamentoDeAnexos,
   });
-  await app.register(rotasVideo, { banco, autenticar, provedor: provedorDeVideo });
+  await app.register(rotasVideo, { banco, autenticar, provedor: provedorDeVideo, ...(aoConcluir ? { aoConcluir } : {}) });
   await app.register(rotasAssinatura, {
     banco,
     autenticar,

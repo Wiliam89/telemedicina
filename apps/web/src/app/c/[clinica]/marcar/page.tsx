@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { MedicoResumo } from "@tele/shared";
 import { Aviso } from "@/componentes/Aviso";
 import { chamarApi } from "@/lib/api";
@@ -17,6 +17,8 @@ export default async function PaginaMarcar({ params }: { params: Promise<{ clini
   const { clinica: slug } = await params;
   const { token, perfil, clinica } = await contextoDaClinica(slug);
   if (!temPapel(clinica, "paciente", "recepcao", "admin_clinica")) notFound();
+  // ADR-0024: o paciente marca por uma das duas linhas de atendimento, onde ve valor e forma de pagamento.
+  if (!temPapel(clinica, "recepcao", "admin_clinica")) redirect(`/c/${slug}/teleconsulta`);
 
   const todos = await chamarApi<MedicoResumo[]>("/medicos", { token, clinica: slug });
   // So quem teve o CRM conferido recebe marcacao (ADR-0016).
@@ -32,7 +34,7 @@ export default async function PaginaMarcar({ params }: { params: Promise<{ clini
       {!medicos.ok ? (
         <Aviso tipo="erro">{medicos.erro.mensagem}</Aviso>
       ) : medicos.dados.length === 0 ? (
-        <Aviso>Nenhum médico atende nesta clínica ainda.</Aviso>
+        <Aviso>Ainda não há médico credenciado com CRM conferido.</Aviso>
       ) : (
         <MarcarConsulta slug={slug} fuso={clinica.fusoHorario} medicos={medicos.dados} />
       )}

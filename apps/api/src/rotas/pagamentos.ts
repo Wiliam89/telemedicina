@@ -20,7 +20,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { consultas, filaAtendimento, pagamentos, perfis, precos, vinculos, type Banco } from "@tele/db";
 import type { Resposta } from "@tele/shared";
-import { calcularComissao, clinicaTemRecebimento, ErroDePagamento, escolherPreco, type Cobranca, type ContextoDePagamento, type PedidoDeCobranca, type ResolvedorDePagamento } from "../pagamento/index.js";
+import { especialidadeExiste, rotuloDoPedido, tipoDePreco } from "@tele/shared/atendimento";
+import { calcularComissao, ErroDePagamento, type Cobranca, type ContextoDePagamento, type PedidoDeCobranca, type ResolvedorDePagamento } from "../pagamento/index.js";
+import { cartaoAtivo, exigirSemPendencia, precoPara } from "../cobranca.js";
 import { registrarAuditoria } from "../auditoria.js";
 import type { Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
@@ -35,13 +37,25 @@ const esquemaPrecos = z.object({
   itens: z
     .array(
       z.object({
-        tipo: z.enum(["agendada", "pronto_atendimento"]),
+        tipo: z.enum(["agendada", "pronto_atendimento", "teleconsulta_imediata", "pronto_agendado"]),
         medicoId: z.string().uuid().nullable().optional(),
+        /** ADR-0024: preco de uma especialidade (so nos tipos de teleconsulta). */
+        especialidade: z.string().refine(especialidadeExiste, "especialidade desconhecida").nullable().optional(),
         valorCentavos: z.number().int().min(100, "mínimo R$ 1,00").max(1000000, "máximo R$ 10.000,00"),
         comissaoPlataformaBps: z.number().int().min(0).max(3000, "comissao maxima de 30%").default(0),
       }),
     )
-    .max(50),
+    .max(200)
+    .superRefine((itens, ctx) => {
+      const vistos = new Set<string>();
+      itens.forEach((i, n) => {
+        if (i.medicoId && i.especialidade) ctx.addIssue({ code: "custom", path: [n, "especialidade"], message: "o preço é do médico ou da especialidade, não dos dois" });
+        if (i.especialidade && (i.tipo === "pronto_atendimento" || i.tipo === "pronto_agendado")) ctx.addIssue({ code: "custom", path: [n, "especialidade"], message: "o pronto atendimento não tem especialidade" });
+        const chave = `${i.tipo}|${i.medicoId ?? ""}|${i.especialidade ?? ""}`;
+        if (vistos.has(chave)) ctx.addIssue({ code: "custom", path: [n, "tipo"], message: "preço repetido para o mesmo tipo" });
+        vistos.add(chave);
+      });
+    }),
 });
 
 function traduzir(erro: unknown): never {
@@ -61,9 +75,9 @@ export async function rotasPagamentos(
 
   // --- precos ---------------------------------------------------------------
 
-  app.get("/precos", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<{ tipo: string; medicoId: string | null; valorCentavos: number }[]>> => {
+  app.get("/precos", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<{ tipo: string; medicoId: string | null; especialidade: string | null; valorCentavos: number }[]>> => {
     const linhas = await banco
-      .select({ tipo: precos.tipo, medicoId: precos.medicoId, valorCentavos: precos.valorCentavos })
+      .select({ tipo: precos.tipo, medicoId: precos.medicoId, especialidade: precos.especialidade, valorCentavos: precos.valorCentavos })
       .from(precos)
       .where(eq(precos.clinicaId, req.contexto.clinicaId));
     // A comissao da plataforma nao aparece aqui: e assunto entre a clinica
@@ -82,6 +96,7 @@ export async function rotasPagamentos(
             clinicaId: req.contexto.clinicaId,
             tipo: i.tipo,
             medicoId: i.medicoId ?? null,
+            especialidade: i.especialidade ?? null,
             valorCentavos: i.valorCentavos,
             comissaoPlataformaBps: i.comissaoPlataformaBps,
           })),
@@ -98,7 +113,7 @@ export async function rotasPagamentos(
       });
     });
 
-    const semRecebimento = opcoes.producao && itens.length > 0 && !(await clinicaTemRecebimento(banco, req.contexto.clinicaId));
+    const semRecebimento = itens.length > 0 && !(await resolvedor.temRecebimento(req.contexto.clinicaId));
     return {
       ok: true,
       dados: {
@@ -197,7 +212,8 @@ export async function rotasPagamentos(
     const { id } = z.object({ id: z.string().uuid("id invalido") }).parse(req.params);
     const dados = z
       .object({
-        metodo: z.enum(["pix", "cartao_credito"]),
+        /** "cartao_salvo": tenta de novo no cartao cadastrado (so para consulta ja realizada). */
+        metodo: z.enum(["pix", "cartao_credito", "cartao_salvo"]),
         tokenDoCartao: z.string().min(1).optional(),
         parcelas: z.number().int().min(1).max(12).optional(),
       })
@@ -208,6 +224,7 @@ export async function rotasPagamentos(
       .select({
         id: consultas.id, status: consultas.status, pacienteId: consultas.pacienteId, medicoId: consultas.medicoId,
         inicio: consultas.inicio, pagamentoId: consultas.pagamentoId, expiraReservaEm: consultas.expiraReservaEm,
+        linha: consultas.linha, especialidade: consultas.especialidade, formaDeCobranca: consultas.formaDeCobranca, valorCombinado: consultas.valorCombinadoCentavos,
         pagadorNome: perfis.nomeCompleto, pagadorCpf: perfis.cpf,
       })
       .from(consultas)
@@ -219,25 +236,38 @@ export async function rotasPagamentos(
     if (consulta.pacienteId !== req.usuario.id && !["recepcao", "admin_clinica"].includes(req.contexto.papel)) {
       throw new ErroHttp(403, "NAO_E_SUA", "Só o paciente ou a recepção pagam esta consulta.");
     }
-    if (consulta.status !== "aguardando_pagamento") {
-      throw new ErroHttp(409, "NAO_AGUARDA_PAGAMENTO", `Esta consulta está "${consulta.status}": não há o que pagar.`);
+
+    /**
+     * ADR-0023 - PENDENCIA: a consulta ja aconteceu, era para ser debitada no
+     * cartao cadastrado e a cobranca nao passou. O paciente regulariza aqui,
+     * por Pix ou tentando de novo no cartao (o mesmo ou um novo).
+     */
+    const ePendencia = consulta.status === "concluida" && consulta.formaDeCobranca === "cartao_ao_final";
+    if (ePendencia) {
+      const tentativas = await banco.select({ status: pagamentos.status }).from(pagamentos).where(eq(pagamentos.consultaId, id));
+      if (tentativas.some((t) => t.status === "confirmado" || t.status === "autorizado")) throw new ErroHttp(409, "JA_PAGA", "Esta consulta já está paga.");
+      if (!tentativas.some((t) => t.status === "recusado")) throw new ErroHttp(409, "COBRANCA_EM_ANDAMENTO", "A cobrança no seu cartão ainda está em andamento. Aguarde alguns minutos.");
+      if (dados.metodo === "cartao_credito") throw new ErroHttp(400, "METODO_INVALIDO", "Pague por Pix ou use o cartão cadastrado.");
+    } else {
+      if (dados.metodo === "cartao_salvo") throw new ErroHttp(400, "METODO_INVALIDO", "O cartão cadastrado é debitado ao final da consulta. Não é preciso pagar agora.");
+      if (consulta.status !== "aguardando_pagamento") {
+        throw new ErroHttp(409, "NAO_AGUARDA_PAGAMENTO", `Esta consulta está "${consulta.status}": não há o que pagar.`);
+      }
     }
+
     // Reserva vencida nao se paga: o horario pode ja ser de outra pessoa.
     const fimDaReserva = consulta.expiraReservaEm;
-    if (!fimDaReserva || fimDaReserva.getTime() <= Date.now()) {
+    if (!ePendencia && (!fimDaReserva || fimDaReserva.getTime() <= Date.now())) {
       await liberarReservasVencidas(banco, { medicoId: consulta.medicoId, pacienteId: consulta.pacienteId });
       throw new ErroHttp(409, "RESERVA_VENCIDA", "O prazo para pagar este horário terminou. Marque a consulta novamente.");
     }
 
-    // Preco: o do medico, se houver; senao o padrao da clinica.
-    const tabela = await banco
-      .select({ valorCentavos: precos.valorCentavos, comissaoPlataformaBps: precos.comissaoPlataformaBps, medicoId: precos.medicoId })
-      .from(precos)
-      .where(and(eq(precos.clinicaId, req.contexto.clinicaId), eq(precos.tipo, "agendada")));
-    const preco = escolherPreco(tabela, consulta.medicoId);
-    if (!preco) throw new ErroHttp(409, "SEM_PRECO", "Esta clínica ainda não definiu o valor da consulta. Fale com a administração.");
+    // Preco: o combinado ao marcar; senao o do medico, o da especialidade ou o padrao.
+    const preco = await precoPara(banco, req.contexto.clinicaId, consulta.linha, "agendado", { medicoId: consulta.medicoId, especialidade: consulta.especialidade });
+    const valor = consulta.valorCombinado ?? preco?.valorCentavos ?? null;
+    if (!valor) throw new ErroHttp(409, "SEM_PRECO", "Esta clínica ainda não definiu o valor da consulta. Fale com a administração.");
 
-    const divisao = calcularComissao(preco.valorCentavos, preco.comissaoPlataformaBps);
+    const divisao = calcularComissao(valor, ePendencia ? 0 : preco?.comissaoPlataformaBps ?? 0);
 
     let contexto;
     try {
@@ -245,6 +275,9 @@ export async function rotasPagamentos(
     } catch (erro) {
       traduzir(erro);
     }
+
+    const cartao = dados.metodo === "cartao_salvo" ? await cartaoAtivo(banco, consulta.pacienteId, req.contexto.clinicaId) : null;
+    if (dados.metodo === "cartao_salvo" && !cartao) throw new ErroHttp(409, "SEM_CARTAO", "Você não tem cartão válido cadastrado. Cadastre um ou pague por Pix.");
 
     /**
      * Clique duplo, duas abas ou a tela repetindo depois de um tempo esgotado:
@@ -255,7 +288,7 @@ export async function rotasPagamentos(
      */
     const registro = await banco.transaction(async (tx) => {
       const [travada] = await tx.select({ status: consultas.status }).from(consultas).where(eq(consultas.id, consulta.id)).for("update");
-      if (travada?.status !== "aguardando_pagamento") throw new ErroHttp(409, "NAO_AGUARDA_PAGAMENTO", "Esta consulta não está mais aguardando pagamento.");
+      if (travada?.status !== (ePendencia ? "concluida" : "aguardando_pagamento")) throw new ErroHttp(409, "NAO_AGUARDA_PAGAMENTO", "Esta consulta não está mais aguardando pagamento.");
 
       const [ativa] = await tx
         .select()
@@ -265,7 +298,9 @@ export async function rotasPagamentos(
         .limit(1);
       if (ativa) {
         const vencida = ativa.status === "pendente" && ativa.expiraEm !== null && ativa.expiraEm.getTime() <= Date.now();
-        if (!vencida) return { ...ativa, reaproveitada: true };
+        // Trocou de meio (Pix em aberto, agora quer o cartao): a cobranca em aberto e substituida.
+        const outroMeio = ativa.status === "pendente" && (ativa.metodo === "pix") !== (dados.metodo === "pix");
+        if (!vencida && !outroMeio) return { ...ativa, reaproveitada: true };
         await tx.update(pagamentos).set({ status: "expirado", atualizadoEm: new Date() }).where(eq(pagamentos.id, ativa.id));
       }
 
@@ -277,8 +312,9 @@ export async function rotasPagamentos(
           clinicaId: req.contexto.clinicaId,
           pagadorId: req.usuario.id,
           consultaId: consulta.id,
-          metodo: dados.metodo,
-          valorCentavos: preco.valorCentavos,
+          metodo: dados.metodo === "pix" ? "pix" : "cartao_credito",
+          cartaoId: cartao?.id ?? null,
+          valorCentavos: valor,
           valorClinicaCentavos: divisao.clinica,
           valorPlataformaCentavos: divisao.plataforma,
           provedor: contexto.provedor.nome,
@@ -303,14 +339,15 @@ export async function rotasPagamentos(
         comissaoPlataformaCentavos: registro.valorPlataformaCentavos,
         descricao: `Consulta em ${req.contexto.nomeFantasia}`,
         pagador: { nome: consulta.pagadorNome, email: req.usuario.email ?? "sem-email@exemplo.com", cpf: consulta.pagadorCpf },
+        ...(cartao ? { cartaoSalvo: { clienteId: cartao.provedorClienteId, cartaoId: cartao.provedorCartaoId } } : {}),
         ...(dados.tokenDoCartao ? { tokenDoCartao: dados.tokenDoCartao } : {}),
         ...(dados.parcelas ? { parcelas: dados.parcelas } : {}),
         // O Pix nao pode valer mais que a reserva, senao o paciente paga por um
-        // horario que ja foi liberado.
-        expiraEmMinutos: Math.max(1, Math.ceil((fimDaReserva.getTime() - Date.now()) / 60000)),
+        // horario que ja foi liberado. Na pendencia nao ha reserva: 30 minutos.
+        expiraEmMinutos: ePendencia || !fimDaReserva ? 30 : Math.max(1, Math.ceil((fimDaReserva.getTime() - Date.now()) / 60000)),
         urlDeNotificacao: `${opcoes.urlPublicaDaApi}/webhooks/pagamento`,
       },
-      { quem: req.usuario.id, clinicaId: req.contexto.clinicaId, ip: req.ip, detalhes: { metodo: dados.metodo, valorCentavos: registro.valorCentavos } },
+      { quem: req.usuario.id, clinicaId: req.contexto.clinicaId, ip: req.ip, detalhes: { metodo: dados.metodo, valorCentavos: registro.valorCentavos, ...(ePendencia ? { pendencia: true } : {}) } },
     );
 
     // Cartao autorizado ja confirma a consulta: o valor esta reservado, e a
@@ -336,20 +373,31 @@ export async function rotasPagamentos(
    */
   app.post("/pagamentos/pronto-atendimento", { preHandler: dentroDaClinica }, async (req, reply) => {
     const dados = z
-      .object({ metodo: z.enum(["pix", "cartao_credito"]), tokenDoCartao: z.string().min(1).optional() })
+      .object({
+        metodo: z.enum(["pix", "cartao_credito"]),
+        tokenDoCartao: z.string().min(1).optional(),
+        /** ADR-0024: o imediato existe nas duas linhas. Sem dizer nada, e o pronto atendimento. */
+        linha: z.enum(["pronto_atendimento", "teleconsulta"]).default("pronto_atendimento"),
+        especialidade: z.string().refine(especialidadeExiste, "especialidade desconhecida").optional(),
+      })
+      .superRefine((d, ctx) => {
+        if (d.linha === "teleconsulta" && !d.especialidade) ctx.addIssue({ code: "custom", path: ["especialidade"], message: "escolha a especialidade" });
+        if (d.linha === "pronto_atendimento" && d.especialidade) ctx.addIssue({ code: "custom", path: ["especialidade"], message: "o pronto atendimento não tem especialidade" });
+      })
       .parse(req.body);
     exigirMetodoDisponivel(dados.metodo);
 
     if (req.contexto.papel !== "paciente") {
       throw new ErroHttp(403, "SO_PACIENTE", "Só paciente paga pronto atendimento.");
     }
+    // ADR-0023: quem deve uma consulta anterior regulariza antes de pagar outra.
+    await exigirSemPendencia(banco, req.usuario.id, req.contexto.clinicaId);
 
-    const tabela = await banco
-      .select({ valorCentavos: precos.valorCentavos, comissaoPlataformaBps: precos.comissaoPlataformaBps, medicoId: precos.medicoId })
-      .from(precos)
-      .where(and(eq(precos.clinicaId, req.contexto.clinicaId), eq(precos.tipo, "pronto_atendimento")));
-    const preco = tabela.find((p) => p.medicoId === null);
-    if (!preco) throw new ErroHttp(409, "SEM_PRECO", "Esta clínica ainda não definiu o valor do pronto atendimento.");
+    const especialidade = dados.linha === "teleconsulta" ? dados.especialidade! : null;
+    const preco = await precoPara(banco, req.contexto.clinicaId, dados.linha, "imediato", { especialidade });
+    if (!preco) {
+      throw new ErroHttp(409, "SEM_PRECO", dados.linha === "pronto_atendimento" ? "Esta clínica ainda não definiu o valor do pronto atendimento." : "O valor do atendimento imediato desta especialidade ainda não foi definido.");
+    }
 
     const [pessoa] = await banco
       .select({ nome: perfis.nomeCompleto, cpf: perfis.cpf })
@@ -386,7 +434,13 @@ export async function rotasPagamentos(
         .limit(1);
       if (ativa) {
         const vencida = ativa.status === "pendente" && ativa.expiraEm !== null && ativa.expiraEm.getTime() <= Date.now();
-        if (!vencida) return { ...ativa, reaproveitada: true };
+        // O que ja foi pago serve para este atendimento se cobre o valor dele.
+        const serve = ativa.status === "confirmado" ? ativa.valorCentavos >= preco.valorCentavos : ativa.valorCentavos === preco.valorCentavos;
+        if (!vencida && serve) return { ...ativa, reaproveitada: true };
+        if (ativa.status === "confirmado") {
+          throw new ErroHttp(409, "PAGAMENTO_DE_OUTRO_ATENDIMENTO", "Você tem um pagamento confirmado, de outro tipo de atendimento, ainda não usado. Use-o no atendimento correspondente ou peça o reembolso à plataforma.");
+        }
+        // Pix em aberto de outro atendimento (ou vencido): deixa de valer, e nasce um novo.
         await tx.update(pagamentos).set({ status: "expirado", atualizadoEm: new Date() }).where(eq(pagamentos.id, ativa.id));
       }
       const [novo] = await tx
@@ -415,13 +469,13 @@ export async function rotasPagamentos(
         metodo: registro.metodo === "cartao_credito" ? "cartao_credito" : "pix",
         valorCentavos: registro.valorCentavos,
         comissaoPlataformaCentavos: registro.valorPlataformaCentavos,
-        descricao: `Pronto atendimento em ${req.contexto.nomeFantasia}`,
+        descricao: `${rotuloDoPedido(dados.linha, especialidade)} em ${req.contexto.nomeFantasia}`,
         pagador: { nome: pessoa?.nome ?? "Paciente", email: req.usuario.email ?? "sem-email@exemplo.com", cpf: pessoa?.cpf ?? null },
         ...(dados.tokenDoCartao ? { tokenDoCartao: dados.tokenDoCartao } : {}),
         expiraEmMinutos: 20,
         urlDeNotificacao: `${opcoes.urlPublicaDaApi}/webhooks/pagamento`,
       },
-      { quem: req.usuario.id, clinicaId: req.contexto.clinicaId, ip: req.ip, detalhes: { tipo: "pronto_atendimento", valorCentavos: registro.valorCentavos } },
+      { quem: req.usuario.id, clinicaId: req.contexto.clinicaId, ip: req.ip, detalhes: { tipo: tipoDePreco(dados.linha, "imediato"), valorCentavos: registro.valorCentavos } },
     );
 
     void reply.code(201);
@@ -434,7 +488,7 @@ export async function rotasPagamentos(
       .select({
         id: pagamentos.id, status: pagamentos.status, metodo: pagamentos.metodo, valorCentavos: pagamentos.valorCentavos,
         pixCopiaECola: pagamentos.pixCopiaECola, pixQrBase64: pagamentos.pixQrBase64, expiraEm: pagamentos.expiraEm,
-        pagadorId: pagamentos.pagadorId, consultaId: pagamentos.consultaId,
+        pagadorId: pagamentos.pagadorId, consultaId: pagamentos.consultaId, provedor: pagamentos.provedor,
       })
       .from(pagamentos)
       .where(and(eq(pagamentos.id, id), eq(pagamentos.clinicaId, req.contexto.clinicaId)))
@@ -445,10 +499,34 @@ export async function rotasPagamentos(
       throw new ErroHttp(403, "NAO_E_SEU", "Este pagamento não é seu.");
     }
 
+    const { provedor, ...publico } = p;
     return {
       ok: true as const,
-      dados: { ...p, expiraEm: p.expiraEm?.toISOString() ?? null },
+      // `simulavel`: fora de producao, com o gateway simulado, a tela oferece "simular pagamento".
+      dados: { ...publico, expiraEm: p.expiraEm?.toISOString() ?? null, simulavel: !opcoes.producao && provedor === "local_teste" && p.status === "pendente" },
     };
+  });
+
+  /**
+   * SO PARA TESTE. O gateway simulado nao tem banco do outro lado para pagar o
+   * Pix; esta rota faz o papel dele, para dar para percorrer o fluxo inteiro
+   * na sua maquina. Em producao ela nao existe (404), e so funciona com
+   * cobranca do provedor simulado - nunca confirma um Pix de verdade.
+   */
+  app.post("/pagamentos/:id/simular", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<{ status: string }>> => {
+    if (opcoes.producao) throw new ErroHttp(404, "NAO_ENCONTRADO", "Rota não encontrada.");
+    const { id } = z.object({ id: z.string().uuid("id invalido") }).parse(req.params);
+    const [p] = await banco
+      .select({ pagadorId: pagamentos.pagadorId, provedor: pagamentos.provedor, provedorId: pagamentos.provedorId, status: pagamentos.status })
+      .from(pagamentos)
+      .where(and(eq(pagamentos.id, id), eq(pagamentos.clinicaId, req.contexto.clinicaId)))
+      .limit(1);
+    if (!p || p.pagadorId !== req.usuario.id) throw new ErroHttp(404, "PAGAMENTO_NAO_ENCONTRADO", "Pagamento não encontrado.");
+    if (p.provedor !== "local_teste" || !p.provedorId) throw new ErroHttp(409, "NAO_SIMULAVEL", "Só cobranças do gateway simulado podem ser simuladas.");
+    const { ProvedorLocalDePagamento } = await import("../pagamento/provedor-local.js");
+    ProvedorLocalDePagamento.confirmarNoBanco(p.provedorId);
+    await aplicarEstado(banco, id, "confirmado", { simulado: true });
+    return { ok: true, dados: { status: "confirmado" } };
   });
 
   // --- webhook: a fonte da verdade -----------------------------------------

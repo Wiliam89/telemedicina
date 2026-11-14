@@ -1,5 +1,8 @@
 import type { SituacaoCrm } from "./crm.js";
 import type { TipoConsentimento } from "./lgpd.js";
+import type { LinhaDeAtendimento } from "./atendimento.js";
+import type { FormaDeCobranca } from "./cobranca.js";
+import type { StatusDoCredenciamento } from "./credenciamento.js";
 
 export type { Indicadores } from "./indicadores.js";
 
@@ -115,6 +118,42 @@ export type {
 
 export type { MedicoComCrm, SituacaoCrm, VerificacaoCrmResumo } from "./crm.js";
 
+/** As funcoes vivem em "@tele/shared/atendimento", "/credenciamento" e "/cobranca". */
+export type {
+  ChamadoNaFila,
+  Especialidade,
+  EspecialidadeDisponivel,
+  LinhaDeAtendimento,
+  ModoDeAtendimento,
+  OpcoesDeAtendimento,
+  PainelDeChamados,
+  TipoDePreco,
+} from "./atendimento.js";
+export type {
+  CredenciamentoParaAnalise,
+  DocumentoDoMedicoResumo,
+  MeuCredenciamento,
+  StatusDaIdentidade,
+  StatusDoCredenciamento,
+  TipoDeDocumentoDoMedico,
+  VerificacaoDeIdentidadeResumo,
+} from "./credenciamento.js";
+export type { CartaoResumo, FormaDeCobranca, MeiosDePagamento, PendenciaDePagamento } from "./cobranca.js";
+
+/**
+ * GET /plataforma (publica): a plataforma opera como UMA clinica (ADR-0022)?
+ * Quando sim, ninguem escolhe nem cria clinica: todo mundo entra nesta.
+ */
+export interface PlataformaPublica {
+  /** Verdadeiro = modo plataforma unica. Falso = varias clinicas (modo antigo). */
+  unica: boolean;
+  slug: string | null;
+  nome: string | null;
+  /** A clinica da plataforma ja foi criada pela administracao? */
+  configurada: boolean;
+  aceitandoPacientes: boolean;
+}
+
 export type {
   AcessoAosMeusDados,
   ConsentimentoResumo,
@@ -152,8 +191,10 @@ export interface PerfilResposta {
   telefone: string | null;
   cpf: string | null;
   criadoEm: string;
-  medico: { crm: string; crmUf: string; especialidade: string | null } | null;
+  medico: { crm: string; crmUf: string; especialidade: string | null; especialidades?: string[]; atendeProntoAtendimento?: boolean } | null;
   paciente: { dataNascimento: string } | null;
+  /** Medico que pediu para atender na plataforma: em que pe esta (ADR-0022). */
+  credenciamento?: StatusDoCredenciamento | null;
   /** Vazio quando a pessoa ainda nao entrou em nenhuma clinica. */
   clinicas: ClinicaResumo[];
   /** Termos/politica/telemedicina sem aceite na versao atual (ADR-0018). */
@@ -167,6 +208,9 @@ export interface MedicoResumo {
   crm: string;
   crmUf: string;
   especialidade: string | null;
+  /** Especialidades conferidas (codigos de @tele/shared/atendimento). */
+  especialidades?: string[];
+  atendeProntoAtendimento?: boolean;
   situacaoCrm: SituacaoCrm;
 }
 
@@ -218,6 +262,13 @@ export interface ConsultaResumo {
   paciente: { id: string; nomeCompleto: string };
   medico: { id: string; nomeCompleto: string; especialidade: string | null; crm: string; crmUf: string };
   motivoCancelamento: string | null;
+  /** ADR-0024: pronto atendimento (clinico geral) ou teleconsulta (especialista). */
+  linha?: LinhaDeAtendimento;
+  /** Codigo da especialidade da consulta (so na teleconsulta). */
+  especialidadeDaConsulta?: string | null;
+  /** ADR-0023: Pix antes, ou cartao cadastrado debitado ao final. */
+  formaDeCobranca?: FormaDeCobranca;
+  valorCombinadoCentavos?: number | null;
 }
 
 /** Nome de cada dia da semana, indexado por 0-6 (domingo a sabado). */

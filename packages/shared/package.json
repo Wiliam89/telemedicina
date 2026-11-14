@@ -13,7 +13,10 @@
     "./video": "./src/video.ts",
     "./prontuario": "./src/prontuario.ts",
     "./crm": "./src/crm.ts",
-    "./lgpd": "./src/lgpd.ts"
+    "./lgpd": "./src/lgpd.ts",
+    "./atendimento": "./src/atendimento.ts",
+    "./credenciamento": "./src/credenciamento.ts",
+    "./cobranca": "./src/cobranca.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

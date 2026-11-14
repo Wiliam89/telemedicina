@@ -55,7 +55,7 @@ function nomeDaSala(consultaId: string): string {
 
 export async function rotasVideo(
   app: FastifyInstance,
-  opcoes: { banco: Banco; autenticar: Autenticador; provedor: ProvedorDeVideo },
+  opcoes: { banco: Banco; autenticar: Autenticador; provedor: ProvedorDeVideo; /** ADR-0023: dispara a cobranca no cartao cadastrado. */ aoConcluir?: (consultaId: string) => void },
 ): Promise<void> {
   const { banco, provedor } = opcoes;
   const dentroDaClinica = criarExigirClinica(banco, opcoes.autenticar);
@@ -375,6 +375,9 @@ export async function rotasVideo(
         detalhes: {},
         ip: req.ip,
       });
+
+      // Consulta encerrada: quem deixou cartao cadastrado e debitado agora (ADR-0023).
+      opcoes.aoConcluir?.(consultaId);
 
       return { ok: true, dados: { encerrada: true } };
     },

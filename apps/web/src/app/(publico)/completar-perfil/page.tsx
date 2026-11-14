@@ -29,7 +29,7 @@ export default async function PaginaCompletarPerfil({ searchParams }: { searchPa
       largura="lg"
       sobretitulo="Passo 2 de 2"
       titulo="Seus dados"
-      descricao="Estes dados são seus, não de uma clínica: eles acompanham você em todas onde atuar."
+      descricao="Estes dados identificam você nos atendimentos e nos documentos médicos."
     >
       <FormularioPerfil destino={destino} />
     </Folha>

@@ -26,6 +26,22 @@ const PAGINAS_PROTEGIDAS = ["/c", "/clinicas", "/completar-perfil", "/convite", 
 const PAGINAS_SO_DESLOGADO = ["/entrar", "/criar-conta"];
 
 export async function middleware(req: NextRequest) {
+  /**
+   * RETORNO DE E-MAIL NA CAPA. Quando o endereco de retorno nao esta na lista
+   * "Redirect URLs" do Supabase, ele devolve a pessoa para o "Site URL" - a
+   * capa - com o codigo (ou o erro) na URL. A capa nao sabe o que fazer com
+   * isso, e a pessoa ficava olhando para a pagina inicial sem a conta ativar.
+   * Aqui o retorno e levado para quem sabe trata-lo.
+   */
+  if (req.nextUrl.pathname === "/") {
+    const p = req.nextUrl.searchParams;
+    if (p.has("code") || p.has("token_hash") || p.has("error_code") || p.has("error")) {
+      const destino = req.nextUrl.clone();
+      destino.pathname = "/auth/confirmar";
+      return NextResponse.redirect(destino);
+    }
+  }
+
   let resposta = NextResponse.next({ request: req });
 
   const supabase = createServerClient(

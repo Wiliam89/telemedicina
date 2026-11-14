@@ -120,6 +120,8 @@ export async function expirarEsquecidosDaFila(banco: Banco, clinicaId?: string):
     .returning({ id: filaAtendimento.id, clinicaId: filaAtendimento.clinicaId, pacienteId: filaAtendimento.pacienteId, pagamentoId: filaAtendimento.pagamentoId });
 
   for (const f of expirados) {
+    // Quem entrou com cartao cadastrado nao pagou nada ainda: nao ha o que devolver (ADR-0023).
+    if (!f.pagamentoId) continue;
     await registrarPendenciaDeEstorno(b, { clinicaId: f.clinicaId, pagamentoId: f.pagamentoId, pacienteId: f.pacienteId, motivo: "fila: tempo de espera excedido" });
   }
   return expirados.length;

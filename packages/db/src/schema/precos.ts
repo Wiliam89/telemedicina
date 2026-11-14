@@ -13,11 +13,19 @@
  * divergencia de centavos que ninguem consegue explicar.
  */
 import { sql } from "drizzle-orm";
-import { check, index, integer, pgEnum, pgTable, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { check, index, integer, pgEnum, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { clinicas } from "./clinicas.js";
 import { medicos } from "./medicos.js";
 
-export const tipoAtendimentoEnum = pgEnum("tipo_atendimento", ["agendada", "pronto_atendimento"]);
+/**
+ * Quatro tipos, um para cada combinacao de linha e modo (ADR-0024). Os dois
+ * primeiros nomes vem de antes das linhas e continuam valendo:
+ *   agendada              teleconsulta (especializada) agendada
+ *   pronto_atendimento    pronto atendimento imediato
+ *   teleconsulta_imediata teleconsulta (especializada) imediata
+ *   pronto_agendado       pronto atendimento agendado
+ */
+export const tipoAtendimentoEnum = pgEnum("tipo_atendimento", ["agendada", "pronto_atendimento", "teleconsulta_imediata", "pronto_agendado"]);
 
 export const precos = pgTable(
   "precos",
@@ -29,6 +37,8 @@ export const precos = pgTable(
     tipo: tipoAtendimentoEnum("tipo").notNull(),
     /** Nulo = preco padrao da clinica. Preenchido = preco daquele medico. */
     medicoId: uuid("medico_id").references(() => medicos.perfilId, { onDelete: "cascade" }),
+    /** Preenchido = preco daquela especialidade (ortopedia pode custar diferente de dermatologia). */
+    especialidade: text("especialidade"),
 
     valorCentavos: integer("valor_centavos").notNull(),
     /**
@@ -46,7 +56,10 @@ export const precos = pgTable(
     check("precos_valor_razoavel", sql`${t.valorCentavos} between 100 and 1000000`),
     check("precos_comissao_razoavel", sql`${t.comissaoPlataformaBps} between 0 and 3000`),
     // Um preco padrao por tipo, e um por medico por tipo.
-    uniqueIndex("precos_clinica_tipo_medico").on(t.clinicaId, t.tipo, t.medicoId),
+    // NULLS NOT DISTINCT: dois "precos padrao" (medico e especialidade nulos) contam como repetidos.
+    unique("precos_clinica_tipo_medico_especialidade").on(t.clinicaId, t.tipo, t.medicoId, t.especialidade).nullsNotDistinct(),
+    // O preco e do medico OU da especialidade, nunca dos dois ao mesmo tempo.
+    check("precos_medico_ou_especialidade", sql`${t.medicoId} is null or ${t.especialidade} is null`),
     index("precos_clinica").on(t.clinicaId),
   ],
 );

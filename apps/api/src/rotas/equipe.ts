@@ -26,6 +26,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { clinicas, consultas, convites, medicos, perfis, plantoes, verificacoesCrm, vinculos, type Banco } from "@tele/db";
 import type { ConviteCriado, ConviteResumo, MedicoComCrm, MedicoResumo, MembroResumo, Resposta, VerificacaoCrmResumo } from "@tele/shared";
+import { especialidadeExiste, medicoAtende } from "@tele/shared/atendimento";
 import { DIAS_DE_VALIDADE_CRM, situacaoDoCrm } from "@tele/shared/crm";
 import { registrarAuditoria } from "../auditoria.js";
 import { criarExigirLogin, type Autenticador } from "../autenticacao.js";
@@ -47,7 +48,7 @@ const esquemaAceite = z.object({ codigo: z.string().trim().min(20, "código inv�
 
 export async function rotasEquipe(
   app: FastifyInstance,
-  opcoes: { banco: Banco; autenticar: Autenticador; urlDoSite: string },
+  opcoes: { banco: Banco; autenticar: Autenticador; urlDoSite: string; /** ADR-0022: a plataforma e a propria clinica? */ plataformaUnica?: boolean },
 ): Promise<void> {
   const { banco } = opcoes;
   const exigirLogin = criarExigirLogin(opcoes.autenticar);
@@ -167,19 +168,32 @@ export async function rotasEquipe(
   });
 
   app.get("/medicos", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<MedicoResumo[]>> => {
-    const linhas = await banco
+    // ADR-0024: a tela de marcacao pede so quem atende aquela linha (e aquela especialidade).
+    const filtro = z
+      .object({ linha: z.enum(["pronto_atendimento", "teleconsulta"]).optional(), especialidade: z.string().refine(especialidadeExiste, "especialidade desconhecida").optional() })
+      .parse(req.query);
+    const todos = await banco
       .select({
         id: medicos.perfilId,
         nomeCompleto: perfis.nomeCompleto,
         crm: medicos.crm,
         crmUf: medicos.crmUf,
         especialidade: medicos.especialidade,
+        especialidades: medicos.especialidades,
+        atendeProntoAtendimento: medicos.atendeProntoAtendimento,
       })
       .from(vinculos)
       .innerJoin(medicos, eq(medicos.perfilId, vinculos.perfilId))
       .innerJoin(perfis, eq(perfis.id, vinculos.perfilId))
       .where(and(eq(vinculos.clinicaId, req.contexto.clinicaId), eq(vinculos.papel, "medico"), eq(vinculos.status, "ativo")))
       .orderBy(asc(perfis.nomeCompleto));
+    const linhas = todos.filter((m) => {
+      if (filtro.linha === "pronto_atendimento") return m.atendeProntoAtendimento;
+      if (filtro.especialidade) return medicoAtende(m, "teleconsulta", filtro.especialidade);
+      // Teleconsulta sem especialidade escolhida: quem tem ao menos uma.
+      if (filtro.linha === "teleconsulta") return m.especialidades.length > 0;
+      return true;
+    });
     const situacoes = await situacoesCrm(banco, req.contexto.clinicaId, linhas.map((l) => l.id));
     const comSituacao = linhas.map((l) => ({ ...l, situacaoCrm: situacoes.get(l.id)! }));
     // O paciente so ve (e so marca com) quem teve o CRM conferido (ADR-0016).
@@ -308,6 +322,12 @@ export async function rotasEquipe(
 
   app.post("/convites", { preHandler: soAdmin }, async (req, reply): Promise<Resposta<ConviteCriado>> => {
     const dados = esquemaConvite.parse(req.body);
+    // ADR-0022: na plataforma, medico nao entra por convite. Ele se cadastra e
+    // passa pelo credenciamento (documentos e conferencia de identidade) -
+    // um convite pularia justamente a etapa que impede o uso do CRM de outra pessoa.
+    if (opcoes.plataformaUnica && dados.papel === "medico") {
+      throw new ErroHttp(409, "MEDICO_ENTRA_POR_CREDENCIAMENTO", "Médicos entram pelo credenciamento: peça que a pessoa crie a conta, escolha \"Sou médico(a)\" e envie os documentos. O pedido aparece em Credenciamentos.");
+    }
 
     // 32 bytes sorteados = 43 caracteres. Impossivel de adivinhar.
     const codigo = randomBytes(32).toString("base64url");

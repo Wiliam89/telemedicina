@@ -115,7 +115,7 @@ export function FormularioPerfil({ destino }: { destino: string }) {
         <input type="checkbox" checked={souMedico} onChange={(e) => setSouMedico(e.target.checked)} className="mt-1" />
         <span>
           <span className="block font-medium">Sou médico(a) e vou atender</span>
-          <span className="block text-sm text-tinta-suave">Seu CRM fica no seu cadastro e vale em qualquer clínica onde você atuar.</span>
+          <span className="block text-sm text-tinta-suave">Depois deste cadastro você envia seus documentos e confirma a sua identidade para começar a atender.</span>
         </span>
       </label>
 
@@ -132,7 +132,7 @@ export function FormularioPerfil({ destino }: { destino: string }) {
             {erros.crmUf ? <p role="alert" className="text-sm text-alerta">{erros.crmUf}</p> : null}
           </div>
           <div className="sm:col-span-2">
-            <Campo id="especialidade" rotulo="Especialidade (opcional)" value={especialidade} onChange={(e) => setEspecialidade(e.target.value)} placeholder="Clínica geral" />
+            <Campo id="especialidade" rotulo="Como você se apresenta (opcional)" value={especialidade} onChange={(e) => setEspecialidade(e.target.value)} placeholder="Clínica geral" ajuda="As especialidades que você vai atender são escolhidas no credenciamento, com o título de especialista." />
           </div>
         </div>
       ) : null}

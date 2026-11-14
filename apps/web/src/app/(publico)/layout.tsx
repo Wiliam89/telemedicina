@@ -26,7 +26,7 @@ export default async function LayoutPublico({ children }: { children: ReactNode 
             {usuario ? (
               <>
                 <Link href="/clinicas" className="rounded-lg px-3 py-2 text-tinta-suave hover:bg-marinho-suave hover:text-tinta">
-                  Minhas clínicas
+                  Meu painel
                 </Link>
                 <Link href="/conta" className="hidden rounded-lg px-3 py-2 text-tinta-suave hover:bg-marinho-suave hover:text-tinta sm:inline-block">
                   Minha conta

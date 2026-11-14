@@ -1,10 +1,16 @@
 /**
  * Qual provedor de pagamento usar, e com quais credenciais.
  *
- * Diferente da assinatura, aqui NAO ha fallback para a plataforma: o
- * dinheiro e da clinica, e o provedor precisa da autorizacao dela (OAuth)
- * para depositar na conta dela. Clinica sem recebimento configurado
- * simplesmente nao cobra - e a mensagem diz isso com todas as letras.
+ * Duas formas de receber:
+ *
+ *   a) a clinica conectou a PROPRIA conta no provedor (OAuth). O dinheiro
+ *      vai para ela, e o provedor separa a comissao da plataforma;
+ *   b) a plataforma e a propria clinica (ADR-0022): a conta de recebimento
+ *      e uma so, a da plataforma, e vem de apps/api/.env
+ *      (PAGAMENTO_PROVEDOR + PAGAMENTO_ACCESS_TOKEN).
+ *
+ * Sem nenhuma das duas, em producao, nao se cobra - e a mensagem diz isso
+ * com todas as letras.
  */
 import { eq } from "drizzle-orm";
 import { clinicas, type Banco } from "@tele/db";
@@ -40,6 +46,37 @@ export class ResolvedorDePagamento {
     private readonly ambiente: Ambiente,
   ) {}
 
+  /** A conta da propria plataforma, quando configurada em apps/api/.env. */
+  private daPlataforma(): ContextoDePagamento | null {
+    const { PAGAMENTO_PROVEDOR: provedor, PAGAMENTO_ACCESS_TOKEN: token } = this.ambiente;
+    if (provedor === "mercadopago" && token) {
+      return { provedor: new ProvedorMercadoPago(), credenciais: { accessToken: token, contaId: "plataforma" }, avisoDeVencimento: null };
+    }
+    return null;
+  }
+
+  /** Ha como cobrar nesta clinica? Fora de producao sempre ha: o gateway simulado. */
+  async temRecebimento(clinicaId: string): Promise<boolean> {
+    if (this.ambiente.NODE_ENV !== "production") return true;
+    return this.daPlataforma() !== null || (await clinicaTemRecebimento(this.banco, clinicaId));
+  }
+
+  /**
+   * Como o NAVEGADOR transforma o cartao em token (ADR-0023). So a chave
+   * publica sai daqui; o access token nunca.
+   */
+  async tokenizacao(clinicaId: string): Promise<{ provedor: string; chavePublica: string | null; disponivel: boolean }> {
+    let contexto: ContextoDePagamento;
+    try {
+      contexto = await this.para(clinicaId);
+    } catch {
+      return { provedor: "nenhum", chavePublica: null, disponivel: false };
+    }
+    if (contexto.provedor.nome === "local_teste") return { provedor: "local_teste", chavePublica: null, disponivel: true };
+    const chavePublica = this.ambiente.PAGAMENTO_CHAVE_PUBLICA ?? null;
+    return { provedor: contexto.provedor.nome, chavePublica, disponivel: Boolean(chavePublica) };
+  }
+
   async para(clinicaId: string): Promise<ContextoDePagamento> {
     const [c] = await this.banco
       .select({
@@ -55,6 +92,8 @@ export class ResolvedorDePagamento {
     // Em desenvolvimento, clinica sem recebimento usa o gateway simulado -
     // senao nao daria para testar o fluxo sem contratar ninguem.
     if (!c?.provedor || !c.tokenCifrado || !c.contaId) {
+      const plataforma = this.daPlataforma();
+      if (plataforma) return plataforma;
       if (this.ambiente.NODE_ENV === "production") {
         throw new ErroDePagamento(
           "CLINICA_SEM_RECEBIMENTO",

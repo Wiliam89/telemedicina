@@ -45,6 +45,11 @@ export interface PedidoDeCobranca {
   pagador: { nome: string; email: string; cpf?: string | null };
   /** Cartao: token gerado no navegador. Nunca o numero. */
   tokenDoCartao?: string;
+  /**
+   * Cartao que o paciente deixou cadastrado (ADR-0023). A cobranca e feita
+   * sem ele presente, ao final da consulta, e ja capturada.
+   */
+  cartaoSalvo?: { clienteId: string; cartaoId: string };
   parcelas?: number;
   /** Pix: quanto tempo a cobranca vale. */
   expiraEmMinutos?: number;
@@ -64,9 +69,26 @@ export interface Cobranca {
   bruto: Record<string, unknown>;
 }
 
+/** O cartao como o provedor o guardou. Nunca o numero inteiro. */
+export interface CartaoNoProvedor {
+  clienteId: string;
+  cartaoId: string;
+  bandeira: string;
+  ultimos4: string;
+  validadeMes: number;
+  validadeAno: number;
+}
+
 export interface ProvedorDePagamento {
   readonly nome: string;
   readonly rotulo: string;
+
+  /**
+   * Guarda o cartao na conta do provedor, a partir do token gerado no
+   * navegador, e devolve os identificadores para cobrar depois (ADR-0023).
+   */
+  salvarCartao(credenciais: CredenciaisDaClinica, dados: { pagador: { nome: string; email: string; cpf?: string | null }; tokenDoCartao: string }): Promise<CartaoNoProvedor>;
+  removerCartao(credenciais: CredenciaisDaClinica, cartao: { clienteId: string; cartaoId: string }): Promise<void>;
 
   cobrar(credenciais: CredenciaisDaClinica, pedido: PedidoDeCobranca): Promise<Cobranca>;
   /** Consulta o estado atual - usado pelo webhook e pela conciliacao. */
@@ -90,6 +112,7 @@ export class ErroDePagamento extends Error {
       | "CLINICA_SEM_RECEBIMENTO"
       | "TOKEN_VENCIDO"
       | "RECUSADO"
+      | "CARTAO_INVALIDO"
       | "PROVEDOR_INDISPONIVEL"
       | "VALOR_INVALIDO"
       | "FALHA",

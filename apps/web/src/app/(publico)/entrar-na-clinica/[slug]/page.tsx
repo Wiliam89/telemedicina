@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Building2 } from "lucide-react";
 import { Folha } from "@/componentes/Folha";
 import { redirect } from "next/navigation";
-import type { PerfilResposta } from "@tele/shared";
+import type { PerfilResposta, PlataformaPublica } from "@tele/shared";
 import { Aviso } from "@/componentes/Aviso";
 import { chamarApi } from "@/lib/api";
 import { tokenAtual, usuarioAtual } from "@/lib/supabase-servidor";
@@ -23,6 +23,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function PaginaEntrarNaClinica({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  // ADR-0022: na plataforma unica nao ha "entrar numa clinica" - criar a conta ja basta.
+  const plataforma = await chamarApi<PlataformaPublica>("/plataforma");
+  if (plataforma.ok && plataforma.dados.unica) redirect("/clinicas");
   const publico = await chamarApi<{ slug: string; nomeFantasia: string; aceitandoPacientes: boolean }>(`/clinicas/${slug}/publico`);
 
   if (!publico.ok) {

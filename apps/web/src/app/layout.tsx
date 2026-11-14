@@ -19,6 +19,8 @@ import "./globals.css";
 const texto = Inter({ subsets: ["latin"], variable: "--fonte-texto", display: "swap" });
 const titulo = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--fonte-titulo", display: "swap" });
 
+import { RetornoDoEmail } from "@/componentes/RetornoDoEmail";
+
 export const metadata: Metadata = {
   title: { default: NOME_DA_PLATAFORMA, template: `%s · ${NOME_DA_PLATAFORMA}` },
   description: "Plataforma de telemedicina: agenda, teleconsulta, prontuário eletrônico e documentos com assinatura digital.",
@@ -38,6 +40,7 @@ export default function LayoutRaiz({ children }: { children: ReactNode }) {
           Pular para o conteúdo
         </a>
         <TarjaDeAmbiente />
+        <RetornoDoEmail />
         {children}
         <AvisoDeCookies />
       </body>

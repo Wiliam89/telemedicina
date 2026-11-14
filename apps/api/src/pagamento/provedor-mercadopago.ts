@@ -17,7 +17,7 @@
  * documentacao; a primeira execucao real deve ser em ambiente de teste.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { ErroDePagamento, type Cobranca, type CredenciaisDaClinica, type PedidoDeCobranca, type ProvedorDePagamento, type StatusNoProvedor } from "./provedor.js";
+import { ErroDePagamento, type CartaoNoProvedor, type Cobranca, type CredenciaisDaClinica, type PedidoDeCobranca, type ProvedorDePagamento, type StatusNoProvedor } from "./provedor.js";
 
 const URL_BASE = "https://api.mercadopago.com";
 
@@ -99,8 +99,10 @@ export class ProvedorMercadoPago implements ProvedorDePagamento {
       transaction_amount: Number((pedido.valorCentavos / 100).toFixed(2)),
       description: pedido.descricao,
       // A comissao da plataforma. O provedor desconta a taxa dele primeiro
-      // e depois a nossa sobre o restante.
-      application_fee: Number((pedido.comissaoPlataformaCentavos / 100).toFixed(2)),
+      // e depois a nossa sobre o restante. So existe no modelo de
+      // marketplace: quando a plataforma e a propria clinica (ADR-0022), o
+      // valor inteiro e dela e o campo nao e enviado.
+      ...(pedido.comissaoPlataformaCentavos > 0 ? { application_fee: Number((pedido.comissaoPlataformaCentavos / 100).toFixed(2)) } : {}),
       notification_url: pedido.urlDeNotificacao,
       payer: {
         email: pedido.pagador.email,
@@ -109,7 +111,27 @@ export class ProvedorMercadoPago implements ProvedorDePagamento {
       },
     };
 
-    if (pedido.metodo === "pix") {
+    if (pedido.cartaoSalvo) {
+      /**
+       * CARTAO CADASTRADO (ADR-0023). O cartao esta guardado no "customer" do
+       * provedor; para cobrar, gera-se um token a partir dele e o pagamento
+       * sai ja capturado.
+       *
+       * [CONFIRMAR COM O MERCADO PAGO] Cobrar sem o codigo de seguranca (o
+       * paciente nao esta presente no fim da consulta) depende de a conta
+       * estar habilitada para isso. Sem a habilitacao, o emissor recusa - e
+       * a plataforma cai no caminho previsto: avisa o paciente e oferece Pix.
+       */
+      const token = await this.chamar<{ id?: string }>("/v1/card_tokens", {
+        token: credenciais.accessToken,
+        corpo: { card_id: pedido.cartaoSalvo.cartaoId, customer_id: pedido.cartaoSalvo.clienteId },
+      });
+      if (!token.id) throw new ErroDePagamento("RECUSADO", "O provedor não liberou a cobrança neste cartão.");
+      corpo["token"] = token.id;
+      corpo["installments"] = 1;
+      corpo["capture"] = true;
+      corpo["payer"] = { type: "customer", id: pedido.cartaoSalvo.clienteId };
+    } else if (pedido.metodo === "pix") {
       corpo["payment_method_id"] = "pix";
       corpo["date_of_expiration"] = new Date(Date.now() + (pedido.expiraEmMinutos ?? 30) * 60000).toISOString();
     } else {
@@ -129,6 +151,48 @@ export class ProvedorMercadoPago implements ProvedorDePagamento {
         idempotencia: pedido.chaveIdempotencia,
       }),
     );
+  }
+
+  /**
+   * Guarda o cartao no "customer" do pagador. O token veio do navegador
+   * (MercadoPago.js): o numero do cartao nunca passou por este servidor.
+   */
+  async salvarCartao(credenciais: CredenciaisDaClinica, dados: { pagador: { nome: string; email: string; cpf?: string | null }; tokenDoCartao: string }): Promise<CartaoNoProvedor> {
+    const busca = await this.chamar<{ results?: { id?: string }[] }>(`/v1/customers/search?email=${encodeURIComponent(dados.pagador.email)}`, { metodo: "GET", token: credenciais.accessToken });
+    let clienteId = busca.results?.[0]?.id;
+    if (!clienteId) {
+      const criado = await this.chamar<{ id?: string }>("/v1/customers", {
+        token: credenciais.accessToken,
+        corpo: {
+          email: dados.pagador.email,
+          first_name: dados.pagador.nome.split(" ")[0],
+          ...(dados.pagador.cpf ? { identification: { type: "CPF", number: dados.pagador.cpf } } : {}),
+        },
+      });
+      clienteId = criado.id;
+    }
+    if (!clienteId) throw new ErroDePagamento("FALHA", "O provedor não criou o cadastro do pagador.");
+
+    let cartao: { id?: string; last_four_digits?: string; expiration_month?: number; expiration_year?: number; payment_method?: { id?: string } };
+    try {
+      cartao = await this.chamar(`/v1/customers/${clienteId}/cards`, { token: credenciais.accessToken, corpo: { token: dados.tokenDoCartao } });
+    } catch (erro) {
+      if (erro instanceof ErroDePagamento && erro.codigo === "FALHA") throw new ErroDePagamento("CARTAO_INVALIDO", "O cartão não foi aceito. Confira os dados ou use outro cartão.");
+      throw erro;
+    }
+    if (!cartao.id || !cartao.last_four_digits) throw new ErroDePagamento("CARTAO_INVALIDO", "O cartão não foi aceito. Confira os dados ou use outro cartão.");
+    return {
+      clienteId,
+      cartaoId: String(cartao.id),
+      bandeira: String(cartao.payment_method?.id ?? "cartao"),
+      ultimos4: String(cartao.last_four_digits),
+      validadeMes: Number(cartao.expiration_month ?? 12),
+      validadeAno: Number(cartao.expiration_year ?? 2099),
+    };
+  }
+
+  async removerCartao(credenciais: CredenciaisDaClinica, cartao: { clienteId: string; cartaoId: string }): Promise<void> {
+    await this.chamar(`/v1/customers/${cartao.clienteId}/cards/${cartao.cartaoId}`, { metodo: "DELETE", token: credenciais.accessToken });
   }
 
   async consultar(credenciais: CredenciaisDaClinica, id: string): Promise<Cobranca> {

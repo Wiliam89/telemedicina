@@ -26,6 +26,12 @@ export const tipoNotificacaoEnum = pgEnum("tipo_notificacao", [
   "documento_disponivel",
   "pedido_lgpd_respondido",
   "crm_verificado",
+  /** ADR-0025: paciente aguardando atendimento imediato. */
+  "chamado_na_fila",
+  /** ADR-0022: andamento do credenciamento do medico. */
+  "credenciamento",
+  /** ADR-0023: cobranca no cartao, ou pagamento pendente. */
+  "pagamento",
 ]);
 
 export const notificacoes = pgTable(

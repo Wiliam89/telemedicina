@@ -15,6 +15,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ConsultaResumo, DocumentoResumo, MedicoResumo } from "@tele/shared";
 import { Aviso } from "@/componentes/Aviso";
+import { AvisosDaConta } from "@/componentes/AvisosDaConta";
 import { LinkBotao } from "@/componentes/Botao";
 import { Carimbo } from "@/componentes/Carimbo";
 import { StatusDaConsulta } from "@/componentes/EtiquetaDeStatus";
@@ -98,8 +99,8 @@ export default async function PaginaPainel({ params }: { params: Promise<{ clini
               <LinkBotao href={`${base}/pronto-atendimento`} variante="secundario" icone={<Siren className="h-4 w-4" aria-hidden="true" />}>
                 Pronto atendimento
               </LinkBotao>
-              <LinkBotao href={`${base}/marcar`} icone={<CalendarPlus className="h-4 w-4" aria-hidden="true" />}>
-                Marcar consulta
+              <LinkBotao href={`${base}/teleconsulta`} icone={<Stethoscope className="h-4 w-4" aria-hidden="true" />}>
+                Teleconsulta com especialista
               </LinkBotao>
             </>
           ) : papel === "recepcao" ? (
@@ -108,17 +109,19 @@ export default async function PaginaPainel({ params }: { params: Promise<{ clini
             </LinkBotao>
           ) : papel === "medico" ? (
             <LinkBotao href={`${base}/plantao`} variante="secundario" icone={<Siren className="h-4 w-4" aria-hidden="true" />}>
-              Plantão e fila
+              Atendimento imediato
             </LinkBotao>
           ) : (
-            <LinkBotao href={`${base}/equipe`} icone={<Users className="h-4 w-4" aria-hidden="true" />}>
-              Convidar equipe
+            <LinkBotao href={`${base}/credenciamentos`} icone={<Users className="h-4 w-4" aria-hidden="true" />}>
+              Credenciamentos
             </LinkBotao>
           )
         }
       />
 
       {!consultas.ok ? <Aviso tipo="erro">{consultas.erro.mensagem}</Aviso> : null}
+
+      <AvisosDaConta slug={slug} token={token} perfil={perfil} souPaciente={temPapel(clinica, "paciente")} souMedico={temPapel(clinica, "medico")} />
 
       {/* --- indicadores ------------------------------------------------- */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -152,7 +155,7 @@ export default async function PaginaPainel({ params }: { params: Promise<{ clini
             <Indicador Icone={CalendarCheck2} rotulo="Consultas hoje" valor={deHoje.length} />
             <Indicador Icone={CreditCard} tom="espera" rotulo="Aguardando pagamento" valor={aguardandoPagamento.length} />
             <Indicador Icone={Siren} tom="alerta" rotulo="Fila agora" valor={fila.ok ? fila.dados.totalAguardando : "—"} detalhe={fila.ok ? `${fila.dados.medicosDePlantao} de plantão` : undefined} />
-            <Indicador Icone={Stethoscope} tom="info" rotulo="Médicos na clínica" valor={qtdMedicos} />
+            <Indicador Icone={Stethoscope} tom="info" rotulo="Médicos credenciados" valor={qtdMedicos} />
           </>
         )}
       </div>
@@ -171,7 +174,7 @@ export default async function PaginaPainel({ params }: { params: Promise<{ clini
           {destaque.length === 0 ? (
             <div className="p-5">
               <Vazio Icone={CalendarDays} titulo={papel === "medico" ? "Nenhuma consulta hoje" : "Nenhuma consulta marcada"}>
-                {papel === "paciente" ? "Marque uma consulta ou entre no pronto atendimento." : papel === "medico" ? "Confira seus horários de atendimento para receber marcações." : null}
+                {papel === "paciente" ? "Use o pronto atendimento ou marque uma teleconsulta com especialista." : papel === "medico" ? "Confira seus horários de atendimento para receber marcações." : null}
               </Vazio>
             </div>
           ) : (
@@ -237,7 +240,7 @@ export default async function PaginaPainel({ params }: { params: Promise<{ clini
             </Aviso>
           ) : null}
 
-          <Cartao titulo={papel === "paciente" ? "Médicos da clínica" : "Equipe médica"} semPadding>
+          <Cartao titulo={papel === "paciente" ? "Nossos médicos" : "Equipe médica"} semPadding>
             {!medicos.ok ? (
               <div className="p-5">
                 <Aviso tipo="erro">{medicos.erro.mensagem}</Aviso>
@@ -245,7 +248,7 @@ export default async function PaginaPainel({ params }: { params: Promise<{ clini
             ) : medicos.dados.length === 0 ? (
               <div className="p-5">
                 <Vazio Icone={Stethoscope} titulo="Nenhum médico ainda">
-                  {papel === "admin_clinica" ? "Convide a equipe na tela Equipe." : "A administração pode convidar a equipe."}
+                  {papel === "admin_clinica" ? "Os médicos entram pelo credenciamento. Os pedidos aparecem em Credenciamentos." : "Em breve novos profissionais por aqui."}
                 </Vazio>
               </div>
             ) : (
@@ -275,7 +278,7 @@ export default async function PaginaPainel({ params }: { params: Promise<{ clini
                 <div className="text-sm">
                   <p className="font-medium">Como funciona a teleconsulta</p>
                   <p className="mt-1 text-tinta-suave">
-                    No horário marcado, abra a consulta pela agenda e permita câmera e microfone. A chamada não é gravada.
+                    No horário marcado, abra a consulta pela agenda e permita câmera e microfone. A chamada não é gravada. Com cartão cadastrado, o valor só é debitado ao final; sem cartão, o Pix aparece antes de a consulta começar.
                   </p>
                 </div>
               </div>

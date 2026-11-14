@@ -29,13 +29,15 @@ import {
   type Resposta,
 } from "@tele/shared";
 import { calcularHorariosLivres } from "@tele/shared/agenda";
+import { especialidadeExiste, medicoAtende } from "@tele/shared/atendimento";
 import { registrarAuditoria } from "../auditoria.js";
 import type { Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
 import { exigirCrmVerificado } from "../crm.js";
 import { fusoDaClinica, notificar, quandoNaClinica } from "../notificacoes/index.js";
 import { ErroHttp } from "../erros.js";
-import { clinicaTemRecebimento } from "../pagamento/index.js";
+import { cartaoAtivo, exigirSemPendencia, precoPara } from "../cobranca.js";
+import type { ResolvedorDePagamento } from "../pagamento/index.js";
 import { liberarReservasVencidas, registrarPendenciaDeEstorno } from "../reservas.js";
 import { MINUTOS_DE_RESERVA } from "./pagamentos.js";
 
@@ -70,11 +72,19 @@ export const esquemaMarcar = z.object({
   pacienteId: z.string().uuid("pacienteId invalido").optional(),
   inicio: z.string().datetime({ offset: true }),
   motivo: z.string().trim().max(500).optional(),
+  /** ADR-0024: pronto atendimento (clinico geral) ou teleconsulta (especialista). */
+  linha: z.enum(["pronto_atendimento", "teleconsulta"]).default("teleconsulta"),
+  especialidade: z.string().refine(especialidadeExiste, "especialidade desconhecida").optional(),
+  /** ADR-0023: "pix" para pagar antes mesmo tendo cartao; "cartao" para exigir o cartao cadastrado. */
+  cobranca: z.enum(["cartao", "pix"]).optional(),
 });
 
 export const esquemaCancelar = z.object({ motivo: z.string().trim().min(3, "diga o motivo do cancelamento").max(300) });
 
-export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; autenticar: Autenticador; producao: boolean }): Promise<void> {
+export async function rotasAgenda(
+  app: FastifyInstance,
+  opcoes: { banco: Banco; autenticar: Autenticador; producao: boolean; resolvedor: ResolvedorDePagamento; /** ADR-0023: dispara a cobranca no cartao cadastrado. */ aoConcluir?: (consultaId: string) => void },
+): Promise<void> {
   const { banco } = opcoes;
   const dentroDaClinica = criarExigirClinica(banco, opcoes.autenticar);
   const soMedico = [...dentroDaClinica, exigirPapel("medico")];
@@ -307,6 +317,17 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     if (!envolvidos.some((v) => v.perfilId === pacienteId)) throw new ErroHttp(400, "PACIENTE_SEM_VINCULO", "Este paciente não está cadastrado nesta clínica.");
     if (!envolvidos.some((v) => v.perfilId === dados.medicoId)) throw new ErroHttp(400, "MEDICO_NAO_ATENDE_AQUI", "Este médico não atende nesta clínica.");
 
+    // ADR-0024: o medico precisa atender esta linha. Pronto atendimento e do
+    // clinico geral; teleconsulta de uma especialidade, so de quem a tem conferida.
+    if (dados.linha === "pronto_atendimento" && dados.especialidade) throw new ErroHttp(400, "LINHA_INVALIDA", "O pronto atendimento não tem especialidade.");
+    const especialidade = dados.linha === "teleconsulta" ? dados.especialidade ?? null : null;
+    if (dados.linha === "pronto_atendimento" || especialidade) {
+      const [aptidao] = await banco.select({ especialidades: medicos.especialidades, atendeProntoAtendimento: medicos.atendeProntoAtendimento }).from(medicos).where(eq(medicos.perfilId, dados.medicoId)).limit(1);
+      if (!aptidao || !medicoAtende(aptidao, dados.linha, especialidade)) {
+        throw new ErroHttp(409, "MEDICO_NAO_ATENDE_ESTA_LINHA", dados.linha === "pronto_atendimento" ? "Este médico não atende o pronto atendimento." : "Este médico não atende esta especialidade.");
+      }
+    }
+
     // O horario pedido tem de ser um dos que a agenda oferece: assim ninguem
     // marca "09:07" mandando JSON na mao, nem fura a grade do medico.
     const inicio = new Date(dados.inicio);
@@ -325,12 +346,32 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
     // agendando direto - e o caso de quem cobra fora da plataforma. O mesmo
     // vale para quem tem preco, mas nao conectou conta de recebimento: em
     // producao ninguem conseguiria pagar, e o paciente ficaria preso na tela.
-    const [temPreco] = await banco
-      .select({ id: precos.id })
-      .from(precos)
-      .where(and(eq(precos.clinicaId, req.contexto.clinicaId), eq(precos.tipo, "agendada")))
-      .limit(1);
-    const cobraNaPlataforma = Boolean(temPreco) && (!opcoes.producao || (await clinicaTemRecebimento(banco, req.contexto.clinicaId)));
+    const preco = await precoPara(banco, req.contexto.clinicaId, dados.linha, "agendado", { medicoId: dados.medicoId, especialidade });
+    const cobraNaPlataforma = Boolean(preco) && (await opcoes.resolvedor.temRecebimento(req.contexto.clinicaId));
+
+    /**
+     * ADR-0023 - COMO ESTA CONSULTA SERA COBRADA.
+     *
+     *   Paciente com cartao cadastrado: nada e pago agora. A consulta nasce
+     *   AGENDADA, com o valor combinado, e o cartao e debitado quando o
+     *   medico a encerra.
+     *
+     *   Paciente sem cartao (ou que preferiu Pix): o horario nasce RESERVADO e
+     *   o Pix aparece em seguida, antes de a consulta existir de fato.
+     *
+     * So o proprio paciente compromete o cartao dele: a recepcao, marcando em
+     * nome de alguem, segue sempre pelo Pix.
+     */
+    const paraMim = pacienteId === req.usuario.id;
+    let cartaoId: string | null = null;
+    if (cobraNaPlataforma && paraMim) {
+      // Quem deve uma consulta anterior regulariza antes de marcar outra.
+      await exigirSemPendencia(banco, pacienteId, req.contexto.clinicaId);
+      if (dados.cobranca !== "pix") cartaoId = (await cartaoAtivo(banco, pacienteId, req.contexto.clinicaId))?.id ?? null;
+    }
+    if (dados.cobranca === "cartao" && !cartaoId) {
+      throw new ErroHttp(409, "SEM_CARTAO", "Você não tem cartão válido cadastrado. Cadastre um ou pague por Pix.");
+    }
 
     const id = randomUUID();
     try {
@@ -344,9 +385,14 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
           fim: new Date(escolhido.fim),
           motivo: dados.motivo ?? null,
           marcadoPor: req.usuario.id,
-          ...(cobraNaPlataforma
-            ? { status: "aguardando_pagamento" as const, expiraReservaEm: new Date(Date.now() + MINUTOS_DE_RESERVA * 60000) }
-            : {}),
+          linha: dados.linha,
+          especialidade,
+          ...(cobraNaPlataforma ? { valorCombinadoCentavos: preco!.valorCentavos } : {}),
+          ...(cobraNaPlataforma && cartaoId
+            ? { formaDeCobranca: "cartao_ao_final" as const, cartaoId }
+            : cobraNaPlataforma
+              ? { status: "aguardando_pagamento" as const, expiraReservaEm: new Date(Date.now() + MINUTOS_DE_RESERVA * 60000) }
+              : {}),
         });
         await registrarAuditoria(tx, {
           quem: req.usuario.id,
@@ -354,7 +400,7 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
           acao: "consulta.marcada",
           tabela: "consultas",
           registroId: id,
-          detalhes: { medicoId: dados.medicoId, pacienteId, inicio: dados.inicio, porEquipe: pacienteId !== req.usuario.id },
+          detalhes: { medicoId: dados.medicoId, pacienteId, inicio: dados.inicio, porEquipe: pacienteId !== req.usuario.id, linha: dados.linha, especialidade, cobranca: cartaoId ? "cartao_ao_final" : cobraNaPlataforma ? "pix" : "fora_da_plataforma" },
           ip: req.ip,
         });
       });
@@ -550,6 +596,8 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
         ip: req.ip,
       });
     });
+    // Consulta concluida: quem deixou cartao cadastrado e debitado agora (ADR-0023).
+    if (status === "concluida") opcoes.aoConcluir?.(id);
 
     const [atualizada] = await consultasPorId(banco, [id]);
     return { ok: true, dados: atualizada! };
@@ -572,6 +620,10 @@ export async function rotasAgenda(app: FastifyInstance, opcoes: { banco: Banco; 
       crm: medicos.crm,
       crmUf: medicos.crmUf,
       motivoCancelamento: consultas.motivoCancelamento,
+      linha: consultas.linha,
+      especialidadeDaConsulta: consultas.especialidade,
+      formaDeCobranca: consultas.formaDeCobranca,
+      valorCombinadoCentavos: consultas.valorCombinadoCentavos,
     };
   }
 
@@ -585,6 +637,7 @@ function formatarConsulta(l: {
   id: string; inicio: Date; fim: Date; status: string; motivo: string | null;
   pacienteId: string; pacienteNome: string; medicoId: string; medicoNome: string; especialidade: string | null;
   crm: string; crmUf: string; motivoCancelamento: string | null;
+  linha: "pronto_atendimento" | "teleconsulta"; especialidadeDaConsulta: string | null; formaDeCobranca: "antecipada" | "cartao_ao_final"; valorCombinadoCentavos: number | null;
 }): ConsultaResumo {
   return {
     id: l.id,
@@ -595,6 +648,10 @@ function formatarConsulta(l: {
     paciente: { id: l.pacienteId, nomeCompleto: l.pacienteNome },
     medico: { id: l.medicoId, nomeCompleto: l.medicoNome, especialidade: l.especialidade, crm: l.crm, crmUf: l.crmUf },
     motivoCancelamento: l.motivoCancelamento,
+    linha: l.linha,
+    especialidadeDaConsulta: l.especialidadeDaConsulta,
+    formaDeCobranca: l.formaDeCobranca,
+    valorCombinadoCentavos: l.valorCombinadoCentavos,
   };
 }
 

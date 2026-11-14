@@ -11,10 +11,10 @@
  * quem ela e no mundo (nome, CPF) e, se for medica, seu CRM - que e da
  * pessoa, nao da clinica.
  */
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { clinicas, consentimentos, medicos, pacientes, perfis, vinculos, type Banco } from "@tele/db";
+import { clinicas, consentimentos, credenciamentosMedicos, medicos, pacientes, perfis, vinculos, type Banco } from "@tele/db";
 import type { PerfilResposta, Resposta, SituacaoCrm } from "@tele/shared";
 import { consentimentosPendentes } from "@tele/shared/lgpd";
 import { registrarAuditoria } from "../auditoria.js";
@@ -22,6 +22,7 @@ import { situacaoCrm } from "../crm.js";
 import { registrarAceites } from "./lgpd.js";
 import { ErroHttp } from "../erros.js";
 import { criarExigirLogin, type Autenticador } from "../autenticacao.js";
+import { clinicaDaPlataforma, vincularComoPaciente, type ModoPlataforma } from "./plataforma.js";
 
 const UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"] as const;
 
@@ -66,6 +67,8 @@ export async function buscarPerfil(banco: Banco, id: string): Promise<PerfilResp
       crm: medicos.crm,
       crmUf: medicos.crmUf,
       especialidade: medicos.especialidade,
+      especialidades: medicos.especialidades,
+      atendeProntoAtendimento: medicos.atendeProntoAtendimento,
       dataNascimento: pacientes.dataNascimento,
     })
     .from(perfis)
@@ -108,6 +111,11 @@ export async function buscarPerfil(banco: Banco, id: string): Promise<PerfilResp
     .from(consentimentos)
     .where(eq(consentimentos.perfilId, id));
 
+  // ADR-0022: o pedido de credenciamento mais recente, para a tela saber o que mostrar.
+  const [pedido] = linha.crm
+    ? await banco.select({ status: credenciamentosMedicos.status }).from(credenciamentosMedicos).where(eq(credenciamentosMedicos.medicoId, id)).orderBy(desc(credenciamentosMedicos.atualizadoEm)).limit(1)
+    : [];
+
   // ADR-0016: onde a pessoa atende como medico, a situacao do CRM la.
   const ondeAtende = minhas.filter((c) => c.papel === "medico").map((c) => c.id);
   const crmPorClinica = new Map<string, SituacaoCrm>();
@@ -119,8 +127,9 @@ export async function buscarPerfil(banco: Banco, id: string): Promise<PerfilResp
     telefone: linha.telefone,
     cpf: linha.cpf,
     criadoEm: linha.criadoEm.toISOString(),
-    medico: linha.crm && linha.crmUf ? { crm: linha.crm, crmUf: linha.crmUf, especialidade: linha.especialidade } : null,
+    medico: linha.crm && linha.crmUf ? { crm: linha.crm, crmUf: linha.crmUf, especialidade: linha.especialidade, especialidades: linha.especialidades ?? [], atendeProntoAtendimento: linha.atendeProntoAtendimento ?? false } : null,
     paciente: linha.dataNascimento ? { dataNascimento: linha.dataNascimento } : null,
+    credenciamento: pedido?.status ?? null,
     consentimentosPendentes: consentimentosPendentes(aceites),
     clinicas: [...porClinica.values()]
       .filter((c) => c.status !== "encerrada")
@@ -132,7 +141,7 @@ export async function buscarPerfil(banco: Banco, id: string): Promise<PerfilResp
   };
 }
 
-export async function rotasPerfis(app: FastifyInstance, opcoes: { banco: Banco; autenticar: Autenticador }): Promise<void> {
+export async function rotasPerfis(app: FastifyInstance, opcoes: { banco: Banco; autenticar: Autenticador; modo?: ModoPlataforma }): Promise<void> {
   const exigirLogin = criarExigirLogin(opcoes.autenticar);
   const { banco } = opcoes;
 
@@ -201,6 +210,8 @@ export async function rotasPerfis(app: FastifyInstance, opcoes: { banco: Banco; 
             crm: dados.medico.crm,
             crmUf: dados.medico.crmUf,
             especialidade: dados.medico.especialidade ?? null,
+            // ADR-0022: na plataforma, o que o medico atende e liberado no credenciamento.
+            ...(opcoes.modo?.slug ? { atendeProntoAtendimento: false } : {}),
           });
         }
         if (dados.paciente) {
@@ -217,6 +228,17 @@ export async function rotasPerfis(app: FastifyInstance, opcoes: { banco: Banco; 
         });
         if (dados.consentimentos?.length) {
           await registrarAceites(tx, usuario.id, [...new Set(dados.consentimentos)], req.ip, String(req.headers["user-agent"] ?? ""));
+        }
+        /**
+         * ADR-0022: a plataforma E a clinica. Quem cria a conta ja e paciente
+         * dela - sem convite, sem link de entrada, sem escolher clinica. O
+         * medico tambem entra como paciente e, a parte, pede credenciamento.
+         */
+        if (opcoes.modo?.slug && dados.paciente) {
+          const plataforma = await clinicaDaPlataforma(tx, opcoes.modo.slug);
+          if (plataforma && plataforma.status !== "suspensa" && plataforma.status !== "encerrada") {
+            await vincularComoPaciente(tx, usuario.id, plataforma.id, req.ip);
+          }
         }
       });
     } catch (erro) {

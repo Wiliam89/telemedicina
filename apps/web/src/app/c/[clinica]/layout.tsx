@@ -13,7 +13,7 @@ export default async function LayoutDaClinica({ children, params }: { children: 
   const { perfil, clinica } = await contextoDaClinica(slug);
 
   return (
-    <MolduraDaClinica clinica={clinica} outras={perfil.clinicas} nome={perfil.nomeCompleto}>
+    <MolduraDaClinica clinica={clinica} outras={perfil.clinicas} nome={perfil.nomeCompleto} candidato={Boolean(perfil.medico)}>
       {children}
       {/* So a equipe: e quem abre prontuario em computador compartilhado. */}
       {(clinica.papeis ?? [clinica.papel]).some((p) => p !== "paciente") ? <EncerrarPorInatividade /> : null}

@@ -103,6 +103,61 @@ const esquema = z.object({
   PAGAMENTO_WEBHOOK_SEGREDO: z.string().min(8, "use um segredo com ao menos 8 caracteres").optional(),
 
   /**
+   * A CONTA DE RECEBIMENTO DA PLATAFORMA (ADR-0022 e ADR-0023).
+   *
+   * Quando a plataforma e a propria clinica, o dinheiro entra numa conta so:
+   * a dela. PAGAMENTO_ACCESS_TOKEN e o token privado dessa conta no provedor
+   * (nunca vai para o navegador). PAGAMENTO_CHAVE_PUBLICA e a chave publica
+   * da mesma conta: e com ela que o navegador transforma o cartao em token,
+   * sem que o numero passe por este servidor.
+   *
+   * Sem estas variaveis, fora de producao, tudo roda no gateway simulado.
+   */
+  PAGAMENTO_PROVEDOR: z.enum(["mercadopago"]).optional(),
+  PAGAMENTO_ACCESS_TOKEN: z.string().min(20, "PAGAMENTO_ACCESS_TOKEN esta vazio ou curto demais").optional(),
+  PAGAMENTO_CHAVE_PUBLICA: z.string().min(10, "PAGAMENTO_CHAVE_PUBLICA esta vazia ou curta demais").optional(),
+
+  /**
+   * PLATAFORMA COMO CLINICA UNICA (ADR-0022).
+   *
+   * PLATAFORMA_SLUG e o endereco da clinica que E a plataforma. Com ele
+   * definido, ninguem escolhe nem cria clinica: todo paciente entra nela ao
+   * se cadastrar, e o medico pede credenciamento. Sem ele, vale o modo
+   * antigo, com varias clinicas isoladas.
+   *
+   * PLATAFORMA_ADMIN_EMAILS: quem pode fazer a configuracao inicial (criar a
+   * clinica da plataforma), separados por virgula. Em producao e
+   * obrigatorio enquanto a clinica nao existe: sem isso, o primeiro
+   * visitante viraria o administrador.
+   */
+  PLATAFORMA_SLUG: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9][a-z0-9-]{2,38}[a-z0-9]$/, "PLATAFORMA_SLUG: de 4 a 40 letras minusculas, numeros ou hifen")
+    .optional(),
+  PLATAFORMA_ADMIN_EMAILS: z.string().optional(),
+
+  /**
+   * CONFERENCIA DE IDENTIDADE DO MEDICO (ADR-0022).
+   *
+   *   manual      (padrao quando vazio, sem custo) a administracao compara a selfie com a
+   *               foto do documento e registra o resultado;
+   *   externo     um servico de reconhecimento facial de fora faz a
+   *               comparacao e avisa o resultado em POST /webhooks/identidade,
+   *               assinado com IDENTIDADE_WEBHOOK_SEGREDO;
+   *   local_teste aprova sozinho. So fora de producao.
+   *
+   * IDENTIDADE_URL_PROVA_DE_VIDA (opcional, modo externo): o endereco do
+   * servico onde o medico faz a prova de vida. "{referencia}" e trocado
+   * pelo identificador da conferencia.
+   */
+  IDENTIDADE_PROVEDOR: z.enum(["manual", "externo", "local_teste"]).optional(),
+  IDENTIDADE_WEBHOOK_SEGREDO: z.string().min(16, "IDENTIDADE_WEBHOOK_SEGREDO: use ao menos 16 caracteres").optional(),
+  IDENTIDADE_URL_PROVA_DE_VIDA: z.string().url("IDENTIDADE_URL_PROVA_DE_VIDA deve ser uma URL").optional(),
+  IDENTIDADE_NOME_DO_SERVICO: z.string().trim().min(2).max(40).optional(),
+
+  /**
    * Provedor da videochamada (Modulo 12). "local_teste" NAO faz
    * videochamada nenhuma: ele deixa o fluxo rodar na sua maquina sem conta
    * em servico nenhum, e mostra um aviso no lugar da imagem.

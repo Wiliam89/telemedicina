@@ -2,7 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import type { ConsultaResumo, HorarioLivre, MedicoResumo } from "@tele/shared";
+import Link from "next/link";
+import type { CartaoResumo, ConsultaResumo, HorarioLivre, LinhaDeAtendimento, MedicoResumo } from "@tele/shared";
+import { nomeDaEspecialidade } from "@tele/shared/atendimento";
+import { emReais } from "@/lib/dinheiro";
 import { Aviso } from "@/componentes/Aviso";
 import { Botao } from "@/componentes/Botao";
 import { Campo } from "@/componentes/Campo";
@@ -15,8 +18,28 @@ import { criarClienteNavegador } from "@/lib/supabase-navegador";
  * - o site nao calcula nada por conta propria, para nao oferecer horario
  * que o servidor recusaria.
  */
-export function MarcarConsulta({ slug, fuso, medicos }: { slug: string; fuso: string; medicos: MedicoResumo[] }) {
+export function MarcarConsulta({
+  slug,
+  fuso,
+  medicos,
+  linha,
+  especialidade,
+  cartao = null,
+  valorCentavos = null,
+}: {
+  slug: string;
+  fuso: string;
+  medicos: MedicoResumo[];
+  /** ADR-0024: quando o paciente vem de uma linha de atendimento. A recepcao marca sem informar. */
+  linha?: LinhaDeAtendimento;
+  especialidade?: string;
+  /** ADR-0023: com cartao, a consulta e debitada ao final; sem cartao, Pix em seguida. */
+  cartao?: CartaoResumo | null;
+  valorCentavos?: number | null;
+}) {
   const router = useRouter();
+  const [prefiroPix, setPrefiroPix] = useState(false);
+  const usaCartao = Boolean(cartao && !cartao.vencido && !prefiroPix);
   const dias = proximosDias(14, fuso);
 
   const [medicoId, setMedicoId] = useState(medicos[0]!.id);
@@ -58,13 +81,24 @@ export function MarcarConsulta({ slug, fuso, medicos }: { slug: string; fuso: st
       metodo: "POST",
       token: data.session?.access_token,
       clinica: slug,
-      corpo: { medicoId, inicio: horario.inicio, motivo: motivo.trim() || undefined },
+      corpo: {
+        medicoId,
+        inicio: horario.inicio,
+        motivo: motivo.trim() || undefined,
+        ...(linha ? { linha } : {}),
+        ...(linha === "teleconsulta" && especialidade ? { especialidade } : {}),
+        ...(cartao && prefiroPix ? { cobranca: "pix" } : {}),
+      },
     });
-
     if (r.ok) {
-      router.push(`/c/${slug}/agenda`);
+      // Sem cartao: o horario ficou reservado e o Pix vem agora, antes de a consulta existir de fato.
+      router.push(r.dados.status === "aguardando_pagamento" ? `/c/${slug}/pagamento/${r.dados.id}` : `/c/${slug}/agenda`);
       router.refresh();
       return;
+    }
+    if (r.erro.codigo === "PAGAMENTO_PENDENTE") {
+      const consultaId = (r.erro.detalhes as { consultaId?: string } | undefined)?.consultaId;
+      if (consultaId) router.push(`/c/${slug}/pagamento/${consultaId}`);
     }
     setErro(r.erro.mensagem);
     setMarcando(null);
@@ -84,7 +118,7 @@ export function MarcarConsulta({ slug, fuso, medicos }: { slug: string; fuso: st
         <select id="medico" value={medicoId} onChange={(e) => setMedicoId(e.target.value)} className="w-full max-w-md rounded-lg border border-linha bg-superficie px-3 py-2.5 shadow-[inset_0_1px_1px_rgb(15_23_42/0.03)] focus:border-selo focus:outline-none focus:ring-4 focus:ring-selo/15 text-base">
           {medicos.map((m) => (
             <option key={m.id} value={m.id}>
-              {m.nomeCompleto} — {m.especialidade ?? "clínica geral"} (CRM {m.crm}-{m.crmUf})
+              {m.nomeCompleto} — {linha === "teleconsulta" && especialidade ? nomeDaEspecialidade(especialidade) : linha === "pronto_atendimento" ? "Clínico geral" : (m.especialidade ?? "clínica geral")} (CRM {m.crm}-{m.crmUf})
             </option>
           ))}
         </select>
@@ -140,6 +174,35 @@ export function MarcarConsulta({ slug, fuso, medicos }: { slug: string; fuso: st
         ajuda="Uma linha sobre o que você sente. Não é o prontuário: é só para o profissional se preparar."
       />
 
+      {valorCentavos !== null ? (
+        <div className="max-w-md rounded-xl border border-linha bg-superficie-alt p-4 text-sm">
+          {usaCartao ? (
+            <>
+              <p>
+                <strong>{emReais(valorCentavos)}</strong> no cartão final <strong>{cartao!.ultimos4}</strong>, debitado só quando a consulta terminar. Se a consulta for cancelada, nada é cobrado.
+              </p>
+              <button type="button" onClick={() => setPrefiroPix(true)} className="mt-2 text-selo underline underline-offset-4">
+                Prefiro pagar por Pix agora
+              </button>
+            </>
+          ) : (
+            <>
+              <p>
+                <strong>{emReais(valorCentavos)}</strong> por Pix. Ao escolher o horário ele fica reservado por 20 minutos, e o Pix aparece em seguida para confirmar.
+              </p>
+              {cartao && !cartao.vencido ? (
+                <button type="button" onClick={() => setPrefiroPix(false)} className="mt-2 text-selo underline underline-offset-4">
+                  Usar o cartão final {cartao.ultimos4}
+                </button>
+              ) : linha ? (
+                <Link href={`/c/${slug}/cartao`} className="mt-2 inline-block text-selo underline underline-offset-4">
+                  Cadastrar um cartão e pagar só no final
+                </Link>
+              ) : null}
+            </>
+          )}
+        </div>
+      ) : null}
       {erro ? <Aviso tipo="erro">{erro}</Aviso> : null}
       <p className="text-sm text-tinta-suave">Escolher o horário já marca a consulta.</p>
     </div>

@@ -14,7 +14,7 @@ export default async function PaginaPrecos({ params }: { params: Promise<{ clini
   if (!temPapel(clinica, "admin_clinica")) notFound();
 
   const [precos, medicos] = await Promise.all([
-    chamarApi<{ tipo: string; medicoId: string | null; valorCentavos: number }[]>("/precos", { token, clinica: slug }),
+    chamarApi<{ tipo: string; medicoId: string | null; especialidade: string | null; valorCentavos: number }[]>("/precos", { token, clinica: slug }),
     chamarApi<MedicoResumo[]>("/medicos", { token, clinica: slug }),
   ]);
 
@@ -23,8 +23,7 @@ export default async function PaginaPrecos({ params }: { params: Promise<{ clini
       <div className="space-y-1">
         <h1 className="text-2xl text-tinta sm:text-[1.75rem]">Valores</h1>
         <p className="text-tinta-suave">
-          Enquanto não houver valor definido, os pacientes marcam consulta sem pagar — util para quem cobra por fora da
-          plataforma.
+          Quanto custa cada atendimento: pronto atendimento (clínico geral) e teleconsulta (especialista), no modo imediato e no agendado.
         </p>
       </div>
       <EditorDePrecos

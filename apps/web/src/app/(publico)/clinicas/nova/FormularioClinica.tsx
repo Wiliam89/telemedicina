@@ -12,12 +12,13 @@ import { cnpjValido, soDigitos, sugerirSlug } from "@/lib/validacao";
 
 type Erros = Partial<Record<"nomeFantasia" | "razaoSocial" | "cnpj" | "slug", string>>;
 
-export function FormularioClinica() {
+/** `slugFixo`: a configuracao inicial da plataforma unica (ADR-0022) - o endereco ja esta decidido. */
+export function FormularioClinica({ slugFixo }: { slugFixo?: string } = {}) {
   const router = useRouter();
   const [nomeFantasia, setNome] = useState("");
   const [razaoSocial, setRazao] = useState("");
   const [cnpj, setCnpj] = useState("");
-  const [slug, setSlug] = useState("");
+  const [slug, setSlug] = useState(slugFixo ?? "");
   const [slugTocado, setSlugTocado] = useState(false);
   const [erros, setErros] = useState<Erros>({});
   const [erroGeral, setErroGeral] = useState<string | null>(null);
@@ -25,7 +26,7 @@ export function FormularioClinica() {
 
   function validar(): Erros {
     const e: Erros = {};
-    if (nomeFantasia.trim().length < 3) e.nomeFantasia = "Informe o nome da clínica.";
+    if (nomeFantasia.trim().length < 3) e.nomeFantasia = slugFixo ? "Informe o nome que os pacientes vão ver." : "Informe o nome da clínica.";
     if (razaoSocial.trim().length < 3) e.razaoSocial = "Informe a razão social do CNPJ.";
     if (!cnpjValido(cnpj)) e.cnpj = "Este CNPJ não é válido. Confira os dígitos.";
     if (!/^[a-z0-9][a-z0-9-]{2,38}[a-z0-9]$/.test(slug)) e.slug = "De 4 a 40 letras minusculas, numeros ou hifen.";
@@ -59,7 +60,16 @@ export function FormularioClinica() {
       router.refresh();
       return;
     }
-    if (r.status === 409 && r.erro.codigo === "ENDERECO_EM_USO") setErros({ slug: "Este endereço já está em uso. Escolha outro." });
+    if (r.status === 403) setErroGeral(r.erro.codigo === "SO_A_ADMINISTRACAO" ? "A configuração inicial é feita pela administração da plataforma. Se é você, entre com o e-mail de administração." : r.erro.mensagem);
+    else if (r.status === 409 && r.erro.codigo === "ENDERECO_EM_USO") {
+      // Na plataforma unica: alguem acabou de configurar. E so seguir.
+      if (slugFixo) {
+        router.push("/clinicas");
+        router.refresh();
+        return;
+      }
+      setErros({ slug: "Este endereço já está em uso. Escolha outro." });
+    }
     else if (r.status === 409) setErros({ cnpj: "Já existe uma clínica com este CNPJ." });
     else if (r.status === 400 && Array.isArray(r.erro.detalhes)) {
       const doServidor: Erros = {};
@@ -74,19 +84,19 @@ export function FormularioClinica() {
     <form onSubmit={enviar} className="space-y-5" noValidate>
       <Campo
         id="nomeFantasia"
-        rotulo="Nome da clínica"
+        rotulo={slugFixo ? "Nome do serviço" : "Nome da clínica"}
         required
         value={nomeFantasia}
         onChange={(e) => {
           setNome(e.target.value);
-          if (!slugTocado) setSlug(sugerirSlug(e.target.value));
+          if (!slugTocado && !slugFixo) setSlug(sugerirSlug(e.target.value));
         }}
         erro={erros.nomeFantasia}
-        ajuda="Como os pacientes conhecem a clínica."
+        ajuda={slugFixo ? "Como os pacientes vão conhecer o atendimento." : "Como os pacientes conhecem a clínica."}
       />
       <Campo id="razaoSocial" rotulo="Razão social" required value={razaoSocial} onChange={(e) => setRazao(e.target.value)} erro={erros.razaoSocial} ajuda="Como consta no CNPJ." />
       <Campo id="cnpj" rotulo="CNPJ" inputMode="numeric" required placeholder="00.000.000/0000-00" value={cnpj} onChange={(e) => setCnpj(e.target.value)} erro={erros.cnpj} />
-      <Campo
+      {slugFixo ? null : <Campo
         id="slug"
         rotulo="Endereço da clínica no sistema"
         required
@@ -96,11 +106,11 @@ export function FormularioClinica() {
           setSlug(sugerirSlug(e.target.value));
         }}
         erro={erros.slug}
-        ajuda={<>A equipe acessara por <span className="font-mono">/c/{slug || "sua-clinica"}</span>. Escolha com calma: mudar depois quebra os links salvos.</>}
-      />
+        ajuda={<>A equipe acessará por <span className="font-mono">/c/{slug || "sua-clinica"}</span>. Escolha com calma: mudar depois quebra os links salvos.</>}
+      />}
       {erroGeral ? <Aviso tipo="erro">{erroGeral}</Aviso> : null}
       <Botao type="submit" carregando={carregando} className="w-full">
-        Criar clínica
+        {slugFixo ? "Concluir configuração" : "Criar clínica"}
       </Botao>
     </form>
   );

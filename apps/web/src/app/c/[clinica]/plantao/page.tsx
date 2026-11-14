@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import type { LinhaDeAtendimento, PainelDeChamados } from "@tele/shared";
+import { CabecalhoDaPagina } from "@/componentes/ui";
 import { chamarApi } from "@/lib/api";
 import { contextoDaClinica } from "@/lib/clinica";
 import { temPapel } from "@/lib/papeis";
 import { PainelDePlantao } from "./PainelDePlantao";
 
-export const metadata: Metadata = { title: "Plantão" };
+export const metadata: Metadata = { title: "Atendimento imediato" };
 
 export interface PlantaoResumo {
   id: string;
@@ -21,33 +23,42 @@ export interface PlantaoResumo {
 export interface FilaResumo {
   totalAguardando: number;
   medicosDePlantao: number;
-  lista: { id: string; posicao: number; nome: string; queixa: string | null; status: string; esperandoMinutos: number }[];
+  lista: { id: string; posicao: number; nome: string; queixa: string | null; status: string; esperandoMinutos: number; linha?: LinhaDeAtendimento; especialidade?: string | null }[];
 }
 
-/** O painel de quem atende: escala, fila e o botao de chamar o proximo. */
+/**
+ * O painel do atendimento imediato (ADR-0025): o medico fica online e aceita
+ * os pedidos que chegam; a recepcao e a administracao acompanham a fila.
+ */
 export default async function PaginaPlantao({ params }: { params: Promise<{ clinica: string }> }) {
   const { clinica: slug } = await params;
   const { token, perfil, clinica } = await contextoDaClinica(slug);
-  if (!["medico", "recepcao", "admin_clinica"].includes(clinica.papel)) notFound();
+  if (!temPapel(clinica, "medico", "recepcao", "admin_clinica")) notFound();
+  const souMedico = temPapel(clinica, "medico");
 
-  const [plantoes, fila] = await Promise.all([
+  const [plantoes, fila, chamados] = await Promise.all([
     chamarApi<PlantaoResumo[]>("/plantoes", { token, clinica: slug }),
     chamarApi<FilaResumo>("/fila", { token, clinica: slug }),
+    souMedico ? chamarApi<PainelDeChamados>("/fila/chamados", { token, clinica: slug }) : null,
   ]);
 
   return (
     <div className="space-y-8">
-      <div className="space-y-1">
-        <h1 className="text-2xl text-tinta sm:text-[1.75rem]">Plantão</h1>
-        <p className="text-tinta-suave">Pronto atendimento: os pacientes entram na fila e são chamados por ordem de chegada.</p>
-      </div>
-
+      <CabecalhoDaPagina
+        titulo="Atendimento imediato"
+        descricao={
+          souMedico
+            ? "Fique online para receber pacientes do pronto atendimento e das suas especialidades. O primeiro médico que aceita um pedido fica com o atendimento."
+            : "Pacientes aguardando atendimento agora e médicos online."
+        }
+      />
       <PainelDePlantao
         slug={slug}
-        souMedico={temPapel(clinica, "medico")}
+        souMedico={souMedico}
         meuId={perfil.id}
         plantoes={plantoes.ok ? plantoes.dados : []}
         fila={fila.ok ? fila.dados : { totalAguardando: 0, medicosDePlantao: 0, lista: [] }}
+        chamados={chamados?.ok ? chamados.dados : null}
       />
     </div>
   );

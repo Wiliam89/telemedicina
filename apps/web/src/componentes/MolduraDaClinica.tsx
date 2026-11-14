@@ -7,6 +7,9 @@ import {
   CalendarPlus,
   ChevronsUpDown,
   Clock3,
+  CreditCard,
+  IdCard,
+  Stethoscope,
   FileText,
   HeartPulse,
   Inbox,
@@ -35,6 +38,8 @@ interface Item {
   caminho: string;
   Icone: LucideIcon;
   papeis: PapelVinculo[] | "todos";
+  /** So para quem pediu (ou pode pedir) credenciamento e ainda nao atende (ADR-0022). */
+  soCandidato?: boolean;
 }
 
 const EQUIPE: PapelVinculo[] = ["medico", "recepcao", "admin_clinica"];
@@ -50,12 +55,16 @@ const GRUPOS: { titulo: string; itens: Item[] }[] = [
     itens: [
       { rotulo: "Painel", caminho: "inicio", Icone: LayoutDashboard, papeis: "todos" },
       { rotulo: "Agenda", caminho: "agenda", Icone: CalendarDays, papeis: "todos" },
-      { rotulo: "Marcar consulta", caminho: "marcar", Icone: CalendarPlus, papeis: ["paciente", "recepcao"] },
+      // ADR-0024: as duas linhas de atendimento do paciente, cada uma com "agora" e "agendar".
       { rotulo: "Pronto atendimento", caminho: "pronto-atendimento", Icone: Siren, papeis: ["paciente"] },
-      { rotulo: "Plantão e fila", caminho: "plantao", Icone: Siren, papeis: EQUIPE },
+      { rotulo: "Teleconsulta", caminho: "teleconsulta", Icone: Stethoscope, papeis: ["paciente"] },
+      { rotulo: "Marcar consulta", caminho: "marcar", Icone: CalendarPlus, papeis: ["recepcao"] },
+      { rotulo: "Atendimento imediato", caminho: "plantao", Icone: Siren, papeis: EQUIPE },
       { rotulo: "Pacientes", caminho: "pacientes", Icone: Users, papeis: EQUIPE },
       { rotulo: "Minha saúde", caminho: "minha-saude", Icone: HeartPulse, papeis: ["paciente"] },
       { rotulo: "Documentos", caminho: "documentos", Icone: FileText, papeis: "todos" },
+      { rotulo: "Pagamento", caminho: "cartao", Icone: CreditCard, papeis: ["paciente"] },
+      { rotulo: "Credenciamento médico", caminho: "credenciamento", Icone: IdCard, papeis: ["paciente"], soCandidato: true },
     ],
   },
   {
@@ -63,6 +72,7 @@ const GRUPOS: { titulo: string; itens: Item[] }[] = [
     itens: [
       { rotulo: "Meus horários", caminho: "grade", Icone: Clock3, papeis: ["medico"] },
       { rotulo: "Equipe", caminho: "equipe", Icone: Users, papeis: ["admin_clinica"] },
+      { rotulo: "Credenciamentos", caminho: "credenciamentos", Icone: IdCard, papeis: ["admin_clinica"] },
       { rotulo: "Valores", caminho: "precos", Icone: Tags, papeis: ["admin_clinica"] },
       { rotulo: "Indicadores", caminho: "indicadores", Icone: BarChart3, papeis: ["admin_clinica"] },
       { rotulo: "Pedidos LGPD", caminho: "privacidade", Icone: Inbox, papeis: ["admin_clinica"] },
@@ -71,13 +81,13 @@ const GRUPOS: { titulo: string; itens: Item[] }[] = [
   },
 ];
 
-function Menu_({ clinica, aoNavegar }: { clinica: ClinicaResumo; aoNavegar?: () => void }) {
+function Menu_({ clinica, aoNavegar, candidato }: { clinica: ClinicaResumo; aoNavegar?: () => void; candidato?: boolean }) {
   const caminhoAtual = usePathname();
   return (
-    <nav aria-label="Menu da clínica" className="space-y-6">
+    <nav aria-label="Menu principal" className="space-y-6">
       {GRUPOS.map((g) => {
         const meus = clinica.papeis ?? [clinica.papel];
-        const itens = g.itens.filter((i) => i.papeis === "todos" || i.papeis.some((p) => meus.includes(p)));
+        const itens = g.itens.filter((i) => (i.papeis === "todos" || i.papeis.some((p) => meus.includes(p))) && (!i.soCandidato || (candidato && !meus.includes("medico"))));
         if (itens.length === 0) return null;
         return (
           <div key={g.titulo} className="space-y-1">
@@ -114,12 +124,14 @@ function Lateral({
   nome,
   aoNavegar,
   comSino,
+  candidato,
 }: {
   clinica: ClinicaResumo;
   outras: ClinicaResumo[];
   nome: string;
   aoNavegar?: () => void;
   comSino?: boolean;
+  candidato?: boolean;
 }) {
   return (
     <div className="flex h-full flex-col bg-marinho text-white">
@@ -144,7 +156,7 @@ function Lateral({
       ) : null}
 
       <div className="flex-1 overflow-y-auto px-3 py-3">
-        <Menu_ clinica={clinica} aoNavegar={aoNavegar} />
+        <Menu_ clinica={clinica} aoNavegar={aoNavegar} candidato={candidato} />
       </div>
 
       <div className="border-t border-white/10 p-3">
@@ -176,11 +188,14 @@ export function MolduraDaClinica({
   clinica,
   outras,
   nome,
+  candidato,
   children,
 }: {
   clinica: ClinicaResumo;
   outras: ClinicaResumo[];
   nome: string;
+  /** A pessoa tem CRM cadastrado e ainda nao atende: mostra o credenciamento no menu. */
+  candidato?: boolean;
   children: ReactNode;
 }) {
   const [aberto, setAberto] = useState(false);
@@ -198,14 +213,14 @@ export function MolduraDaClinica({
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[16.5rem_1fr]">
       <aside className="sticky top-0 hidden h-screen lg:block">
-        <Lateral clinica={clinica} outras={outras} nome={nome} comSino />
+        <Lateral clinica={clinica} outras={outras} nome={nome} comSino candidato={candidato} />
       </aside>
 
       {aberto ? (
         <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Menu">
           <button className="absolute inset-0 bg-marinho/50 backdrop-blur-sm" aria-label="Fechar menu" onClick={() => setAberto(false)} />
           <div className="relative h-full w-72 max-w-[85vw] shadow-flutuante">
-            <Lateral clinica={clinica} outras={outras} nome={nome} aoNavegar={() => setAberto(false)} />
+            <Lateral clinica={clinica} outras={outras} nome={nome} aoNavegar={() => setAberto(false)} candidato={candidato} />
             <button
               onClick={() => setAberto(false)}
               className="absolute right-3 top-5 rounded-lg p-1.5 text-white/70 hover:bg-white/10 hover:text-white"
@@ -237,8 +252,8 @@ export function MolduraDaClinica({
                 <p className="font-semibold">{NOME_DA_SITUACAO_CRM[clinica.situacaoCrm]}</p>
                 <p>
                   {clinica.situacaoCrm === "recusado"
-                    ? "A administração da clínica recusou o CRM informado. Confira seu cadastro e fale com ela."
-                    : "Até a administração da clínica conferir seu CRM no Conselho, você não emite documentos, não abre plantão e não recebe novas marcações."}
+                    ? "A administração recusou o CRM informado. Confira seu cadastro e fale com ela."
+                    : "Até a administração conferir seu CRM no Conselho, você não emite documentos, não fica online e não recebe novas marcações."}
                 </p>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import type { ConsultaResumo } from "@tele/shared";
+import type { ConsultaResumo, MeiosDePagamento, PendenciaDePagamento } from "@tele/shared";
+import { CabecalhoDaPagina } from "@/componentes/ui";
 import { chamarApi } from "@/lib/api";
 import { contextoDaClinica } from "@/lib/clinica";
 import { dataCurta, hora } from "@/lib/datas";
@@ -9,36 +10,52 @@ import { PagarConsulta } from "./PagarConsulta";
 export const metadata: Metadata = { title: "Pagamento" };
 
 /**
- * A tela de pagamento de uma consulta reservada. O horario esta preso
- * enquanto o pagamento nao acontece - e a tela diz isso, com o prazo.
+ * A tela de pagamento de uma consulta (ADR-0023). Dois casos:
+ *
+ *   RESERVA    consulta marcada por quem nao tem cartao: o horario esta preso
+ *              enquanto o Pix nao acontece - e a tela diz isso, com o prazo;
+ *   PENDENCIA  consulta ja realizada cuja cobranca no cartao nao passou.
+ *
+ * O valor e sempre o COMBINADO quando a consulta foi marcada, nao o que a
+ * tabela de precos diz hoje.
  */
 export default async function PaginaPagamento({ params }: { params: Promise<{ clinica: string; consulta: string }> }) {
   const { clinica: slug, consulta: consultaId } = await params;
-  const { token, perfil, clinica } = await contextoDaClinica(slug);
+  const { token, clinica } = await contextoDaClinica(slug);
 
   const hoje = new Date();
-  const de = new Date(hoje.getTime() - 15 * 86400000).toISOString().slice(0, 10);
+  const de = new Date(hoje.getTime() - 29 * 86400000).toISOString().slice(0, 10);
   const ate = new Date(hoje.getTime() + 60 * 86400000).toISOString().slice(0, 10);
-  const agenda = await chamarApi<ConsultaResumo[]>(`/consultas?de=${de}&ate=${ate}`, { token, clinica: slug });
+  const [agenda, pendencias, meios] = await Promise.all([
+    chamarApi<ConsultaResumo[]>(`/consultas?de=${de}&ate=${ate}`, { token, clinica: slug }),
+    chamarApi<PendenciaDePagamento[]>("/pagamentos/pendencias", { token, clinica: slug }),
+    chamarApi<MeiosDePagamento>("/cartoes", { token, clinica: slug }),
+  ]);
   const consulta = agenda.ok ? agenda.dados.find((c) => c.id === consultaId) : undefined;
-  if (!consulta) notFound();
+  const pendencia = pendencias.ok ? pendencias.dados.find((p) => p.consultaId === consultaId) : undefined;
+  // Pendencia antiga pode estar fora da janela da agenda: ela basta para pagar.
+  if (!consulta && !pendencia) notFound();
 
-  const precos = await chamarApi<{ tipo: string; medicoId: string | null; valorCentavos: number }[]>("/precos", { token, clinica: slug });
-  const doMedico = precos.ok ? precos.dados.find((p) => p.tipo === "agendada" && p.medicoId === consulta.medico.id) : undefined;
-  const padrao = precos.ok ? precos.dados.find((p) => p.tipo === "agendada" && p.medicoId === null) : undefined;
-  const valorCentavos = (doMedico ?? padrao)?.valorCentavos ?? null;
-
+  const quando = consulta?.inicio ?? pendencia!.realizadaEm;
   return (
     <div className="space-y-8">
-      <div className="space-y-1">
-        <h1 className="text-2xl text-tinta sm:text-[1.75rem]">Pagamento da consulta</h1>
-        <p className="text-tinta-suave">
-          {dataCurta(consulta.inicio, clinica.fusoHorario)} as {hora(consulta.inicio, clinica.fusoHorario)} · CRM{" "}
-          {consulta.medico.crm}-{consulta.medico.crmUf}
-        </p>
-      </div>
-
-      <PagarConsulta slug={slug} consultaId={consultaId} status={consulta.status} valorCentavos={valorCentavos} />
+      <CabecalhoDaPagina
+        titulo={pendencia ? "Pagamento pendente" : "Pagamento da consulta"}
+        descricao={
+          <>
+            Consulta de {dataCurta(quando, clinica.fusoHorario)} às {hora(quando, clinica.fusoHorario)}
+            {consulta ? ` · Dr(a). ${consulta.medico.nomeCompleto}` : pendencia ? ` · Dr(a). ${pendencia.medicoNome}` : ""}
+          </>
+        }
+      />
+      <PagarConsulta
+        slug={slug}
+        consultaId={consultaId}
+        status={consulta?.status ?? "concluida"}
+        valorCentavos={pendencia?.valorCentavos ?? consulta?.valorCombinadoCentavos ?? null}
+        pendencia={Boolean(pendencia)}
+        cartao={meios.ok ? meios.dados.cartao : null}
+      />
     </div>
   );
 }

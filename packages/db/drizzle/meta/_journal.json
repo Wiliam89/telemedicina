@@ -183,6 +183,13 @@
       "when": 1793485396000,
       "tag": "0025_cancelar_documento_assinado",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1794529136300,
+      "tag": "0026_plataforma_credenciamento_cobranca_linhas",
+      "breakpoints": true
     }
   ]
 }

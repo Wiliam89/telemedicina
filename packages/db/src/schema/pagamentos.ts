@@ -23,6 +23,7 @@
 import { sql } from "drizzle-orm";
 import { check, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { clinicas } from "./clinicas.js";
+import { cartoesSalvos } from "./cartoes.js";
 import { consultas } from "./consultas.js";
 import { perfis } from "./perfis.js";
 
@@ -53,6 +54,8 @@ export const pagamentos = pgTable(
     consultaId: uuid("consulta_id").references(() => consultas.id, { onDelete: "restrict" }),
 
     metodo: metodoPagamentoEnum("metodo").notNull(),
+    /** O cartao cadastrado que foi debitado (ADR-0023). Nulo no Pix. */
+    cartaoId: uuid("cartao_id").references(() => cartoesSalvos.id, { onDelete: "restrict" }),
     status: statusPagamentoEnum("status").notNull().default("pendente"),
 
     /** Tudo em centavos. bruto = clinica + plataforma + taxas. */

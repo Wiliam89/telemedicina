@@ -14,9 +14,10 @@
  * o provedor avisa (Modulo 10).
  */
 import { sql } from "drizzle-orm";
-import { check, index, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { check, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { cartoesSalvos } from "./cartoes.js";
 import { clinicas } from "./clinicas.js";
-import { consultas } from "./consultas.js";
+import { consultas, linhaAtendimentoEnum } from "./consultas.js";
 import { pacientes } from "./pacientes.js";
 import { pagamentos } from "./pagamentos.js";
 import { plantoes } from "./plantoes.js";
@@ -40,10 +41,18 @@ export const filaAtendimento = pgTable(
     pacienteId: uuid("paciente_id")
       .notNull()
       .references(() => pacientes.perfilId, { onDelete: "restrict" }),
-    /** Ninguem entra na fila sem pagamento. Obrigatorio desde o inicio. */
-    pagamentoId: uuid("pagamento_id")
-      .notNull()
-      .references(() => pagamentos.id, { onDelete: "restrict" }),
+    /**
+     * Ninguem entra na fila sem GARANTIA de pagamento (ADR-0023): ou o Pix ja
+     * confirmado, ou o cartao cadastrado que sera debitado ao final. Um dos
+     * dois e obrigatorio - a regra esta na trava do banco, mais abaixo.
+     */
+    pagamentoId: uuid("pagamento_id").references(() => pagamentos.id, { onDelete: "restrict" }),
+    cartaoId: uuid("cartao_id").references(() => cartoesSalvos.id, { onDelete: "restrict" }),
+    /** O valor mostrado ao paciente ao entrar: e o que sera cobrado. */
+    valorCombinadoCentavos: integer("valor_combinado_centavos"),
+    /** Pronto atendimento (clinico geral) ou teleconsulta de uma especialidade (ADR-0024). */
+    linha: linhaAtendimentoEnum("linha").notNull().default("pronto_atendimento"),
+    especialidade: text("especialidade"),
     status: statusFilaEnum("status").notNull().default("aguardando"),
     /** O que o paciente relata ao entrar na fila. Ajuda na triagem. */
     queixa: text("queixa"),
@@ -82,6 +91,11 @@ export const filaAtendimento = pgTable(
       "fila_exige_consentimento",
       sql`${t.status} <> 'aguardando' or (${t.consentimentoEm} is not null and ${t.consentimentoVersao} is not null)`,
     ),
+    check("fila_exige_garantia_de_pagamento", sql`${t.pagamentoId} is not null or (${t.cartaoId} is not null and ${t.valorCombinadoCentavos} is not null)`),
+    // Teleconsulta sempre tem especialidade; pronto atendimento nunca.
+    check("fila_especialidade_da_linha", sql`(${t.linha} = 'teleconsulta') = (${t.especialidade} is not null)`),
+    // "quem esta esperando por um ortopedista?" - a pergunta do despacho (ADR-0025).
+    index("fila_despacho").on(t.clinicaId, t.status, t.linha, t.especialidade, t.entrouEm),
     // "quem esta esperando agora, por ordem" - a consulta mais frequente da fila.
     index("fila_clinica_status_entrada").on(t.clinicaId, t.status, t.entrouEm),
     index("fila_paciente").on(t.pacienteId),
