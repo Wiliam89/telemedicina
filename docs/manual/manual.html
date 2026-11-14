@@ -134,8 +134,10 @@
     <li>Em <strong>Criar conta</strong>, informe e-mail e senha (mínimo de 8 caracteres, com letras e números).</li>
     <li>Na tela <strong>Seus dados</strong>, preencha nome, data de nascimento, telefone e CPF. Médico marca <em>“Sou médico(a)”</em> e informa CRM, UF e especialidade; para ele, o CPF é obrigatório, porque é o que confirma que o certificado é dele. Quem ainda não tem CPF cadastrado informa em <strong>Minha conta</strong>; depois de salvo, a troca é por pedido à clínica.</li>
     <li>Marque os três aceites: Termos de uso, Política de privacidade e Consentimento para telemedicina. Nenhum vem marcado e cada aceite é registrado com a versão do texto, data e IP.</li>
-    <li>Pronto: a pessoa entra numa clínica pelo link que a clínica divulga, por convite, ou abre a própria clínica.</li>
+    <li>Pronto: com a plataforma operando como clínica única (<span class="mono">PLATAFORMA_SLUG</span>), quem cria a conta <strong>já é paciente</strong> e cai direto no painel. Médico segue para o <strong>Credenciamento</strong> (seção 5.0).</li>
   </ol>
+  <h3>Confirmação do e-mail</h3>
+  <p>Com “Confirm email” ligado no Supabase, a tela mostra para qual e-mail o link foi enviado, orienta a olhar o spam e oferece <strong>Reenviar o e-mail</strong> (a cada 60 s). O link leva à tela <strong>Confirmar e-mail</strong>, que ativa a conta com um toque e funciona em qualquer aparelho. Link vencido ou já usado leva a uma tela que explica o que fazer. No login, conta ainda não confirmada também ganha o botão de reenvio. A configuração necessária no Supabase está em <span class="mono">docs/publicar.md</span>.</p>
   <figure><span class="recorte" style="width:110mm"><img src="imagens/03-aceitar-termos.jpg" alt="Aceite dos termos"></span><figcaption>Tela de aceite: aparece no cadastro e sempre que os termos mudam de versão.</figcaption></figure>
   <h3>Esqueci minha senha</h3>
   <ol class="passos">
@@ -152,8 +154,21 @@
   <p>As telas do paciente funcionam no celular e no computador. As imagens abaixo estão no formato de celular.</p>
   <figure class="duas"><img src="imagens/10-paciente-painel.jpg" alt="Painel"><img src="imagens/11-paciente-marcar.jpg" alt="Marcar"></figure>
   <figure style="margin-top:-3mm"><figcaption>Painel do paciente e marcação de consulta.</figcaption></figure>
-  <h3>4.1 Entrar numa clínica</h3>
-  <p>A clínica divulga um link do tipo <span class="mono">/entrar-na-clinica/clinica-demo</span> (site, QR Code, WhatsApp). O paciente cria a conta (ou entra) e passa a ser paciente daquela clínica.</p>
+  <h3>4.1 Duas linhas de atendimento</h3>
+  <table>
+    <tr><th></th><th>Agora (fila)</th><th>Agendado</th></tr>
+    <tr><td><strong>Pronto atendimento</strong></td><td>Clínico geral, sem escolher especialidade</td><td>Clínico geral, com dia e hora</td></tr>
+    <tr><td><strong>Teleconsulta</strong></td><td>Especialista da especialidade escolhida</td><td>Especialista escolhido, com dia e hora</td></tr>
+  </table>
+  <p>Em <strong>Teleconsulta</strong> aparecem só as especialidades que têm médico credenciado, com quantos estão online e o valor. Escolhida a linha, a pessoa escolhe <strong>Atendimento agora</strong> ou <strong>Agendar horário</strong>.</p>
+  <h3>4.1b Pagamento: cartão (opcional) ou Pix</h3>
+  <ul>
+    <li><strong>Com cartão cadastrado</strong> (menu <strong>Pagamento</strong>): nada é pago antes. O valor mostrado na hora de marcar ou de entrar na fila é debitado quando o médico encerra a consulta. Consulta cancelada não é cobrada. Dá para escolher Pix numa consulta específica.</li>
+    <li><strong>Sem cartão</strong>: o Pix aparece antes. No agendado, o horário fica reservado por 20 minutos; no imediato, a pessoa entra na fila sozinha assim que o Pix é confirmado.</li>
+    <li>Se o cartão for recusado no fim da consulta, o paciente recebe aviso, vê a pendência no painel e paga por Pix (ou tenta o cartão de novo). Enquanto deve, não marca nova consulta.</li>
+    <li>O número do cartão vai direto para o serviço de pagamento: a plataforma guarda só bandeira e quatro últimos dígitos.</li>
+  </ul>
+  <div class="aviso">Em ambiente de teste (gateway simulado), use o cartão <span class="mono">4242 4242 4242 4242</span>; o <span class="mono">4000 0000 0000 0002</span> é recusado no fim da consulta. O Pix simulado tem o botão <strong>Simular o pagamento</strong>.</div>
   <h3>4.2 Marcar consulta</h3>
   <ol class="passos">
     <li>No menu, <strong>Marcar consulta</strong>. Escolha o médico (só aparecem médicos com CRM verificado), o dia e o horário livre.</li>
@@ -165,7 +180,7 @@
   <p>Na <strong>Agenda</strong>, o botão <strong>Entrar na consulta</strong> aparece perto do horário. O paciente precisa ter aceitado o termo de telemedicina na versão atual; se não aceitou, a tela leva até o aceite e volta. O navegador pede câmera e microfone. A sala é exclusiva dos dois e <strong>não é gravada</strong>. Depois que o médico encerra, ela não abre de novo.</p>
   <div class="aviso">Sem uma conta de vídeo configurada (<span class="mono">VIDEO_PROVEDOR=local_teste</span>), a sala abre e mostra um aviso no lugar da imagem; todo o resto do fluxo funciona. Para vídeo real, veja a seção 12.</div>
   <h3>4.4 Pronto atendimento</h3>
-  <p>Sem agendamento: o paciente descreve o que sente, aceita o termo, paga e entra na fila. Se a clínica ainda não recebe pela plataforma, a tela avisa antes que o pronto atendimento está indisponível. Tocar duas vezes em pagar não gera duas cobranças. A tela mostra a posição e a estimativa de espera, e leva o paciente para a sala quando um médico de plantão o chama. Há um alerta claro para emergências (SAMU 192).</p>
+  <p>Sem agendamento (vale para o pronto atendimento e para a teleconsulta imediata): o paciente descreve o que sente, aceita o termo, garante o pagamento (cartão ou Pix) e entra na fila. O pedido é enviado a todos os médicos online que podem atendê-lo; o primeiro que aceitar atende. A pessoa pode sair da fila enquanto ninguém aceitou. Se a clínica ainda não recebe pela plataforma, a tela avisa antes que o pronto atendimento está indisponível. Tocar duas vezes em pagar não gera duas cobranças. A tela mostra a posição e a estimativa de espera, e leva o paciente para a sala quando um médico de plantão o chama. Há um alerta claro para emergências (SAMU 192).</p>
 </section>
 
 <section>
@@ -194,6 +209,14 @@
 <!-- ============================== MEDICO ============================== -->
 <section class="quebra">
   <h2>5. Médico</h2>
+  <h3>5.0 Credenciamento</h3>
+  <ol class="passos">
+    <li>Crie a conta marcando <em>“Sou médico(a)”</em> (CRM e UF). Até ser aprovado, você é só mais uma conta: não vê pacientes, agenda nem fila.</li>
+    <li>Em <strong>Credenciamento médico</strong>: diga se atende o pronto atendimento e quais especialidades (até 6, com RQE).</li>
+    <li>Envie os documentos: identidade (frente e verso), carteira do CRM, diploma, título de especialista (se pediu especialidade) e, opcionalmente, comprovante de endereço.</li>
+    <li>Tire a <strong>selfie</strong> (no celular abre a câmera), leia e aceite o termo da conferência de identidade e toque em <strong>Enviar para análise</strong>.</li>
+    <li>A administração compara a selfie com a foto do documento, confere o CRM no CFM e decide: aprova (liberando o que foi comprovado), pede ajuste ou recusa, sempre com aviso no sino.</li>
+  </ol>
   <div class="aviso"><strong>CRM pendente:</strong> até a administração da clínica conferir o CRM no Conselho, um aviso aparece no topo e o médico <strong>não emite documentos, não abre plantão e não recebe marcações</strong>. Consultas já marcadas continuam.</div>
   <div class="dica"><strong>Sessão por inatividade:</strong> para quem trabalha na clínica, a sessão encerra depois de 30 minutos sem uso, com um aviso 2 minutos antes e o botão <strong>Continuar conectado</strong>. Durante a videochamada nunca encerra, e o rascunho aberto da evolução é salvo antes de sair.</div>
   <h3>5.1 Meus horários</h3>
@@ -227,7 +250,9 @@
 
 <section>
   <figure><span class="recorte"><img src="imagens/24-medico-graficos.jpg" alt="Gráficos"></span><figcaption>Sinais vitais: um gráfico por medida, com o valor exato ao passar o mouse e a tabela completa abaixo.</figcaption></figure>
-  <h3>5.6 Plantão e fila</h3>
+  <h3>5.6 Atendimento imediato (ficar online)</h3>
+  <p>Em <strong>Atendimento imediato</strong>, toque em <strong>Ficar online</strong> (6 horas). Os pacientes que você pode atender (pronto atendimento, se liberado, e as suas especialidades) aparecem na lista com um toque sonoro; com <strong>Ativar alertas</strong>, o aviso aparece mesmo com a aba em segundo plano. O mesmo pedido aparece para todos os colegas aptos: quem toca <strong>Aceitar</strong> primeiro vai direto para o atendimento, e para os demais o pedido some. <strong>Ficar offline</strong> é recusado com atendimento em curso.</p>
+  <h3>5.6b Plantão e fila (texto anterior)</h3>
   <p>Em <strong>Plantão e fila</strong>: <strong>Entrar de plantão agora (6 horas)</strong>, depois <strong>Chamar o próximo</strong>. A fila respeita a prioridade e a ordem de chegada, e dois médicos nunca chamam o mesmo paciente. Encerrar o plantão é recusado se houver atendimento em curso.</p>
   <figure><img src="imagens/26-medico-plantao.jpg" alt="Plantão"><figcaption>Plantão: escala e fila da clínica.</figcaption></figure>
   <h3>5.7 Notificações</h3>
@@ -258,6 +283,8 @@
 </section>
 
 <section>
+  <h3>7.1b Credenciamentos</h3>
+  <p>Em <strong>Credenciamentos</strong> ficam os pedidos dos médicos. Para cada um: abra os documentos (link temporário, cada abertura fica registrada), toque em <strong>Ver a selfie ao lado do documento</strong> e registre <strong>É a mesma pessoa</strong> ou <strong>Não confirmo</strong> (com motivo). Confira o CRM no CFM e, na decisão, marque o que liberar. Sem identidade confirmada não é possível aprovar, e ninguém decide o próprio pedido. Com um serviço de reconhecimento facial configurado (<span class="mono">IDENTIDADE_PROVEDOR=externo</span>), o resultado chega sozinho e aparece com a semelhança informada.</p>
   <h3>7.2 Verificar o CRM dos médicos</h3>
   <ol class="passos">
     <li>Em <strong>Equipe → Verificação de CRM</strong>, clique em <strong>Verificar CRM</strong>.</li>
@@ -350,6 +377,18 @@
     <tr><td>☐</td><td>Com a recepção suspensa, tente aceitar um convite antigo dela.</td><td>Recusado: só “Reativar” devolve o acesso.</td></tr>
     <tr><td>☐</td><td>Indicadores → troque entre 7, 30 e 90 dias.</td><td>Números e gráfico do período.</td></tr>
     <tr><td>☐</td><td>Como paciente, faça um pedido LGPD para a clínica; como admin, responda “Concluir” sem texto e depois com texto.</td><td>Sem texto: recusado; com texto: o paciente vê a resposta e recebe aviso.</td></tr>
+  </table>
+  <h3>D2. Plataforma como clínica, credenciamento, cobrança e despacho</h3>
+  <table class="check">
+    <tr><th></th><th>Ação</th><th>Resultado esperado</th></tr>
+    <tr><td>☐</td><td>Crie uma conta nova de paciente.</td><td>Depois dos dados, cai direto no painel, sem escolher nem criar clínica.</td></tr>
+    <tr><td>☐</td><td>Crie uma conta marcando “Sou médico(a)”.</td><td>Vai para Credenciamento; não vê pacientes, agenda nem atendimento imediato.</td></tr>
+    <tr><td>☐</td><td>Envie os documentos e a selfie; tente enviar sem aceitar o termo.</td><td>Sem o aceite: recusado. Com: “Em análise” e aviso no sino da administração.</td></tr>
+    <tr><td>☐</td><td>Como admin, tente aprovar antes de conferir a identidade.</td><td>Botão bloqueado; ao conferir “É a mesma pessoa”, a aprovação libera o médico.</td></tr>
+    <tr><td>☐</td><td>Paciente sem cartão: Teleconsulta → especialidade → Agendar horário.</td><td>Horário reservado e tela de Pix (em teste, “Simular o pagamento”).</td></tr>
+    <tr><td>☐</td><td>Pagamento → cadastre o cartão 4242 4242 4242 4242; entre no pronto atendimento.</td><td>Nada é cobrado antes. Ao médico encerrar, o sino avisa “Consulta paga no cartão”.</td></tr>
+    <tr><td>☐</td><td>Dois médicos aptos online; um paciente entra na fila.</td><td>O pedido aparece (com som) para os dois; quem aceita primeiro atende, para o outro ele some.</td></tr>
+    <tr><td>☐</td><td>Cartão 4000 0000 0000 0002: faça e encerre uma consulta.</td><td>Aviso de cobrança recusada, pendência no painel e bloqueio de nova consulta até pagar por Pix.</td></tr>
   </table>
   <h3>E. Público</h3>
   <table class="check">

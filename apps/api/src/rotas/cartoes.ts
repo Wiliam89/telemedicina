@@ -107,7 +107,7 @@ export async function rotasCartoes(app: FastifyInstance, opcoes: { banco: Banco;
         .update(cartoesSalvos)
         .set({ status: "removido", removidoEm: new Date() })
         .where(and(eq(cartoesSalvos.perfilId, req.usuario.id), eq(cartoesSalvos.clinicaId, req.contexto.clinicaId), eq(cartoesSalvos.status, "ativo")))
-        .returning({ id: cartoesSalvos.id });
+        .returning({ id: cartoesSalvos.id, provedorClienteId: cartoesSalvos.provedorClienteId, provedorCartaoId: cartoesSalvos.provedorCartaoId });
       const [c] = await tx
         .insert(cartoesSalvos)
         .values({
@@ -127,6 +127,13 @@ export async function rotasCartoes(app: FastifyInstance, opcoes: { banco: Banco;
       if (anteriores.length > 0) {
         const ids = anteriores.map((a) => a.id);
         await tx.update(consultas).set({ cartaoId: c!.id }).where(and(inArray(consultas.cartaoId, ids), inArray(consultas.status, ["agendada", "em_andamento"])));
+        // Tambem as ja realizadas que ainda nao foram cobradas: o cartao antigo nao pode ser debitado depois da troca.
+        await tx.execute(sql`
+          update consultas c set cartao_id = ${c!.id}
+          where c.cartao_id in (${sql.join(ids.map((i) => sql`${i}::uuid`), sql`, `)})
+            and c.status = 'concluida' and c.forma_de_cobranca = 'cartao_ao_final'
+            and not exists (select 1 from pagamentos p where p.consulta_id = c.id and (p.status in ('confirmado', 'autorizado', 'estornado') or (p.status = 'pendente' and p.provedor_id is not null)))
+        `);
         await tx.update(filaAtendimento).set({ cartaoId: c!.id }).where(and(inArray(filaAtendimento.cartaoId, ids), inArray(filaAtendimento.status, ["aguardando", "chamado", "em_atendimento"])));
       }
       await registrarAuditoria(tx, {
@@ -139,11 +146,20 @@ export async function rotasCartoes(app: FastifyInstance, opcoes: { banco: Banco;
         detalhes: { bandeira: c!.bandeira, ultimos4: c!.ultimos4, autorizacaoVersao: VERSAO_DA_AUTORIZACAO_DE_COBRANCA, substituiu: anteriores.length > 0 },
         ip: req.ip,
       });
-      return c!;
+      return { novo: c!, anteriores };
     });
 
+    // O cartao substituido sai tambem do provedor: so assim ele deixa de poder ser cobrado de fato.
+    for (const antigo of novo.anteriores) {
+      try {
+        await contexto.provedor.removerCartao(contexto.credenciais, { clienteId: antigo.provedorClienteId, cartaoId: antigo.provedorCartaoId });
+      } catch (erro) {
+        req.log.warn({ err: erro, cartaoId: antigo.id }, "nao foi possivel apagar no provedor o cartao substituido");
+      }
+    }
+
     void reply.code(201);
-    return { ok: true, dados: resumir(novo) };
+    return { ok: true, dados: resumir(novo.novo) };
   });
 
   app.post("/cartoes/:id/remover", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<{ removido: true }>> => {

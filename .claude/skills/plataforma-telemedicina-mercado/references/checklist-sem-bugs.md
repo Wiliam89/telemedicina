@@ -41,6 +41,9 @@ Para cada item, peça evidência: teste, arquivo e linha, ou medição. Pense se
 - [ ] Recusa no final vira pendência, avisa o paciente e bloqueia novo atendimento
 - [ ] Cartão com consulta por cobrar não pode ser removido
 - [ ] Valor cobrado é o combinado, não o da tabela no dia
+- [ ] Trocar de cartão antes da cobrança: debita o cartão novo; o antigo sai do provedor
+- [ ] Pix em aberto não pode ser trocado por cartão (pagamento em dobro)
+- [ ] Cobrança "em análise" no provedor é conciliada sem depender do aviso
 
 ## Credenciamento e identidade (ADR-0022)
 - [ ] Médico sem aprovação não vê paciente, agenda nem fila
@@ -51,7 +54,7 @@ Para cada item, peça evidência: teste, arquivo e linha, ou medição. Pense se
 ## Despacho do atendimento imediato (ADR-0025)
 - [ ] Pedido chega a todos os médicos aptos online, e só a eles
 - [ ] Dois aceites ao mesmo tempo: um vence, o outro recebe "já aceito"
-- [ ] Médico offline não lê queixa de ninguém
+- [ ] Médico offline não lê queixa de ninguém (nem em `/fila/chamados`, nem em `GET /fila`)
 - [ ] Especialidade sem médico não aceita paciente na fila
 
 ## Confirmação de e-mail

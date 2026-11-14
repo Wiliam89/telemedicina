@@ -22,6 +22,10 @@ import { and, desc, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
+  cartoesSalvos,
+  credenciamentosMedicos,
+  documentosDoMedico,
+  verificacoesDeIdentidade,
   anexos,
   auditoria,
   clinicas,
@@ -108,6 +112,15 @@ export async function rotasLgpd(app: FastifyInstance, opcoes: { banco: Banco; au
       .limit(1);
     if (!pessoa) throw new ErroHttp(404, "PERFIL_NAO_ENCONTRADO", "Você ainda não tem perfil.");
 
+    const [meusCartoes, meuCredenciamento, meusDocumentosProfissionais, minhasConferencias] = await Promise.all([
+      // ADR-0023: o que guardamos do cartao (nunca o numero) e a autorizacao dada.
+      banco.select({ bandeira: cartoesSalvos.bandeira, final: cartoesSalvos.ultimos4, validadeMes: cartoesSalvos.validadeMes, validadeAno: cartoesSalvos.validadeAno, status: cartoesSalvos.status, autorizadoEm: cartoesSalvos.autorizadoEm, autorizacaoVersao: cartoesSalvos.autorizacaoVersao, removidoEm: cartoesSalvos.removidoEm }).from(cartoesSalvos).where(eq(cartoesSalvos.perfilId, eu)),
+      // ADR-0022: o pedido de credenciamento, os documentos enviados (so os dados do arquivo) e as conferencias de identidade.
+      banco.select({ status: credenciamentosMedicos.status, especialidades: credenciamentosMedicos.especialidadesSolicitadas, prontoAtendimento: credenciamentosMedicos.querProntoAtendimento, rqe: credenciamentosMedicos.rqe, consentimentoBiometriaEm: credenciamentosMedicos.consentimentoBiometriaEm, consentimentoBiometriaVersao: credenciamentosMedicos.consentimentoBiometriaVersao, enviadoEm: credenciamentosMedicos.enviadoEm, decididoEm: credenciamentosMedicos.decididoEm, motivo: credenciamentosMedicos.motivo }).from(credenciamentosMedicos).where(eq(credenciamentosMedicos.medicoId, eu)),
+      banco.select({ tipo: documentosDoMedico.tipo, tipoArquivo: documentosDoMedico.tipoArquivo, tamanhoBytes: documentosDoMedico.tamanhoBytes, hash: documentosDoMedico.hash, enviadoEm: documentosDoMedico.criadoEm }).from(documentosDoMedico).where(eq(documentosDoMedico.medicoId, eu)),
+      banco.select({ metodo: verificacoesDeIdentidade.provedor, resultado: verificacoesDeIdentidade.status, semelhanca: verificacoesDeIdentidade.pontuacao, observacao: verificacoesDeIdentidade.observacao, em: verificacoesDeIdentidade.criadoEm }).from(verificacoesDeIdentidade).where(eq(verificacoesDeIdentidade.medicoId, eu)),
+    ]);
+
     const [meusVinculos, minhasConsultas, meusDocumentos, minhasEvolucoes, fichas, sinais, meusAnexos, aceites, pedidos, meusPagamentos, minhaFila] = await Promise.all([
       banco.select({ clinica: clinicas.nomeFantasia, papel: vinculos.papel, status: vinculos.status, desde: vinculos.criadoEm }).from(vinculos).innerJoin(clinicas, eq(clinicas.id, vinculos.clinicaId)).where(eq(vinculos.perfilId, eu)),
       banco.select({ clinica: clinicas.nomeFantasia, inicio: consultas.inicio, fim: consultas.fim, status: consultas.status, motivo: consultas.motivo }).from(consultas).innerJoin(clinicas, eq(clinicas.id, consultas.clinicaId)).where(eq(consultas.pacienteId, eu)),
@@ -147,6 +160,17 @@ export async function rotasLgpd(app: FastifyInstance, opcoes: { banco: Banco; au
       prontoAtendimento: minhaFila,
       consentimentos: aceites,
       solicitacoes: pedidos,
+      cartoes: meusCartoes,
+      ...(meuCredenciamento.length > 0 || meusDocumentosProfissionais.length > 0
+        ? {
+            credenciamentoMedico: {
+              pedidos: meuCredenciamento,
+              // As imagens nao vao no arquivo: so a ficha de cada uma. Copia das imagens: pedido ao encarregado.
+              documentosEnviados: meusDocumentosProfissionais,
+              conferenciasDeIdentidade: minhasConferencias,
+            },
+          }
+        : {}),
     };
 
     return reply

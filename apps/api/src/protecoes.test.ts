@@ -257,7 +257,12 @@ describe.skipIf(!temBanco)("fila", () => {
     const queixa = async (quem: string) => ((await chamar(quem, "GET", "/fila")).json().dados.lista as { queixa: string | null }[])[0]?.queixa;
     expect(await queixa(recepcao)).toBeNull();
     expect(await queixa(admin)).toBeNull();
+    // ADR-0025: medico offline nao le a queixa de ninguem; online e apto, le.
+    expect(await queixa(medico)).toBeNull();
+    const [plantao] = await banco.$client`insert into plantoes (clinica_id, medico_id, inicio, fim, status, aberto_em)
+      values (${clinicaId}, ${medico}, now() - interval '1 hour', now() + interval '5 hours', 'aberto', now()) returning id`;
     expect(await queixa(medico)).toBe("febre e tosse ha dois dias");
+    await banco.$client`update plantoes set status = 'encerrado', encerrado_em = now() where id = ${plantao!.id as string}`;
   });
 
   it("13. clique duplo nao coloca o paciente duas vezes na fila", async () => {

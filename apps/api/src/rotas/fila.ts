@@ -404,7 +404,10 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
       .where(and(eq(plantoes.clinicaId, req.contexto.clinicaId), eq(plantoes.status, "aberto"), gte(plantoes.fim, new Date())));
 
     // A queixa e informacao de saude: da equipe, so o medico le (LGPD, art. 6, III).
-    const leQueixa = req.contexto.papeis.includes("medico");
+    // ADR-0025: e, entre os medicos, so quem esta online e pode atender aquele pedido.
+    const meuPlantao = req.contexto.papeis.includes("medico") ? await plantaoAbertoDe(req.usuario.id, req.contexto.clinicaId) : null;
+    const minhaAptidao = meuPlantao ? await aptidaoDe(req.usuario.id) : null;
+    const leQueixa = (f: { linha: LinhaDeAtendimento; especialidade: string | null }) => Boolean(minhaAptidao && medicoAtende(minhaAptidao, f.linha, f.especialidade));
 
     return {
       ok: true as const,
@@ -427,7 +430,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
         // A lista completa e so para quem trabalha na clinica.
         lista: souEquipe
           ? aguardando.map((f, i) => ({
-              id: f.id, posicao: i + 1, nome: f.nome, queixa: leQueixa ? f.queixa : null, status: f.status, consultaId: f.consultaId,
+              id: f.id, posicao: i + 1, nome: f.nome, queixa: leQueixa(f) ? f.queixa : null, status: f.status, consultaId: f.consultaId,
               linha: f.linha, especialidade: f.especialidade,
               entrouEm: f.entrouEm.toISOString(),
               esperandoMinutos: Math.round((Date.now() - f.entrouEm.getTime()) / 60000),

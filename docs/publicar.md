@@ -209,6 +209,15 @@ Sem o passo 3, o link padrão continua funcionando, mas só abre a sessão no
 mesmo navegador do cadastro; em outro aparelho a pessoa vê "e-mail confirmado,
 entre com sua senha".
 
+## Ordem de publicação desta versão (migração 0026)
+
+O deploy não é atômico: por alguns minutos, a API antiga roda sobre o banco novo.
+
+1. Rode a migração no banco publicado (`CONFIRMAR_BANCO_REMOTO=sim pnpm db:migrar`) e `pnpm db:verificar-rls` (esperado: 50 políticas).
+2. Publique a **API** (Render) com as variáveis novas e espere o `/pronto` responder.
+3. Só então publique o **site** (Vercel).
+4. **Não** cadastre preço por especialidade nem deixe paciente entrar na fila com cartão antes do passo 2 terminar: a API antiga não entende esses dois dados novos.
+
 ## Plataforma como clínica única (ADR-0022)
 
 Na API (Render):

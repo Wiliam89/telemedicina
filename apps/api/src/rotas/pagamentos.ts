@@ -18,7 +18,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, notExists, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { consultas, filaAtendimento, pagamentos, perfis, precos, vinculos, type Banco } from "@tele/db";
+import { clinicas, consultas, filaAtendimento, pagamentos, perfis, precos, vinculos, type Banco } from "@tele/db";
 import type { Resposta } from "@tele/shared";
 import { especialidadeExiste, rotuloDoPedido, tipoDePreco } from "@tele/shared/atendimento";
 import { calcularComissao, ErroDePagamento, type Cobranca, type ContextoDePagamento, type PedidoDeCobranca, type ResolvedorDePagamento } from "../pagamento/index.js";
@@ -298,8 +298,12 @@ export async function rotasPagamentos(
         .limit(1);
       if (ativa) {
         const vencida = ativa.status === "pendente" && ativa.expiraEm !== null && ativa.expiraEm.getTime() <= Date.now();
-        // Trocou de meio (Pix em aberto, agora quer o cartao): a cobranca em aberto e substituida.
+        // Trocou de meio. Um Pix em aberto continua pagavel no banco: trocar agora
+        // permitiria pagar duas vezes. So depois que ele vencer.
         const outroMeio = ativa.status === "pendente" && (ativa.metodo === "pix") !== (dados.metodo === "pix");
+        if (!vencida && outroMeio && ativa.metodo === "pix") {
+          throw new ErroHttp(409, "PIX_EM_ABERTO", `Há um Pix em aberto para esta consulta${ativa.expiraEm ? ` até ${ativa.expiraEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}` : ""}. Pague esse Pix ou espere ele vencer para usar o cartão.`);
+        }
         if (!vencida && !outroMeio) return { ...ativa, reaproveitada: true };
         await tx.update(pagamentos).set({ status: "expirado", atualizadoEm: new Date() }).where(eq(pagamentos.id, ativa.id));
       }
@@ -646,6 +650,7 @@ export async function rotasPagamentos(
 
       if (novo === "confirmado" || novo === "autorizado") await confirmarConsultaPaga(tx, pagamentoId);
       if (novo === "recusado" || novo === "expirado" || novo === "estornado") await liberarConsulta(tx, pagamentoId);
+      if (novo === "recusado" && atual.status !== novo) await avisarRecusaNoFinal(tx, pagamentoId);
       if (novo === "estornado" && atual.status !== novo) await tratarEstorno(tx, pagamentoId, atual.clinicaId);
     });
   }
@@ -743,6 +748,27 @@ export async function rotasPagamentos(
         chave: `estorno:${pagamentoId}`,
       })),
     );
+  }
+
+  /** ADR-0023: a cobranca ao final, no cartao, foi recusada depois (pelo aviso do provedor). */
+  async function avisarRecusaNoFinal(tx: Transacao, pagamentoId: string): Promise<void> {
+    const [c] = await tx
+      .select({ id: consultas.id, clinicaId: consultas.clinicaId, pacienteId: consultas.pacienteId, forma: consultas.formaDeCobranca, status: consultas.status, slug: clinicas.slug })
+      .from(pagamentos)
+      .innerJoin(consultas, eq(consultas.id, pagamentos.consultaId))
+      .innerJoin(clinicas, eq(clinicas.id, consultas.clinicaId))
+      .where(eq(pagamentos.id, pagamentoId))
+      .limit(1);
+    if (!c || c.forma !== "cartao_ao_final" || c.status !== "concluida") return;
+    await notificar(tx, {
+      perfilId: c.pacienteId,
+      clinicaId: c.clinicaId,
+      tipo: "pagamento",
+      titulo: "Não conseguimos cobrar o seu cartão",
+      corpo: "A cobrança da sua consulta no cartão não foi aprovada. Pague a consulta por Pix para continuar usando a plataforma.",
+      link: `/c/${c.slug}/pagamento/${c.id}`,
+      chave: `cobranca_final:${pagamentoId}:recusado`,
+    });
   }
 
   /** Pagamento que nao veio: o horario volta a ficar livre. */

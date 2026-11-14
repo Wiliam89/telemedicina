@@ -559,3 +559,85 @@ describe.skipIf(!temBanco)("cartao cadastrado e Pix (ADR-0023)", () => {
     expect((await cobrar()).cobradas).toBe(0);
   });
 });
+
+describe.skipIf(!temBanco)("correcoes do supervisor", () => {
+  async function atenderEConcluir(paciente: string, medico: string, queixa = "febre e dor no corpo") {
+    const r = await chamar(paciente, "POST", "/fila", { queixa, usarCartao: true, consentimento: true });
+    expect(r.statusCode).toBe(201);
+    const aceite = await chamar(medico, "POST", `/fila/${r.json().dados.id as string}/aceitar`);
+    const consultaId = aceite.json().dados.consultaId as string;
+    expect((await chamar(medico, "POST", `/consultas/${consultaId}/status`, { status: "concluida" })).statusCode).toBe(200);
+    await sairDaFila(paciente);
+    return consultaId;
+  }
+
+  it("30. trocar de cartao antes da cobranca: a consulta e debitada no cartao NOVO", async () => {
+    const quem = pacientes[2]!;
+    const consultaId = await atenderEConcluir(quem, clinico);
+    // Troca de cartao antes de o agendador cobrar.
+    expect((await chamar(quem, "POST", "/cartoes", { tokenDoCartao: cartaoDe("5555"), autorizo: true })).statusCode).toBe(201);
+    await cobrar();
+    const [p] = await banco.$client`select p.status, c.ultimos4 from pagamentos p join cartoes_salvos c on c.id = p.cartao_id where p.consulta_id = ${consultaId}`;
+    expect(p).toMatchObject({ status: "confirmado", ultimos4: "5555" });
+  });
+
+  it("31. Pix em aberto nao pode ser trocado por cartao (seria pagar duas vezes)", async () => {
+    const id = randomUUID();
+    const inicio = new Date(Date.now() + 9 * 86400000);
+    await banco.$client`insert into consultas (id, clinica_id, paciente_id, medico_id, inicio, fim, status, marcado_por, expira_reserva_em, linha, valor_combinado_centavos)
+      values (${id}, ${clinicaId}, ${pacientes[1]!}, ${clinico}, ${inicio.toISOString()}::timestamptz, ${new Date(inicio.getTime() + 1800000).toISOString()}::timestamptz, 'aguardando_pagamento', ${pacientes[1]!}, ${new Date(Date.now() + 15 * 60000).toISOString()}::timestamptz, 'pronto_atendimento', 7000)`;
+    expect((await chamar(pacientes[1]!, "POST", `/consultas/${id}/pagamento`, { metodo: "pix" })).statusCode).toBe(201);
+    const r = await chamar(pacientes[1]!, "POST", `/consultas/${id}/pagamento`, { metodo: "cartao_credito", tokenDoCartao: "tok_qualquer" });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().erro.codigo).toBe("PIX_EM_ABERTO");
+    expect((await banco.$client`select 1 from pagamentos where consulta_id = ${id}`).length).toBe(1);
+  });
+
+  it("32. GET /fila: so le a queixa o medico online que pode atender aquele pedido", async () => {
+    const quem = pacientes[2]!;
+    expect((await chamar(quem, "POST", "/fila", { queixa: "garganta inflamada", usarCartao: true, consentimento: true })).statusCode).toBe(201);
+    const queixaVistaPor = async (m: string) => ((await chamar(m, "GET", "/fila")).json().dados.lista as { queixa: string | null }[]).map((f) => f.queixa).filter(Boolean);
+    expect(await queixaVistaPor(clinico)).toContain("garganta inflamada");
+    // Online, mas nao atende pronto atendimento.
+    expect(await queixaVistaPor(cardio)).toEqual([]);
+    // Atende pronto atendimento, mas esta offline.
+    expect(await queixaVistaPor(candidato)).toEqual([]);
+    expect(await queixaVistaPor(admin)).toEqual([]);
+    await sairDaFila(quem);
+  });
+
+  it("33. cobranca no cartao parada 'em analise' e conferida com o provedor e resolvida", async () => {
+    const quem = pacientes[2]!;
+    const consultaId = await atenderEConcluir(quem, clinico);
+    const [cartao] = await banco.$client`select id, provedor_cliente_id, provedor_cartao_id from cartoes_salvos where perfil_id = ${quem} and status = 'ativo'`;
+    // Simula o provedor: a cobranca existe la (aprovada), mas aqui ficou "pendente" e o aviso se perdeu.
+    const noProvedor = await new ProvedorLocalDePagamento().cobrar({ accessToken: "x", contaId: "x" }, {
+      chaveIdempotencia: randomUUID(), metodo: "cartao_credito", valorCentavos: 6000, comissaoPlataformaCentavos: 0, descricao: "teste",
+      pagador: { nome: "x", email: "" }, cartaoSalvo: { clienteId: cartao!.provedor_cliente_id as string, cartaoId: cartao!.provedor_cartao_id as string }, urlDeNotificacao: "http://x",
+    });
+    await banco.$client`insert into pagamentos (clinica_id, pagador_id, consulta_id, metodo, cartao_id, status, valor_centavos, valor_clinica_centavos, valor_plataforma_centavos, provedor, provedor_id, chave_idempotencia, criado_em, atualizado_em)
+      values (${clinicaId}, ${quem}, ${consultaId}, 'cartao_credito', ${cartao!.id as string}, 'pendente', 6000, 6000, 0, 'local_teste', ${noProvedor.idNoProvedor}, ${randomUUID()}, now() - interval '30 minutes', now() - interval '30 minutes')`;
+
+    // Enquanto pendente, nao se cobra de novo.
+    const rodada = await cobrar();
+    expect(rodada.cobradas).toBe(1);
+    const pagos = await banco.$client`select status from pagamentos where consulta_id = ${consultaId}`;
+    expect(pagos.map((p) => p.status)).toEqual(["confirmado"]);
+  });
+
+  it("34. a exportacao LGPD traz cartao, credenciamento e conferencias de identidade (sem imagem)", async () => {
+    const paciente = await chamar(pacientes[2]!, "GET", "/lgpd/meus-dados", undefined, { clinica: null });
+    expect(paciente.statusCode).toBe(200);
+    const dadosPaciente = JSON.parse(paciente.body) as { cartoes: { final: string }[] };
+    expect(dadosPaciente.cartoes.map((c) => c.final)).toContain("5555");
+    expect(paciente.body).not.toMatch(/card_local|cli_local/);
+
+    const medico = JSON.parse((await chamar(candidato, "GET", "/lgpd/meus-dados", undefined, { clinica: null })).body) as {
+      credenciamentoMedico: { pedidos: unknown[]; documentosEnviados: { tipo: string }[]; conferenciasDeIdentidade: { resultado: string }[] };
+    };
+    expect(medico.credenciamentoMedico.pedidos).toHaveLength(1);
+    expect(medico.credenciamentoMedico.documentosEnviados.map((d) => d.tipo)).toContain("selfie");
+    expect(medico.credenciamentoMedico.conferenciasDeIdentidade.map((c) => c.resultado)).toContain("aprovada");
+    expect(JSON.stringify(medico)).not.toMatch(/credenciamento\//);
+  });
+});

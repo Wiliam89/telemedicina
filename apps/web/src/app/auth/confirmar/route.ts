@@ -47,8 +47,8 @@ export async function GET(req: NextRequest) {
     const supabase = await criarClienteServidor();
     const { error } = await supabase.auth.exchangeCodeForSession(codigo);
     if (!error) {
-      destino.pathname = proximo;
-      return NextResponse.redirect(destino);
+      // `proximo` pode ter "?": montado como URL, e nao como caminho (senao vira %3F e a pagina nao existe).
+      return NextResponse.redirect(new URL(proximo, req.nextUrl.origin));
     }
   }
 

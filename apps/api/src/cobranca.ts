@@ -116,6 +116,17 @@ export interface OpcoesDaCobranca {
 export async function cobrarConsultasConcluidas(banco: Banco, resolvedor: ResolvedorDePagamento, opcoes: OpcoesDaCobranca): Promise<{ cobradas: number; recusadas: number; adiadas: number }> {
   const resultado = { cobradas: 0, recusadas: 0, adiadas: 0 };
 
+  // Na rodada do agendador, antes de cobrar o que falta, resolve o que ficou no meio do caminho.
+  if (!opcoes.consultaId) {
+    try {
+      const r = await conciliarCobrancasPendentes(banco, resolvedor);
+      resultado.cobradas += r.confirmadas;
+      resultado.recusadas += r.recusadas;
+    } catch (erro) {
+      opcoes.log?.error({ err: erro }, "conciliacao das cobrancas no cartao falhou");
+    }
+  }
+
   const candidatas = await banco
     .select({ id: consultas.id })
     .from(consultas)
@@ -148,6 +159,69 @@ export async function cobrarConsultasConcluidas(banco: Banco, resolvedor: Resolv
   return resultado;
 }
 
+/** Uma cobranca no cartao "em analise" no provedor ha mais que isto e conferida direto com ele. */
+const MINUTOS_ATE_CONCILIAR = 10;
+
+/**
+ * CONCILIACAO. O provedor pode responder "em analise" e decidir depois; o
+ * aviso dessa decisao pode se perder. Sem isto, a consulta nunca seria cobrada
+ * nem viraria pendencia. A cada rodada, as cobrancas no cartao paradas ha
+ * mais de 10 minutos sao consultadas no provedor.
+ */
+export async function conciliarCobrancasPendentes(banco: Banco, resolvedor: ResolvedorDePagamento, agora: Date = new Date()): Promise<{ confirmadas: number; recusadas: number }> {
+  const r = { confirmadas: 0, recusadas: 0 };
+  const paradas = await banco
+    .select({ id: pagamentos.id, clinicaId: pagamentos.clinicaId, provedorId: pagamentos.provedorId, consultaId: pagamentos.consultaId, pagadorId: pagamentos.pagadorId, cartaoId: pagamentos.cartaoId })
+    .from(pagamentos)
+    .where(
+      and(
+        eq(pagamentos.status, "pendente"),
+        eq(pagamentos.metodo, "cartao_credito"),
+        sql`${pagamentos.cartaoId} is not null and ${pagamentos.provedorId} is not null`,
+        sql`${pagamentos.atualizadoEm} < ${new Date(agora.getTime() - MINUTOS_ATE_CONCILIAR * 60000).toISOString()}::timestamptz`,
+      ),
+    )
+    .limit(25);
+
+  for (const p of paradas) {
+    const contexto = await resolvedor.para(p.clinicaId);
+    const atual = await contexto.provedor.consultar(contexto.credenciais, p.provedorId!);
+    const status = atual.status === "confirmado" || atual.status === "autorizado" ? "confirmado" : atual.status === "recusado" || atual.status === "expirado" ? "recusado" : null;
+
+    await banco.transaction(async (tx) => {
+      const data = new Date();
+      if (!status) {
+        // Continua em analise: so marca que foi conferida, para nao consultar a cada minuto.
+        await tx.update(pagamentos).set({ atualizadoEm: data }).where(and(eq(pagamentos.id, p.id), eq(pagamentos.status, "pendente")));
+        return;
+      }
+      const mudou = await tx
+        .update(pagamentos)
+        .set({ status, provedorPayload: atual.bruto, ...(status === "confirmado" ? { confirmadoEm: data } : {}), atualizadoEm: data })
+        .where(and(eq(pagamentos.id, p.id), eq(pagamentos.status, "pendente")))
+        .returning({ id: pagamentos.id });
+      if (mudou.length === 0) return;
+      if (status === "confirmado") r.confirmadas++;
+      else r.recusadas++;
+      await registrarAuditoria(tx, { quem: null, clinicaId: p.clinicaId, acao: status === "confirmado" ? "pagamento.cartao_debitado" : "pagamento.cartao_recusado", tabela: "pagamentos", registroId: p.id, detalhes: { consultaId: p.consultaId, conciliado: true } });
+      const [dados] = await tx.select({ slug: clinicas.slug, ultimos4: cartoesSalvos.ultimos4 }).from(clinicas).leftJoin(cartoesSalvos, eq(cartoesSalvos.id, p.cartaoId!)).where(eq(clinicas.id, p.clinicaId)).limit(1);
+      await notificar(tx, {
+        perfilId: p.pagadorId,
+        clinicaId: p.clinicaId,
+        tipo: "pagamento",
+        titulo: status === "confirmado" ? "Consulta paga no cartão" : "Não conseguimos cobrar o seu cartão",
+        corpo:
+          status === "confirmado"
+            ? `O valor da sua consulta foi debitado no cartão final ${dados?.ultimos4 ?? ""}.`
+            : `A cobrança no cartão final ${dados?.ultimos4 ?? ""} não foi aprovada. Pague a consulta por Pix para continuar usando a plataforma.`,
+        link: status === "confirmado" || !p.consultaId ? null : `/c/${dados?.slug ?? ""}/pagamento/${p.consultaId}`,
+        chave: `cobranca_final:${p.id}:${status}`,
+      });
+    });
+  }
+  return r;
+}
+
 async function cobrarUma(banco: Banco, resolvedor: ResolvedorDePagamento, consultaId: string, urlDeNotificacao: string): Promise<"cobrada" | "recusada" | "adiada" | "ignorada"> {
   // 1. Tranca a consulta, confere de novo e registra a tentativa - tudo junto.
   const preparo = await banco.transaction(async (tx) => {
@@ -166,8 +240,19 @@ async function cobrarUma(banco: Banco, resolvedor: ResolvedorDePagamento, consul
       .orderBy(desc(pagamentos.criadoEm));
     if (existentes.some((p) => p.status !== "pendente" || p.provedorId !== null)) return null;
 
-    const [cartao] = await tx.select().from(cartoesSalvos).where(eq(cartoesSalvos.id, c.cartao_id)).limit(1);
+    let [cartao] = await tx.select().from(cartoesSalvos).where(eq(cartoesSalvos.id, c.cartao_id)).limit(1);
     if (!cartao) return null;
+    // Cartao trocado ou removido depois da consulta: nunca se cobra um cartao que a pessoa tirou.
+    if (cartao.status !== "ativo") {
+      const [atual] = await tx
+        .select()
+        .from(cartoesSalvos)
+        .where(and(eq(cartoesSalvos.perfilId, c.paciente_id), eq(cartoesSalvos.clinicaId, c.clinica_id), eq(cartoesSalvos.status, "ativo")))
+        .limit(1);
+      if (!atual) return null;
+      await tx.update(consultas).set({ cartaoId: atual.id }).where(eq(consultas.id, consultaId));
+      cartao = atual;
+    }
 
     // Tentativa anterior que caiu antes de o provedor responder: repete com a MESMA chave.
     // Se ela e recente, outra copia da API esta no meio dela: esta aqui nao faz nada.
