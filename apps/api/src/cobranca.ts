@@ -119,7 +119,7 @@ export async function cobrarConsultasConcluidas(banco: Banco, resolvedor: Resolv
   // Na rodada do agendador, antes de cobrar o que falta, resolve o que ficou no meio do caminho.
   if (!opcoes.consultaId) {
     try {
-      const r = await conciliarCobrancasPendentes(banco, resolvedor);
+      const r = await conciliarCobrancasPendentes(banco, resolvedor, new Date(), opcoes.log);
       resultado.cobradas += r.confirmadas;
       resultado.recusadas += r.recusadas;
     } catch (erro) {
@@ -168,7 +168,7 @@ const MINUTOS_ATE_CONCILIAR = 10;
  * nem viraria pendencia. A cada rodada, as cobrancas no cartao paradas ha
  * mais de 10 minutos sao consultadas no provedor.
  */
-export async function conciliarCobrancasPendentes(banco: Banco, resolvedor: ResolvedorDePagamento, agora: Date = new Date()): Promise<{ confirmadas: number; recusadas: number }> {
+export async function conciliarCobrancasPendentes(banco: Banco, resolvedor: ResolvedorDePagamento, agora: Date = new Date(), log?: OpcoesDaCobranca["log"]): Promise<{ confirmadas: number; recusadas: number }> {
   const r = { confirmadas: 0, recusadas: 0 };
   const paradas = await banco
     .select({ id: pagamentos.id, clinicaId: pagamentos.clinicaId, provedorId: pagamentos.provedorId, consultaId: pagamentos.consultaId, pagadorId: pagamentos.pagadorId, cartaoId: pagamentos.cartaoId })
@@ -184,8 +184,15 @@ export async function conciliarCobrancasPendentes(banco: Banco, resolvedor: Reso
     .limit(25);
 
   for (const p of paradas) {
-    const contexto = await resolvedor.para(p.clinicaId);
-    const atual = await contexto.provedor.consultar(contexto.credenciais, p.provedorId!);
+    // Um pagamento com problema nao pode impedir a conciliacao dos outros.
+    let atual;
+    try {
+      const contexto = await resolvedor.para(p.clinicaId);
+      atual = await contexto.provedor.consultar(contexto.credenciais, p.provedorId!);
+    } catch (erro) {
+      log?.error({ err: erro, pagamentoId: p.id }, "conciliacao: nao foi possivel consultar o provedor");
+      continue;
+    }
     const status = atual.status === "confirmado" || atual.status === "autorizado" ? "confirmado" : atual.status === "recusado" || atual.status === "expirado" ? "recusado" : null;
 
     await banco.transaction(async (tx) => {
@@ -260,7 +267,8 @@ async function cobrarUma(banco: Banco, resolvedor: ResolvedorDePagamento, consul
     if (registro && Date.now() - registro.atualizadoEm.getTime() < SEGUNDOS_DE_TENTATIVA_EM_CURSO * 1000) return null;
     if (registro) {
       // Marca a retomada: duas copias nao retomam a mesma tentativa ao mesmo tempo.
-      await tx.update(pagamentos).set({ atualizadoEm: new Date() }).where(eq(pagamentos.id, registro.id));
+      // O registro passa a apontar para o cartao que sera de fato usado (pode ter sido trocado).
+      await tx.update(pagamentos).set({ atualizadoEm: new Date(), cartaoId: cartao.id }).where(eq(pagamentos.id, registro.id));
     } else {
       [registro] = await tx
         .insert(pagamentos)

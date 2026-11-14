@@ -304,6 +304,10 @@ export async function rotasPagamentos(
         if (!vencida && outroMeio && ativa.metodo === "pix") {
           throw new ErroHttp(409, "PIX_EM_ABERTO", `Há um Pix em aberto para esta consulta${ativa.expiraEm ? ` até ${ativa.expiraEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })}` : ""}. Pague esse Pix ou espere ele vencer para usar o cartão.`);
         }
+        // O inverso: cobranca no cartao "em analise" no provedor ainda pode ser aprovada.
+        if (outroMeio && ativa.metodo === "cartao_credito" && ativa.provedorId) {
+          throw new ErroHttp(409, "CARTAO_EM_ANALISE", "A cobrança no seu cartão ainda está em análise pelo banco. Aguarde alguns minutos antes de pagar por Pix.");
+        }
         if (!vencida && !outroMeio) return { ...ativa, reaproveitada: true };
         await tx.update(pagamentos).set({ status: "expirado", atualizadoEm: new Date() }).where(eq(pagamentos.id, ativa.id));
       }
