@@ -97,6 +97,8 @@ export interface Financeiro {
   porMedico: LinhaFinanceira[];
   repasses: RepasseRegistrado[];
   reembolsosPendentes: PendenciaDeReembolso[];
+  /** Consultas realizadas cuja cobranca no cartao do paciente nao passou (ADR-0023). */
+  cobrancasRecusadas: { consultaId: string; pacienteNome: string; valorCentavos: number; realizadaEm: string }[];
 }
 
 export interface EventoDeAuditoria {

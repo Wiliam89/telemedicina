@@ -301,7 +301,7 @@ export async function rotasAdmin(app: FastifyInstance, opcoes: { banco: Banco; a
     const quem = alias(perfis, "quem_registrou");
     const quemCancelou = alias(perfis, "quem_cancelou");
     const nomeMedico = alias(perfis, "nome_medico");
-    const [[totais], ganhos, saldoPorMedico, equipe, repasses, reembolsos] = await Promise.all([
+    const [[totais], ganhos, saldoPorMedico, equipe, repasses, reembolsos, recusadas] = await Promise.all([
       banco.$client<{ bruta: number; estornado: number }[]>`
         select coalesce(sum(valor_centavos) filter (where status = 'confirmado' and confirmado_em >= ${periodo.de.toISOString()}::timestamptz and confirmado_em < ${ate.toISOString()}::timestamptz), 0)::bigint as bruta,
                coalesce(sum(valor_centavos) filter (where status = 'estornado' and estornado_em >= ${periodo.de.toISOString()}::timestamptz and estornado_em < ${ate.toISOString()}::timestamptz), 0)::bigint as estornado
@@ -325,6 +325,14 @@ export async function rotasAdmin(app: FastifyInstance, opcoes: { banco: Banco; a
         join perfis pf on pf.id = p.pagador_id
         where a.clinica_id = ${clinicaId} and a.acao = 'pagamento.pendente_de_estorno' and p.status = 'confirmado'
         order by p.id, a.quando asc
+        limit 200`,
+      banco.$client<{ consulta_id: string; paciente: string; valor: number; inicio: Date }[]>`
+        select c.id as consulta_id, pf.nome_completo as paciente, coalesce(c.valor_combinado_centavos, 0) as valor, c.inicio
+        from consultas c join perfis pf on pf.id = c.paciente_id
+        where c.clinica_id = ${clinicaId} and c.status = 'concluida' and c.forma_de_cobranca = 'cartao_ao_final'
+          and exists (select 1 from pagamentos p where p.consulta_id = c.id and p.status = 'recusado')
+          and not exists (select 1 from pagamentos p where p.consulta_id = c.id and p.status in ('confirmado', 'autorizado'))
+        order by c.inicio desc
         limit 200`,
     ]);
 
@@ -360,6 +368,7 @@ export async function rotasAdmin(app: FastifyInstance, opcoes: { banco: Banco; a
           registradoPor: por,
           cancelado: r.canceladoEm ? { em: r.canceladoEm.toISOString(), por: cancelouNome ?? "", motivo: r.motivoCancelamento ?? "" } : null,
         })),
+        cobrancasRecusadas: recusadas.map((x) => ({ consultaId: x.consulta_id, pacienteNome: x.paciente, valorCentavos: Number(x.valor), realizadaEm: new Date(x.inicio).toISOString() })),
         reembolsosPendentes: reembolsos.map((x) => ({ pagamentoId: x.pagamento_id, valorCentavos: Number(x.valor), metodo: x.metodo, motivo: x.motivo, pacienteNome: x.paciente, desde: new Date(x.desde).toISOString() })),
       },
     };

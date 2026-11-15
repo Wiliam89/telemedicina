@@ -112,8 +112,8 @@ export default async function PaginaPainel({ params }: { params: Promise<{ clini
               Atendimento imediato
             </LinkBotao>
           ) : (
-            <LinkBotao href={`${base}/credenciamentos`} icone={<Users className="h-4 w-4" aria-hidden="true" />}>
-              Credenciamentos
+            <LinkBotao href={`${base}/admin`} icone={<Users className="h-4 w-4" aria-hidden="true" />}>
+              Painel da administração
             </LinkBotao>
           )
         }

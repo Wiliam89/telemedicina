@@ -7,9 +7,14 @@ import {
   CalendarPlus,
   ChevronsUpDown,
   Clock3,
+  ClipboardList,
   CreditCard,
+  HandCoins,
   IdCard,
+  Settings2,
+  ShieldCheck,
   Stethoscope,
+  Wallet,
   FileText,
   HeartPulse,
   Inbox,
@@ -71,12 +76,25 @@ const GRUPOS: { titulo: string; itens: Item[] }[] = [
     titulo: "Configuração",
     itens: [
       { rotulo: "Meus horários", caminho: "grade", Icone: Clock3, papeis: ["medico"] },
-      { rotulo: "Equipe", caminho: "equipe", Icone: Users, papeis: ["admin_clinica"] },
+      { rotulo: "Meus ganhos", caminho: "meus-ganhos", Icone: HandCoins, papeis: ["medico"] },
+      { rotulo: "Status do sistema", caminho: "diagnostico", Icone: Activity, papeis: ["medico", "recepcao"] },
+    ],
+  },
+  {
+    // ADR-0026: a area de quem gere a plataforma.
+    titulo: "Administração",
+    itens: [
+      { rotulo: "Painel da administração", caminho: "admin", Icone: ShieldCheck, papeis: ["admin_clinica"] },
+      { rotulo: "Médicos", caminho: "admin/medicos", Icone: Stethoscope, papeis: ["admin_clinica"] },
       { rotulo: "Credenciamentos", caminho: "credenciamentos", Icone: IdCard, papeis: ["admin_clinica"] },
-      { rotulo: "Valores", caminho: "precos", Icone: Tags, papeis: ["admin_clinica"] },
+      { rotulo: "Financeiro", caminho: "admin/financeiro", Icone: Wallet, papeis: ["admin_clinica"] },
+      { rotulo: "Valores das consultas", caminho: "precos", Icone: Tags, papeis: ["admin_clinica"] },
+      { rotulo: "Equipe", caminho: "equipe", Icone: Users, papeis: ["admin_clinica"] },
       { rotulo: "Indicadores", caminho: "indicadores", Icone: BarChart3, papeis: ["admin_clinica"] },
       { rotulo: "Pedidos LGPD", caminho: "privacidade", Icone: Inbox, papeis: ["admin_clinica"] },
-      { rotulo: "Status do sistema", caminho: "diagnostico", Icone: Activity, papeis: EQUIPE },
+      { rotulo: "Auditoria", caminho: "admin/auditoria", Icone: ClipboardList, papeis: ["admin_clinica"] },
+      { rotulo: "Configurações", caminho: "admin/configuracoes", Icone: Settings2, papeis: ["admin_clinica"] },
+      { rotulo: "Status do sistema", caminho: "diagnostico", Icone: Activity, papeis: ["admin_clinica"] },
     ],
   },
 ];
@@ -94,7 +112,7 @@ function Menu_({ clinica, aoNavegar, candidato }: { clinica: ClinicaResumo; aoNa
             <p className="px-3 pb-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-white/40">{g.titulo}</p>
             {itens.map(({ rotulo, caminho, Icone }) => {
               const href = `/c/${clinica.slug}/${caminho}`;
-              const ativo = caminhoAtual === href || caminhoAtual.startsWith(`${href}/`);
+              const ativo = caminhoAtual === href || (caminho !== "admin" && caminhoAtual.startsWith(`${href}/`));
               return (
                 <Link
                   key={caminho}
