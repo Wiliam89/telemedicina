@@ -556,6 +556,13 @@ export async function rotasPagamentos(
       if (!p) throw new ErroHttp(404, "PAGAMENTO_NAO_ENCONTRADO", "Pagamento não encontrado.");
       if (p.status === "estornado") return { status: "estornado" };
       if (p.status !== "confirmado" || !p.provedorId) throw new ErroHttp(409, "NAO_REEMBOLSAVEL", "Só se reembolsa pagamento confirmado.");
+      // Consulta ainda marcada: devolver o dinheiro e mante-la seria atendimento de graca.
+      const [ativa] = await tx
+        .select({ status: consultas.status })
+        .from(consultas)
+        .where(and(eq(consultas.pagamentoId, id), inArray(consultas.status, ["aguardando_pagamento", "agendada", "em_andamento"])))
+        .limit(1);
+      if (ativa) throw new ErroHttp(409, "CONSULTA_ATIVA", "Esta consulta ainda está marcada. Cancele a consulta na Agenda antes de reembolsar.");
 
       let contexto;
       try {

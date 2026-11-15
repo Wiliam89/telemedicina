@@ -32,7 +32,7 @@ export default async function PaginaAdministracao({ params }: { params: Promise<
     { n: d.pendencias.reembolsos, texto: "reembolso(s) a fazer", href: `${base}/admin/financeiro#reembolsos`, Icone: RotateCcw },
     { n: d.pendencias.pagamentosDePacientes, texto: "consulta(s) com cobrança recusada no cartão do paciente", href: `${base}/admin/financeiro#recusadas`, Icone: BadgeDollarSign },
     { n: d.pendencias.pedidosLgpd, texto: "pedido(s) de pacientes sobre dados pessoais (LGPD)", href: `${base}/privacidade`, Icone: Inbox },
-    { n: d.pendencias.medicosSemPercentual, texto: "médico(s) sem porcentagem definida", href: `${base}/admin/configuracoes`, Icone: Percent },
+    { n: d.pendencias.medicosSemPercentual, texto: "médico(s) sem porcentagem definida — consultas marcadas antes de definir usarão a porcentagem do dia em que você definir", href: `${base}/admin/configuracoes`, Icone: Percent },
     { n: d.pendencias.crmVencendo, texto: "CRM(s) com conferência vencendo em 30 dias", href: `${base}/equipe`, Icone: Stethoscope },
   ].filter((p) => p.n > 0);
 

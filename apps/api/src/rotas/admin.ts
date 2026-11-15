@@ -168,7 +168,8 @@ export async function rotasAdmin(app: FastifyInstance, opcoes: { banco: Banco; a
         razaoSocial: z.string().trim().min(3, "razão social com ao menos 3 letras").max(120).optional(),
         fusoHorario: z.string().trim().refine(fusoValido, "fuso horário desconhecido (use o nome IANA, ex.: America/Manaus)").optional(),
         /** Medico responsavel tecnico (Resolucao CFM 2.314/2022). */
-        responsavelTecnicoId: z.string().uuid("responsável técnico inválido").nullable().optional(),
+        /** Troca-se por outro; nao se deixa a plataforma sem (Resolucao CFM 2.314/2022). */
+        responsavelTecnicoId: z.string().uuid("responsável técnico inválido").optional(),
         repassePadraoBps: bps.nullable().optional(),
       })
       .strict()
@@ -404,7 +405,7 @@ export async function rotasAdmin(app: FastifyInstance, opcoes: { banco: Banco; a
         .limit(1);
       if (!m) throw new ErroHttp(404, "MEDICO_NAO_ENCONTRADO", "Médico não encontrado na plataforma.");
 
-      const [ganho] = await ganhosPorMedico(banco, req.contexto.clinicaId, undefined, dados.medicoId);
+      const [ganho] = await ganhosPorMedico(tx, req.contexto.clinicaId, undefined, dados.medicoId);
       const pago = (await pagoPorMedico(tx, req.contexto.clinicaId, dados.medicoId)).get(dados.medicoId) ?? 0;
       const saldo = (ganho?.repasseCentavos ?? 0) - pago;
       if (dados.valorCentavos > saldo) {

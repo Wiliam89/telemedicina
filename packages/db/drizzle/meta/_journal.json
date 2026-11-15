@@ -197,6 +197,13 @@
       "when": 1794714980890,
       "tag": "0027_repasse_aos_medicos",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794716442201,
+      "tag": "0028_indice_e_trava_do_repasse",
+      "breakpoints": true
     }
   ]
 }

@@ -55,7 +55,7 @@ export default async function PaginaFinanceiro({ params, searchParams }: { param
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Indicador Icone={BadgeDollarSign} rotulo="Recebido no período" valor={emReais(r.dados.receitaBrutaCentavos)} />
             <Indicador Icone={Wallet} tom="info" rotulo="Ganho dos médicos" valor={emReais(r.dados.repasseDoPeriodoCentavos)} detalhe="das consultas do período" />
-            <Indicador Icone={PiggyBank} tom="selo" rotulo="Fica com a plataforma" valor={emReais(r.dados.margemCentavos)} detalhe="antes das taxas do serviço de pagamento" />
+            <Indicador Icone={PiggyBank} tom="selo" rotulo="Fica com a plataforma (estimativa)" valor={emReais(r.dados.margemCentavos)} detalhe="recebido no período menos o ganho dos médicos pelas consultas do período, antes das taxas" />
             <Indicador Icone={RotateCcw} tom="alerta" rotulo="Devolvido (reembolsos)" valor={emReais(r.dados.estornadoCentavos)} />
           </div>
 

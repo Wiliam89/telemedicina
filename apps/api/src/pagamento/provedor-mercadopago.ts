@@ -212,6 +212,8 @@ export class ProvedorMercadoPago implements ProvedorDePagamento {
   async estornar(credenciais: CredenciaisDaClinica, id: string, valorCentavos?: number): Promise<Cobranca> {
     await this.chamar(`/v1/payments/${id}/refunds`, {
       token: credenciais.accessToken,
+      // O mesmo pedido repetido (rede, clique duplo) nao gera dois estornos.
+      idempotencia: `estorno:${id}:${valorCentavos ?? "total"}`,
       corpo: valorCentavos ? { amount: Number((valorCentavos / 100).toFixed(2)) } : {},
     });
     return this.consultar(credenciais, id);

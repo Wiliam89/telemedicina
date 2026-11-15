@@ -227,4 +227,19 @@ describe.skipIf(!temBanco)("area da administracao (ADR-0026)", () => {
     expect(c).toMatchObject({ nomeFantasia: "Plataforma Nova", responsavelTecnicoId: medicoA, repassePadraoBps: 7000 });
     expect((await banco.$client`select 1 from auditoria where acao = 'clinica.configuracoes_alteradas' and clinica_id = ${clinicaId}`).length).toBe(1);
   });
+
+  it("11. nao se reembolsa consulta ainda marcada (seria atendimento de graca)", async () => {
+    const { consultaId, pagamentoId } = await consultaPaga(medicoB, 4000, 7000, { status: "agendada" });
+    await banco.$client`update consultas set pagamento_id = ${pagamentoId}, inicio = now() + interval '5 days', fim = now() + interval '5 days 30 minutes' where id = ${consultaId}`;
+    const r = await chamar(admin, "POST", `/admin/pagamentos/${pagamentoId}/reembolsar`, { motivo: "paciente pediu" });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().erro.codigo).toBe("CONSULTA_ATIVA");
+    const [p] = await banco.$client`select status from pagamentos where id = ${pagamentoId}`;
+    expect(p!.status).toBe("confirmado");
+  });
+
+  it("12. nem a observacao de um repasse registrado muda pelo banco", async () => {
+    const [r] = await banco.$client`select id from repasses_medicos where medico_id = ${medicoA} and cancelado_em is null limit 1`;
+    await expect(banco.$client`update repasses_medicos set observacao = 'alterado' where id = ${r!.id as string}`).rejects.toThrow();
+  });
 });

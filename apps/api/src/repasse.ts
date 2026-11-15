@@ -52,15 +52,23 @@ export interface GanhoDoMedico {
  * Ganhos por medico num periodo (pela data da consulta). Sem periodo: desde
  * sempre - e o que entra no saldo.
  */
-export async function ganhosPorMedico(b: Banco, clinicaId: string, periodo?: { de: Date; ate: Date }, medicoId?: string): Promise<GanhoDoMedico[]> {
+export async function ganhosPorMedico(b: Executor, clinicaId: string, periodo?: { de: Date; ate: Date }, medicoId?: string): Promise<GanhoDoMedico[]> {
   const linhas = await b.execute<{ medico_id: string; consultas: number; faturado: number; repasse: number }>(sql`
-    with pagas as (
+    with recebido as (
+      -- Um agregado so sobre os pagamentos confirmados da clinica (usa o indice pagamentos_consulta).
+      select consulta_id, sum(valor_centavos)::bigint as valor
+      from pagamentos
+      where clinica_id = ${clinicaId} and status = 'confirmado' and consulta_id is not null
+      group by consulta_id
+    ),
+    pagas as (
       select c.id, c.medico_id,
              coalesce(c.repasse_medico_bps, pm.percentual_bps, cl.repasse_padrao_bps, 0) as bps,
-             (select coalesce(sum(p.valor_centavos), 0) from pagamentos p where p.consulta_id = c.id and p.status = 'confirmado')::bigint as valor
+             coalesce(r.valor, 0) as valor
       from consultas c
       join clinicas cl on cl.id = c.clinica_id
       left join percentuais_medicos pm on pm.clinica_id = c.clinica_id and pm.medico_id = c.medico_id
+      left join recebido r on r.consulta_id = c.id
       where c.clinica_id = ${clinicaId} and c.status = 'concluida'
         ${periodo ? sql`and c.inicio >= ${periodo.de.toISOString()}::timestamptz and c.inicio < ${periodo.ate.toISOString()}::timestamptz` : sql``}
         ${medicoId ? sql`and c.medico_id = ${medicoId}` : sql``}

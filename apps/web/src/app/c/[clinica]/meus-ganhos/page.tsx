@@ -31,7 +31,12 @@ export default async function PaginaMeusGanhos({ params }: { params: Promise<{ c
             <Indicador Icone={Percent} rotulo="Sua porcentagem hoje" valor={formatarPercentual(r.dados.percentualEmVigorBps)} detalhe="de cada consulta paga" />
             <Indicador Icone={CalendarCheck2} tom="info" rotulo="Este mês" valor={emReais(r.dados.doMes.repasseCentavos)} detalhe={`${r.dados.doMes.consultas} consulta(s) paga(s)`} />
             <Indicador Icone={HandCoins} tom="neutro" rotulo="Já recebido" valor={emReais(r.dados.pagoCentavos)} detalhe={`de ${emReais(r.dados.ganhoTotalCentavos)} ganhos no total`} />
-            <Indicador Icone={Wallet} tom="espera" rotulo="A receber" valor={emReais(r.dados.saldoCentavos)} />
+            {r.dados.saldoCentavos >= 0 ? (
+              <Indicador Icone={Wallet} tom="espera" rotulo="A receber" valor={emReais(r.dados.saldoCentavos)} />
+            ) : (
+              // Reembolso de consulta ja repassada: o valor e descontado dos proximos ganhos.
+              <Indicador Icone={Wallet} tom="alerta" rotulo="A descontar" valor={emReais(-r.dados.saldoCentavos)} detalhe="de consulta reembolsada; sai dos próximos ganhos" />
+            )}
           </div>
           <Aviso>
             Só entram consultas <strong>concluídas e pagas</strong>. Consulta cancelada, reembolsada ou ainda não cobrada não gera ganho. A porcentagem de cada consulta é a do dia em que ela foi marcada.

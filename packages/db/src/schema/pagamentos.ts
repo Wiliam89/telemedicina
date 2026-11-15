@@ -99,6 +99,8 @@ export const pagamentos = pgTable(
     uniqueIndex("pagamentos_provedor_id_unico").on(t.provedor, t.provedorId),
     index("pagamentos_clinica_criado").on(t.clinicaId, t.criadoEm),
     index("pagamentos_pagador").on(t.pagadorId),
+    // ADR-0026: o calculo do repasse soma os pagamentos de cada consulta.
+    index("pagamentos_consulta").on(t.consultaId),
     uniqueIndex("pagamentos_chave_idempotencia").on(t.chaveIdempotencia),
     // Uma so cobranca em aberto por consulta, e uma so por paciente na fila de
     // cada clinica. A API ja se protege; o banco e a ultima trava.

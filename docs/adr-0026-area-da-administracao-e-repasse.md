@@ -44,6 +44,18 @@ credenciamentos, equipe, valores, LGPD, auditoria e configuracoes.
   CRM verificado) e porcentagem padrao. CNPJ nao se troca por aqui.
 - O medico ve os proprios ganhos em `/meus-ganhos`.
 
+## Publicacao
+As migracoes 0027 e 0028 vao ANTES da API: a API nova grava
+`repasse_medico_bps` ao marcar consulta, e quebraria num banco antigo.
+
+## Proximos passos (lacunas frente ao mercado)
+- Exportar o financeiro em CSV para a contabilidade; nota fiscal (NFS-e).
+- Reembolso de consulta concluida por reclamacao, com regra de quem arca.
+- Gestao de pacientes pela administracao (bloqueio por fraude, por exemplo).
+- Indicadores de operacao: taxa de nao comparecimento, abandono da fila, NPS.
+- Repasse automatico (split no provedor): exige conta do medico no provedor e
+  tem taxa por transacao - decisao de gasto.
+
 ## Consequencias
 - Nada de prontuario, queixa ou motivo aparece para a administracao.
 - Imposto, nota fiscal e contrato com o medico (PJ/autonomo) estao fora do

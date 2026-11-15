@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guia completo - TeleSaúde</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root {
+    --selo: #0b7f7a; --selo-suave: #e3f3f2; --marinho: #0c2a43; --tinta: #0f172a; --suave: #4f5b6d;
+    --linha: #dfe5ec; --alerta: #b4232a; --alerta-suave: #fdecec; --espera: #8a4b00; --espera-suave: #fff4e0;
+    --info: #1d4ed8; --info-suave: #e8effe; --papel: #f7f9fb;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: "Segoe UI", system-ui, Arial, sans-serif; color: var(--tinta); font-size: 11pt; line-height: 1.6; margin: 0; background: #fff; }
+  main { max-width: 190mm; margin: 0 auto; padding: 0 4mm; }
+  h1, h2, h3, h4 { color: var(--marinho); line-height: 1.25; margin: 0; }
+  h2 { font-size: 18pt; margin: 0 0 4mm; padding: 3mm 0 2mm; border-bottom: 3px solid var(--selo); }
+  h3 { font-size: 13.5pt; margin: 7mm 0 2.5mm; color: var(--selo); }
+  h4 { font-size: 11.5pt; margin: 5mm 0 2mm; }
+  h2, h3, h4 { break-after: avoid; page-break-after: avoid; }
+  p { margin: 0 0 3mm; }
+  ul, ol { margin: 0 0 3.5mm; padding-left: 6mm; }
+  li { margin-bottom: 1.2mm; }
+  strong { color: var(--marinho); }
+  .capitulo { break-before: page; page-break-before: always; padding-top: 2mm; }
+  .numero-capitulo { display: inline-block; background: var(--selo); color: #fff; border-radius: 2mm; padding: 0 2.5mm; margin-right: 2mm; font-size: 14pt; }
+  code, .mono { font-family: Consolas, "Cascadia Mono", monospace; font-size: 9.5pt; background: #eef2f6; padding: 0 1.2mm; border-radius: 1mm; }
+  pre { font-family: Consolas, monospace; font-size: 9.5pt; background: var(--marinho); color: #e2f1f0; padding: 3mm 4mm; border-radius: 2mm; white-space: pre-wrap; margin: 0 0 3mm; break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 0 0 4mm; font-size: 10pt; }
+  th, td { border: 1px solid var(--linha); padding: 2mm 2.5mm; text-align: left; vertical-align: top; }
+  th { background: var(--papel); color: var(--marinho); }
+  tr { break-inside: avoid; }
+
+  /* --- caixas --- */
+  .caixa { border-radius: 2.5mm; padding: 3mm 4mm 3mm 13mm; margin: 0 0 4mm; position: relative; break-inside: avoid; }
+  .caixa::before { position: absolute; left: 3.5mm; top: 2.6mm; font-weight: 800; font-size: 13pt; width: 6mm; height: 6mm; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 10pt; }
+  .caixa .titulo { display: block; font-weight: 700; margin-bottom: 0.8mm; }
+  .dica { background: var(--selo-suave); border: 1px solid #b9dfdc; }
+  .dica::before { content: "✓"; background: var(--selo); }
+  .cuidado { background: var(--alerta-suave); border: 1px solid #f3c2c4; }
+  .cuidado::before { content: "!"; background: var(--alerta); }
+  .lembre { background: var(--espera-suave); border: 1px solid #f2d3a3; }
+  .lembre::before { content: "i"; background: var(--espera); font-style: italic; }
+  .imagine { background: var(--info-suave); border: 1px solid #c8d6fb; }
+  .imagine::before { content: "★"; background: var(--info); }
+
+  /* --- passo a passo --- */
+  .passos { counter-reset: p; list-style: none; padding-left: 0; }
+  .passos > li { counter-increment: p; position: relative; padding-left: 10mm; margin-bottom: 2.6mm; min-height: 7mm; break-inside: avoid; }
+  .passos > li::before { content: counter(p); position: absolute; left: 0; top: 0; width: 7mm; height: 7mm; border-radius: 50%; background: var(--marinho); color: #fff; font-size: 9.5pt; font-weight: 700; display: grid; place-items: center; }
+  .botao { display: inline-block; background: var(--selo); color: #fff; border-radius: 1.5mm; padding: 0 2mm; font-weight: 600; font-size: 9.5pt; white-space: nowrap; }
+  .botao.claro { background: #fff; color: var(--marinho); border: 1px solid #b8c3cf; }
+  .menu { display: inline-block; background: var(--marinho); color: #fff; border-radius: 1.5mm; padding: 0 2mm; font-size: 9.5pt; white-space: nowrap; }
+
+  /* --- desenho de tela --- */
+  .tela { border: 1.5px solid #b8c3cf; border-radius: 3mm; overflow: hidden; margin: 1mm 0 5mm; background: #fff; break-inside: avoid; box-shadow: 0 1mm 2.5mm rgba(15,23,42,.07); }
+  .tela .barra { background: #eef2f6; padding: 1.5mm 3mm; font-size: 8.5pt; color: var(--suave); display: flex; gap: 1.5mm; align-items: center; }
+  .tela .barra i { width: 2.2mm; height: 2.2mm; border-radius: 50%; background: #c9d2dc; display: inline-block; }
+  .tela .corpo { display: grid; grid-template-columns: 34mm 1fr; min-height: 30mm; }
+  .tela .lado { background: var(--marinho); color: #cfe0ee; font-size: 8pt; padding: 3mm; line-height: 1.9; }
+  .tela .lado b { color: #fff; display: block; margin-bottom: 1mm; }
+  .tela .lado .ativo { background: rgba(255,255,255,.14); color: #fff; border-radius: 1mm; padding: 0 1mm; }
+  .tela .conteudo { padding: 3.5mm 4mm; font-size: 9pt; }
+  .tela .conteudo h5 { margin: 0 0 2mm; font-size: 11pt; color: var(--marinho); }
+  .tela .cartoes { display: grid; grid-template-columns: repeat(auto-fit, minmax(33mm, 1fr)); gap: 2mm; margin-bottom: 2mm; }
+  .tela .cartao { border: 1px solid var(--linha); border-radius: 2mm; padding: 2mm; }
+  .tela .cartao small { color: var(--suave); display: block; }
+  .tela .cartao b { font-size: 11pt; color: var(--marinho); }
+  .tela .linha { border: 1px solid var(--linha); border-radius: 2mm; padding: 2mm; margin-bottom: 1.5mm; display: flex; justify-content: space-between; gap: 2mm; align-items: center; }
+  .tela .etiqueta { background: var(--selo-suave); color: var(--selo); border-radius: 5mm; padding: 0 2mm; font-size: 8pt; white-space: nowrap; }
+  .tela .etiqueta.laranja { background: var(--espera-suave); color: var(--espera); }
+  .legenda { font-size: 8.5pt; color: var(--suave); margin: -3.5mm 0 5mm; }
+
+  /* --- capa e sumario --- */
+  .capa { min-height: 255mm; display: flex; flex-direction: column; justify-content: center; gap: 6mm; padding: 10mm 6mm; background: linear-gradient(160deg, var(--marinho), #11466d 60%, var(--selo)); color: #fff; border-radius: 4mm; }
+  .capa h1 { color: #fff; font-size: 34pt; }
+  .capa .marca { font-size: 14pt; letter-spacing: .14em; text-transform: uppercase; opacity: .85; }
+  .capa p { font-size: 13pt; max-width: 140mm; color: #dcebf5; }
+  .capa .selo { display: inline-block; border: 1px solid rgba(255,255,255,.5); border-radius: 5mm; padding: 1mm 4mm; font-size: 10pt; }
+  .sumario { columns: 2; column-gap: 10mm; font-size: 10.5pt; padding-left: 5mm; }
+  .sumario li { break-inside: avoid; margin-bottom: 1.6mm; }
+  .grade2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .papel { border: 1px solid var(--linha); border-radius: 2.5mm; padding: 3mm 4mm; break-inside: avoid; }
+  .papel h4 { margin-top: 0; }
+  figure { margin: 0 0 5mm; text-align: center; break-inside: avoid; }
+  figure img { max-width: 100%; max-height: 95mm; border: 1px solid var(--linha); border-radius: 2mm; }
+  figcaption { font-size: 8.5pt; color: var(--suave); margin-top: 1.5mm; }
+  .glossario dt { font-weight: 700; color: var(--marinho); margin-top: 2mm; }
+  .glossario dd { margin: 0 0 1.5mm 0; }
+  .check td:first-child { width: 7mm; text-align: center; color: var(--suave); }
+  @media screen {
+    body { background: var(--papel); }
+    main { background: #fff; padding: 10mm 12mm; margin: 6mm auto; border-radius: 3mm; box-shadow: 0 1mm 4mm rgba(0,0,0,.06); }
+    .capitulo { margin-top: 12mm; }
+  }
+  @media (max-width: 700px) {
+    .grade2, .tela .corpo { grid-template-columns: 1fr; }
+    .tela .lado { display: none; }
+    .sumario { columns: 1; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<!-- =============================== CAPA =============================== -->
+<section class="capa">
+  <span class="marca">✚ TeleSaúde</span>
+  <h1>Guia completo da plataforma</h1>
+  <p>Tudo o que pacientes, médicos, recepção e administração precisam saber para usar a plataforma de telemedicina — explicado passo a passo, com palavras simples.</p>
+  <p><span class="selo">Versão 2.0 · novembro de 2026</span></p>
+</section>
+
+<!-- ============================== SUMARIO ============================= -->
+<section class="capitulo">
+  <h2>O que tem neste guia</h2>
+  <ol class="sumario">
+    <li>Como usar este guia</li>
+    <li>O que é a plataforma</li>
+    <li>Quem é quem</li>
+    <li>Primeiros passos: criar conta e entrar</li>
+    <li>Para o paciente</li>
+    <li>Pagamento: cartão ou Pix</li>
+    <li>Para o médico</li>
+    <li>Para a recepção</li>
+    <li>Para a administração</li>
+    <li>Dinheiro dos médicos: porcentagens e repasses</li>
+    <li>Validar um documento</li>
+    <li>Privacidade e segurança</li>
+    <li>Quando algo dá errado</li>
+    <li>Para quem instala e mantém (parte técnica)</li>
+    <li>Roteiro de testes</li>
+    <li>Glossário: palavras difíceis</li>
+  </ol>
+</section>
+
+<!-- ============================ 1. COMO USAR =========================== -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">1</span>Como usar este guia</h2>
+  <p>Você não precisa ler tudo. Procure o capítulo da sua função: <strong>paciente</strong>, <strong>médico</strong>, <strong>recepção</strong> ou <strong>administração</strong>. Cada um é independente.</p>
+  <p>Ao longo do guia você vai encontrar estas caixinhas coloridas:</p>
+  <div class="caixa dica"><span class="titulo">Dica</span>Um jeito mais fácil ou mais rápido de fazer algo.</div>
+  <div class="caixa lembre"><span class="titulo">Lembre-se</span>Uma regra importante para não se confundir.</div>
+  <div class="caixa cuidado"><span class="titulo">Cuidado</span>Algo que pode dar problema se for feito errado.</div>
+  <div class="caixa imagine"><span class="titulo">Imagine assim</span>Uma comparação com o dia a dia, para ficar fácil de entender.</div>
+  <p>Quando aparecer um <span class="botao">botão verde</span>, é um botão que você vai tocar na tela. Quando aparecer <span class="menu">Menu › Item</span>, é o caminho no menu ao lado (no celular, o menu abre no ícone <strong>☰</strong> no alto da tela).</p>
+  <p>Palavras difíceis estão explicadas no <strong>glossário</strong>, no fim do guia.</p>
+</section>
+
+<!-- ============================ 2. O QUE E ============================= -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">2</span>O que é a plataforma</h2>
+  <p>A TeleSaúde é uma <strong>clínica que funciona pela internet</strong>. O paciente conversa com o médico por <strong>vídeo</strong>, pelo celular ou pelo computador, sem sair de casa. O médico examina pela conversa, escreve tudo no <strong>prontuário</strong> (a ficha de saúde do paciente) e pode mandar <strong>receita, atestado e pedido de exame</strong>, todos assinados digitalmente.</p>
+  <div class="caixa imagine"><span class="titulo">Imagine assim</span>É como ir a um consultório, só que a sala de espera e o consultório ficam dentro do celular. A plataforma é a própria clínica: o paciente não precisa escolher “qual clínica” — ele já está nela ao criar a conta.</div>
+  <h3>Dois tipos de atendimento</h3>
+  <table>
+    <tr><th></th><th>Agora (sem hora marcada)</th><th>Agendado (com dia e hora)</th></tr>
+    <tr><td><strong>Pronto atendimento</strong><br><small>clínico geral</small></td><td>Você entra na fila e o primeiro médico que puder atende você.</td><td>Você escolhe o dia, a hora e o médico.</td></tr>
+    <tr><td><strong>Teleconsulta</strong><br><small>especialista</small></td><td>Você escolhe a especialidade (ex.: ortopedia) e o primeiro especialista disponível atende.</td><td>Você escolhe a especialidade, o médico, o dia e a hora.</td></tr>
+  </table>
+  <div class="caixa lembre"><span class="titulo">Lembre-se</span><strong>Pronto atendimento</strong> é para coisas do dia a dia: gripe, dor de garganta, mal-estar. <strong>Teleconsulta</strong> é com especialista: ortopedista, dermatologista, cardiologista e outros.</div>
+  <div class="caixa cuidado"><span class="titulo">Cuidado: emergência não é aqui</span>Dor forte no peito, falta de ar, desmaio, sangramento que não para ou sinais de derrame (AVC): <strong>ligue 192 (SAMU)</strong> ou vá ao pronto-socorro agora. A plataforma não substitui o atendimento de emergência.</div>
+</section>
+
+<!-- ============================ 3. QUEM E QUEM ========================= -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">3</span>Quem é quem</h2>
+  <p>Cada pessoa tem uma função. A função decide o que ela vê no menu. Ninguém vê o que não precisa ver.</p>
+  <div class="grade2">
+    <div class="papel"><h4>🧑 Paciente</h4><p>Pede atendimento, paga, faz a consulta por vídeo, vê a própria saúde e baixa receitas e atestados.</p><p><small><strong>Não vê:</strong> dados de outros pacientes.</small></p></div>
+    <div class="papel"><h4>🩺 Médico</h4><p>Envia os documentos para ser aprovado, fica online para atender, escreve o prontuário, emite documentos e acompanha os próprios ganhos.</p><p><small><strong>Não vê:</strong> ficha de quem nunca atendeu.</small></p></div>
+    <div class="papel"><h4>🗂️ Recepção</h4><p>Marca consultas para pacientes, acompanha a agenda e a fila.</p><p><small><strong>Não vê:</strong> o que o paciente sente nem o prontuário.</small></p></div>
+    <div class="papel"><h4>⚙️ Administração</h4><p>Cuida da plataforma inteira: médicos, porcentagens, dinheiro, valores, equipe, privacidade e configurações.</p><p><small><strong>Não vê:</strong> o prontuário nem o que o paciente sente.</small></p></div>
+  </div>
+  <div class="caixa imagine"><span class="titulo">Imagine assim</span>É como numa escola: o aluno vê as próprias notas, o professor vê as notas da turma dele, e a secretaria cuida das matrículas — mas não lê o caderno de ninguém. Aqui é igual, e a lei de proteção de dados (LGPD) exige que seja assim.</div>
+</section>
+
+<!-- ======================= 4. PRIMEIROS PASSOS ======================== -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">4</span>Primeiros passos: criar conta e entrar</h2>
+  <figure><img src="imagens/01-capa.jpg" alt="Capa da plataforma"><figcaption>A capa: é o que aparece quando você abre o endereço da plataforma.</figcaption></figure>
+
+  <h3>4.1 Criar a conta</h3>
+  <ol class="passos">
+    <li>Na capa, toque em <span class="botao">Começar agora</span> (ou <span class="botao claro">Criar conta</span>).</li>
+    <li>Escreva seu <strong>e-mail</strong> e crie uma <strong>senha</strong> com pelo menos 8 letras e números misturados (ex.: <span class="mono">sol2026praia</span> — mas invente a sua!).</li>
+    <li>Toque em <span class="botao">Criar conta</span>. A plataforma manda um <strong>e-mail de confirmação</strong>.</li>
+    <li>Abra seu e-mail, ache a mensagem da plataforma e toque no link. Vai abrir a tela <strong>Confirmar e-mail</strong>: toque em <span class="botao">Confirmar meu e-mail</span>.</li>
+    <li>Preencha <strong>Seus dados</strong>: nome completo, data de nascimento, telefone e CPF. Se você é médico, marque <strong>“Sou médico(a)”</strong> e informe o CRM e o estado.</li>
+    <li>Leia e marque os três aceites (Termos de uso, Política de privacidade e Telemedicina). Nenhum vem marcado: você decide.</li>
+    <li>Toque em <span class="botao">Salvar e continuar</span>. Pronto: você já está dentro da plataforma.</li>
+  </ol>
+  <div class="caixa dica"><span class="titulo">O e-mail não chegou?</span>Olhe a pasta de <strong>spam</strong> e a aba de <strong>promoções</strong>. Confira se escreveu o e-mail certo. Depois de 1 minuto, aparece o botão <span class="botao claro">Reenviar o e-mail</span>. Use sempre o e-mail <strong>mais novo</strong>: o link antigo deixa de valer.</div>
+  <div class="caixa lembre"><span class="titulo">O link diz que venceu?</span>Isso acontece se você já usou o link ou se ele ficou velho. Se a conta já foi confirmada, é só entrar com sua senha. Se não, tente entrar: a tela oferece reenviar o e-mail.</div>
+  <figure><img src="imagens/03-aceitar-termos.jpg" alt="Tela de aceite dos termos" style="max-height:70mm"><figcaption>Os aceites: aparecem no cadastro e de novo sempre que os textos mudam.</figcaption></figure>
+
+  <h3>4.2 Entrar</h3>
+  <ol class="passos">
+    <li>Toque em <span class="botao claro">Entrar</span>, escreva o e-mail e a senha e toque em <span class="botao">Entrar</span>.</li>
+    <li>Você vai direto para o <strong>Painel</strong>: a primeira tela, com o que importa hoje.</li>
+  </ol>
+
+  <h3>4.3 Esqueci minha senha</h3>
+  <ol class="passos">
+    <li>Na tela Entrar, toque em <strong>Esqueci minha senha</strong> e escreva seu e-mail.</li>
+    <li>Abra o e-mail recebido e toque no link. Crie a senha nova.</li>
+  </ol>
+  <div class="caixa lembre"><span class="titulo">Por que a mensagem é sempre igual?</span>A tela diz “se houver uma conta, o link chega” mesmo quando o e-mail não existe. É de propósito: assim ninguém descobre quem usa a plataforma.</div>
+  <div class="caixa cuidado"><span class="titulo">Saída automática</span>Para quem trabalha na plataforma (médico, recepção, administração), a sessão fecha depois de <strong>30 minutos parada</strong>, com um aviso 2 minutos antes. Isso protege os dados se alguém esquecer o computador aberto. Durante a videochamada ela nunca fecha.</div>
+</section>
+
+<!-- ============================ 5. PACIENTE ============================ -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">5</span>Para o paciente</h2>
+  <div class="tela">
+    <div class="barra"><i></i><i></i><i></i> telesaude · Painel</div>
+    <div class="corpo">
+      <div class="lado"><b>Atendimento</b><span class="ativo">Painel</span><br>Agenda<br>Pronto atendimento<br>Teleconsulta<br>Minha saúde<br>Documentos<br>Pagamento</div>
+      <div class="conteudo">
+        <h5>Bom dia, Maria</h5>
+        <div class="cartoes"><div class="cartao"><small>Próxima consulta</small><b>14:30</b></div><div class="cartao"><small>Documentos</small><b>3</b></div></div>
+        <span class="botao claro">Pronto atendimento</span> <span class="botao">Teleconsulta com especialista</span>
+      </div>
+    </div>
+  </div>
+  <p class="legenda">Desenho simplificado do painel do paciente. No celular, o menu da esquerda fica escondido no ícone ☰.</p>
+
+  <h3>5.1 Ser atendido AGORA (pronto atendimento)</h3>
+  <ol class="passos">
+    <li>No menu, toque em <span class="menu">Pronto atendimento</span> e depois em <strong>Atendimento agora</strong>. Você vê quantos médicos estão online e o valor.</li>
+    <li>Escreva em poucas palavras <strong>o que você está sentindo</strong> (só o médico que atender você vai ler).</li>
+    <li>Leia o termo de telemedicina, marque que concorda e escolha como pagar (veja o capítulo 6).</li>
+    <li>Você entra na <strong>fila</strong>. A tela mostra sua posição e mais ou menos quanto tempo falta.</li>
+    <li>Deixe a tela aberta. Quando um médico aceitar, ela <strong>muda sozinha</strong> e abre a sala de vídeo.</li>
+    <li>Permita <strong>câmera e microfone</strong> quando o navegador perguntar. Pronto: é só conversar com o médico.</li>
+  </ol>
+  <div class="caixa imagine"><span class="titulo">Imagine assim</span>É como pedir um carro por aplicativo: o seu pedido aparece para <strong>todos os médicos disponíveis</strong> ao mesmo tempo, e o primeiro que aceitar atende você. Os outros param de ver o seu pedido na hora — nunca dois médicos pegam o mesmo paciente.</div>
+  <div class="caixa dica"><span class="titulo">Mudou de ideia?</span>Enquanto nenhum médico aceitou, você pode tocar em <strong>Sair da fila</strong>. Se pagou por Pix, a plataforma é avisada para devolver o valor.</div>
+
+  <h3>5.2 Falar com um ESPECIALISTA (teleconsulta)</h3>
+  <ol class="passos">
+    <li>No menu, toque em <span class="menu">Teleconsulta</span>. Aparecem as especialidades que têm médico, com quantos estão online e o preço.</li>
+    <li>Escolha a especialidade (ex.: <strong>Ortopedia e Traumatologia</strong>).</li>
+    <li>Escolha <strong>Atendimento agora</strong> (fila daquela especialidade) ou <strong>Agendar horário</strong>.</li>
+  </ol>
+
+  <h3>5.3 Marcar um horário (agendar)</h3>
+  <ol class="passos">
+    <li>Em Pronto atendimento ou Teleconsulta, toque em <strong>Agendar horário</strong>.</li>
+    <li>Escolha o <strong>médico</strong>, o <strong>dia</strong> e toque no <strong>horário livre</strong>. Escrever o motivo é opcional.</li>
+    <li>Com cartão cadastrado: a consulta já fica <strong>marcada</strong>. Sem cartão: o horário fica <strong>reservado por 20 minutos</strong> e aparece o Pix para pagar.</li>
+    <li>Você recebe avisos no <strong>sino</strong> 🔔 (e por e-mail): quando marcar, 24 horas antes e 1 hora antes.</li>
+  </ol>
+  <div class="caixa lembre"><span class="titulo">Na hora da consulta</span>Abra a <span class="menu">Agenda</span>. Perto do horário aparece o botão <span class="botao">Entrar na consulta</span>. A chamada é só sua e do médico e <strong>não é gravada</strong>.</div>
+
+  <h3>5.4 Minha saúde</h3>
+  <p>Em <span class="menu">Minha saúde</span> fica a sua ficha: alergias, remédios que você toma, doenças, tipo sanguíneo, as consultas e os exames, do mais novo para o mais antigo.</p>
+  <ul>
+    <li><strong>Sinais vitais:</strong> gráficos de pressão, peso, glicose e batimentos. Você pode anotar medidas feitas em casa (elas ficam marcadas como “informado pelo paciente”).</li>
+    <li><strong>Exames:</strong> envie resultados em PDF ou foto (até 15 MB). Arquivo disfarçado é recusado.</li>
+  </ul>
+  <div class="grade2">
+    <figure><img src="imagens/13-paciente-minha-saude.jpg" alt="Minha saúde"><figcaption>Minha saúde, com o alerta de alergia.</figcaption></figure>
+    <figure><img src="imagens/14-paciente-sinais.jpg" alt="Sinais vitais"><figcaption>Gráficos de sinais vitais.</figcaption></figure>
+  </div>
+
+  <h3>5.5 Documentos</h3>
+  <p>Receitas, atestados e pedidos de exame aparecem em <span class="menu">Documentos</span>. Depois que o médico assina, toque para <strong>baixar o PDF</strong>. Cada documento tem um <strong>código de validação</strong>: a farmácia confere em <span class="mono">/validar</span>.</p>
+
+  <h3>5.6 Minha conta e privacidade</h3>
+  <p>Em <span class="menu">Minha conta</span> você corrige nome e telefone, baixa <strong>uma cópia de todos os seus dados</strong>, vê <strong>quem abriu seu prontuário</strong> e quando, e pode pedir algo sobre seus dados à plataforma (resposta em até 15 dias).</p>
+  <figure><img src="imagens/17-conta.jpg" alt="Minha conta" style="max-height:75mm"><figcaption>Minha conta e privacidade.</figcaption></figure>
+</section>
+
+<!-- ============================ 6. PAGAMENTO =========================== -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">6</span>Pagamento: cartão ou Pix</h2>
+  <p>Você escolhe. As duas formas funcionam para todos os atendimentos.</p>
+  <table>
+    <tr><th></th><th>💳 Com cartão cadastrado</th><th>📱 Sem cartão (Pix)</th></tr>
+    <tr><td><strong>Quando paga</strong></td><td>Só <strong>depois</strong>, quando o médico encerra a consulta.</td><td><strong>Antes</strong> de a consulta começar.</td></tr>
+    <tr><td><strong>Agendado</strong></td><td>A consulta fica marcada na hora.</td><td>O horário fica reservado por 20 minutos enquanto você paga.</td></tr>
+    <tr><td><strong>Agora (fila)</strong></td><td>Você entra na fila direto.</td><td>Você entra na fila sozinho assim que o banco confirmar o Pix.</td></tr>
+    <tr><td><strong>Se cancelar</strong></td><td>Nada é cobrado.</td><td>A plataforma é avisada para devolver o valor.</td></tr>
+  </table>
+
+  <h3>6.1 Cadastrar o cartão (opcional)</h3>
+  <ol class="passos">
+    <li>No menu, toque em <span class="menu">Pagamento</span>.</li>
+    <li>Preencha o nome como está no cartão, o número, a validade e o código de segurança.</li>
+    <li>Leia a autorização (“o valor é debitado ao final de cada consulta”) e marque que concorda.</li>
+    <li>Toque em <span class="botao">Salvar cartão</span>. Aparece “Visa final 4242”, por exemplo.</li>
+  </ol>
+  <div class="caixa lembre"><span class="titulo">Seu cartão está protegido</span>O número do cartão vai <strong>direto para o serviço de pagamento</strong> e não fica guardado na plataforma. Guardamos só a bandeira e os 4 últimos números, para você reconhecer qual é. Você pode <strong>Trocar</strong> ou <strong>Remover</strong> quando quiser.</div>
+
+  <h3>6.2 Pagar com Pix</h3>
+  <ol class="passos">
+    <li>Na tela de pagamento, toque em <span class="botao">Pagar com Pix</span>.</li>
+    <li>Abra o aplicativo do seu banco e leia o <strong>QR Code</strong>, ou toque em <span class="botao claro">Copiar código</span> e cole no banco (“Pix copia e cola”).</li>
+    <li>Pague no banco e volte para a plataforma. A tela <strong>muda sozinha</strong> quando o banco confirma.</li>
+  </ol>
+
+  <h3>6.3 E se o cartão não passar?</h3>
+  <p>Às vezes o banco recusa a cobrança no fim da consulta (limite, cartão vencido...). Quando isso acontece:</p>
+  <ol class="passos">
+    <li>Você recebe um aviso no sino 🔔: <strong>“Não conseguimos cobrar o seu cartão”</strong>.</li>
+    <li>No painel aparece a pendência com o botão <strong>Pagar agora</strong>.</li>
+    <li>Pague por Pix (ou tente de novo no cartão, ou cadastre outro).</li>
+  </ol>
+  <div class="caixa cuidado"><span class="titulo">Enquanto houver pendência</span>Você não consegue marcar uma nova consulta nem entrar na fila. É só pagar a consulta anterior que tudo volta ao normal.</div>
+</section>
+
+<!-- ============================ 7. MEDICO ============================== -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">7</span>Para o médico</h2>
+
+  <h3>7.1 Credenciamento: ser aprovado para atender</h3>
+  <p>Antes de atender, a administração confere quem você é. Isso protege os pacientes e o seu registro: ninguém consegue atender usando o CRM de outra pessoa.</p>
+  <ol class="passos">
+    <li>Crie a conta marcando <strong>“Sou médico(a)”</strong> com o CRM e o estado. Você vai direto para <span class="menu">Credenciamento médico</span>.</li>
+    <li><strong>O que você quer atender:</strong> marque <em>Pronto atendimento (clínico geral)</em> e/ou adicione suas <strong>especialidades</strong> (até 6), com o número de RQE.</li>
+    <li><strong>Documentos:</strong> envie, um por um, identidade (frente e verso), carteira do CRM, diploma e — se pediu especialidade — o título de especialista. Comprovante de endereço é opcional.</li>
+    <li><strong>Selfie:</strong> toque em <span class="botao claro">Tirar a foto</span>. No celular abre a câmera da frente. Rosto inteiro, sem óculos escuros nem boné, em lugar claro.</li>
+    <li>Leia o texto da conferência de identidade, marque que concorda e toque em <span class="botao">Enviar para análise</span>.</li>
+    <li>Pronto: o pedido fica <strong>Em análise</strong>. A resposta chega no sino 🔔: <em>aprovado</em>, <em>precisa de ajuste</em> (com a explicação) ou <em>não aprovado</em>.</li>
+  </ol>
+  <div class="caixa lembre"><span class="titulo">Enquanto não for aprovado</span>Você é como um paciente: não vê pacientes, agenda nem fila. Depois da aprovação, o menu de médico aparece sozinho.</div>
+  <div class="caixa dica"><span class="titulo">Pediram ajuste?</span>Abra o Credenciamento, leia a mensagem da administração, troque o documento indicado e envie de novo.</div>
+
+  <h3>7.2 Meus horários (para consultas agendadas)</h3>
+  <p>Em <span class="menu">Meus horários</span>, monte sua semana: dia, hora de início, hora de fim e quanto dura cada consulta. Os pacientes só veem os horários livres a partir daqui.</p>
+  <figure><img src="imagens/25-medico-horarios.jpg" alt="Meus horários" style="max-height:70mm"><figcaption>A grade semanal do médico.</figcaption></figure>
+
+  <h3>7.3 Ficar online e aceitar pacientes (atendimento imediato)</h3>
+  <div class="tela">
+    <div class="barra"><i></i><i></i><i></i> telesaude · Atendimento imediato</div>
+    <div class="corpo">
+      <div class="lado"><b>Atendimento</b>Painel<br>Agenda<br><span class="ativo">Atendimento imediato</span><br>Pacientes<br>Documentos<br>Meus ganhos</div>
+      <div class="conteudo">
+        <div class="linha" style="background:#e3f3f2"><span>● Você está <b>online</b> até 18:00</span><span style="color:#b4232a">Ficar offline</span></div>
+        <h5>Pacientes aguardando você (2)</h5>
+        <div class="linha"><span><span class="etiqueta">Pronto atendimento</span> João · febre há 2 dias</span><span class="botao">Aceitar</span></div>
+        <div class="linha"><span><span class="etiqueta laranja">Teleconsulta - Ortopedia</span> Ana · torci o tornozelo</span><span class="botao">Aceitar</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="legenda">Desenho simplificado do painel de atendimento imediato.</p>
+  <ol class="passos">
+    <li>No menu, toque em <span class="menu">Atendimento imediato</span> e depois em <span class="botao">Ficar online (6 horas)</span>.</li>
+    <li>Toque em <strong>Ativar alertas</strong> para ser avisado mesmo com a aba em segundo plano.</li>
+    <li>Quando um paciente que você pode atender entrar na fila, ele aparece na lista com um <strong>toque sonoro</strong>. Você vê o nome e o que ele sente.</li>
+    <li>Toque em <span class="botao">Aceitar</span>. Você vai direto para a tela do atendimento.</li>
+  </ol>
+  <div class="caixa imagine"><span class="titulo">Imagine assim</span>Como num aplicativo de corridas: o mesmo pedido toca para todos os médicos que podem atender. Quem aceitar primeiro leva o paciente; para os outros, o pedido some e aparece “outro médico já aceitou”.</div>
+  <div class="caixa lembre"><span class="titulo">Quais pedidos chegam para você?</span>Pronto atendimento, se a administração liberou você como clínico geral. Teleconsulta, só das especialidades que foram liberadas para você. Offline, nada chega e você não vê o que ninguém sente.</div>
+
+  <h3>7.4 Atender</h3>
+  <ol class="passos">
+    <li>Na tela do atendimento, no alto ficam as <strong>alergias</strong>, os remédios e os últimos sinais vitais do paciente.</li>
+    <li>Entre na sala pelo quadro <strong>Atendimento por vídeo</strong>.</li>
+    <li>Escreva a evolução no formato <strong>SOAP</strong> (o que o paciente conta, o que você observa, sua avaliação, o plano) e o <strong>CID-10</strong>. O rascunho é salvo sozinho.</li>
+    <li>Ao tocar em <span class="botao">Finalizar</span>, a evolução fica <strong>trancada</strong>: correções depois só por <strong>adendo</strong>, e o texto original continua guardado.</li>
+    <li>Emita os documentos: receita, atestado, pedido de exame, relatório.</li>
+    <li>Toque em <span class="botao">Encerrar</span>. A sala fecha para os dois e, se o paciente tem cartão, a cobrança acontece agora.</li>
+  </ol>
+  <figure><img src="imagens/21-medico-atendimento.jpg" alt="Tela de atendimento"><figcaption>Prontuário à esquerda; vídeo e documentos à direita.</figcaption></figure>
+
+  <h3>7.5 Assinar documentos</h3>
+  <p>Em <span class="menu">Documentos</span>, cada documento tem dois caminhos:</p>
+  <ul>
+    <li><strong>Assinar com certificado em nuvem:</strong> CPF + o código de 6 dígitos do aplicativo do seu certificado.</li>
+    <li><strong>Assinar fora da plataforma:</strong> baixe o PDF, assine no programa que você já usa (sem editar) e envie de volta. A plataforma confere se a assinatura é sua e se nada mudou.</li>
+  </ul>
+  <div class="caixa cuidado"><span class="titulo">Receita de controle especial</span>Precisa de assinatura qualificada ICP-Brasil (certificado digital). A assinatura do gov.br não serve para esse tipo.</div>
+
+  <h3>7.6 Meus ganhos</h3>
+  <p>Em <span class="menu">Meus ganhos</span> você vê: sua <strong>porcentagem</strong> hoje, quanto ganhou <strong>este mês</strong>, quanto <strong>já recebeu</strong> e quanto ainda tem <strong>a receber</strong>, além da lista de transferências feitas pela plataforma.</p>
+  <div class="caixa lembre"><span class="titulo">O que conta como ganho</span>Só consultas <strong>concluídas e pagas</strong>. Cada consulta guarda a porcentagem do dia em que foi marcada (ou aceita). Se a porcentagem mudar depois, as consultas antigas não mudam.</div>
+</section>
+
+<!-- ============================ 8. RECEPCAO ============================ -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">8</span>Para a recepção</h2>
+  <ul>
+    <li><strong>Marcar para um paciente:</strong> <span class="menu">Marcar consulta</span>, escolha o paciente, o médico, o dia e o horário. Pelo atendimento da recepção o pagamento é sempre por Pix (o cartão só o próprio paciente usa).</li>
+    <li><strong>Agenda:</strong> vê todas as consultas e pode cancelar com motivo (fica registrado).</li>
+    <li><strong>Pacientes:</strong> busca por nome ou CPF e vê o cadastro. O prontuário aparece como “Dados clínicos protegidos”.</li>
+    <li><strong>Atendimento imediato:</strong> acompanha a fila e quais médicos estão online, sem ver o que os pacientes sentem.</li>
+  </ul>
+  <div class="caixa lembre"><span class="titulo">Por que a recepção não vê o prontuário?</span>Porque a lei de proteção de dados diz que cada pessoa só vê o que precisa para o seu trabalho. Para marcar uma consulta, não é preciso saber o que o paciente tem.</div>
+</section>
+
+<!-- ========================== 9. ADMINISTRACAO ======================== -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">9</span>Para a administração</h2>
+  <p>Tudo fica no grupo <span class="menu">Administração</span> do menu. A primeira tela é o <strong>Painel da administração</strong>.</p>
+  <div class="tela">
+    <div class="barra"><i></i><i></i><i></i> telesaude · Painel da administração</div>
+    <div class="corpo">
+      <div class="lado"><b>Administração</b><span class="ativo">Painel</span><br>Médicos<br>Credenciamentos<br>Financeiro<br>Valores<br>Equipe<br>Indicadores<br>Pedidos LGPD<br>Auditoria<br>Configurações</div>
+      <div class="conteudo">
+        <h5>Agora</h5>
+        <div class="cartoes"><div class="cartao"><small>Consultas hoje</small><b>18</b></div><div class="cartao"><small>Na fila</small><b>3</b></div><div class="cartao"><small>Médicos online</small><b>5</b></div><div class="cartao"><small>A repassar</small><b>R$ 4.320</b></div></div>
+        <h5>Precisa da sua atenção</h5>
+        <div class="linha"><span><b>2</b> pedidos de credenciamento esperando análise</span><span>›</span></div>
+        <div class="linha"><span><b>1</b> reembolso a fazer</span><span>›</span></div>
+      </div>
+    </div>
+  </div>
+  <p class="legenda">Desenho simplificado do painel da administração.</p>
+
+  <h3>9.1 O painel</h3>
+  <ul>
+    <li><strong>Agora:</strong> consultas de hoje, pacientes na fila, médicos online e quanto há para repassar aos médicos.</li>
+    <li><strong>Últimos 30 dias:</strong> quanto os pacientes pagaram, quanto disso é dos médicos, consultas concluídas e pacientes novos.</li>
+    <li><strong>Precisa da sua atenção:</strong> tudo o que espera uma decisão sua. Toque na linha e você vai direto para onde resolver.</li>
+  </ul>
+  <div class="caixa dica"><span class="titulo">Comece o dia por aqui</span>Se “Precisa da sua atenção” diz “Nada pendente agora”, está tudo em dia.</div>
+
+  <h3>9.2 Primeira vez: configurar a plataforma</h3>
+  <ol class="passos">
+    <li>Entre com o e-mail de administração. Na primeira vez aparece <strong>Configuração inicial</strong>: nome que os pacientes verão, razão social e CNPJ.</li>
+    <li>Vá em <span class="menu">Configurações</span> e defina a <strong>porcentagem padrão do médico</strong> (ex.: 70).</li>
+    <li>Escolha o <strong>responsável técnico</strong> (um médico aprovado, exigência do Conselho de Medicina).</li>
+    <li>Em <span class="menu">Valores das consultas</span>, defina os preços (veja 9.5).</li>
+  </ol>
+
+  <h3>9.3 Credenciamentos: aprovar médicos</h3>
+  <ol class="passos">
+    <li>Abra <span class="menu">Credenciamentos</span>. Cada pedido mostra o médico, o CRM e o que ele quer atender.</li>
+    <li><strong>Documentos:</strong> toque em cada um para abrir. Cada abertura fica registrada.</li>
+    <li><strong>Identidade:</strong> toque em <span class="botao claro">Ver a selfie ao lado do documento</span>. É a mesma pessoa? O nome bate com o cadastro? Toque em <span class="botao">É a mesma pessoa</span> ou <strong>Não confirmo</strong> (com o motivo).</li>
+    <li><strong>CRM:</strong> toque em <strong>Abrir a busca do CFM</strong>, procure o CRM e confira se o nome é o mesmo e a situação é <strong>Ativo</strong>. Anote o nome e a situação nos campos.</li>
+    <li><strong>Decisão:</strong> marque o que liberar (pronto atendimento e/ou especialidades comprovadas) e toque em <span class="botao">Aprovar</span>. Ou <strong>Pedir ajuste</strong> / <strong>Recusar</strong>, sempre com uma mensagem para o médico.</li>
+  </ol>
+  <div class="caixa cuidado"><span class="titulo">Regras que a plataforma garante</span>Sem identidade confirmada, o botão Aprovar não funciona. Ninguém aprova o próprio pedido. Só se libera especialidade que o médico pediu (e para a qual mandou o título).</div>
+
+  <h3>9.4 Médicos</h3>
+  <p>Em <span class="menu">Médicos</span> aparece cada médico com: se está online, o CRM, o que atende, a <strong>porcentagem</strong>, quanto ganhou nos últimos 30 dias e quanto tem <strong>a receber</strong>.</p>
+  <ol class="passos">
+    <li>Toque em <strong>Alterar porcentagem e atendimento</strong>.</li>
+    <li>Escolha <strong>Usar a porcentagem padrão</strong> ou <strong>Porcentagem própria</strong> (ex.: 75).</li>
+    <li>Ajuste o que ele atende: pronto atendimento e especialidades.</li>
+    <li>Toque em <span class="botao">Salvar</span>. Vale para as <strong>próximas</strong> consultas.</li>
+  </ol>
+  <p>Para <strong>suspender</strong> o acesso de alguém, use <span class="menu">Equipe</span> (o histórico e os prontuários continuam guardados; reativar devolve o acesso).</p>
+
+  <h3>9.5 Valores das consultas</h3>
+  <p>São quatro preços, um para cada tipo de atendimento:</p>
+  <table>
+    <tr><th>Tipo</th><th>Exemplo</th></tr>
+    <tr><td>Pronto atendimento imediato</td><td>R$ 60,00</td></tr>
+    <tr><td>Pronto atendimento agendado</td><td>R$ 70,00</td></tr>
+    <tr><td>Teleconsulta imediata (especialista)</td><td>R$ 120,00</td></tr>
+    <tr><td>Teleconsulta agendada (especialista)</td><td>R$ 150,00</td></tr>
+  </table>
+  <p>Você também pode pôr um preço diferente para <strong>uma especialidade</strong> (ex.: cardiologia R$ 180,00) ou para <strong>um médico</strong> nas consultas agendadas. Vale sempre o mais específico: médico → especialidade → padrão.</p>
+  <div class="caixa lembre"><span class="titulo">O preço combinado não muda</span>O valor que o paciente viu ao marcar ou entrar na fila é o que será cobrado, mesmo que você mude a tabela depois.</div>
+
+  <h3>9.6 Financeiro</h3>
+  <p>Em <span class="menu">Financeiro</span>, escolha o período (De / Até) e veja:</p>
+  <ul>
+    <li><strong>Recebido no período</strong>, <strong>ganho dos médicos</strong>, o que <strong>fica com a plataforma</strong> e o que foi <strong>devolvido</strong>.</li>
+    <li><strong>Repasse aos médicos:</strong> cada médico com o que ganhou e quanto tem a receber (veja o capítulo 10).</li>
+    <li><strong>Cobranças recusadas</strong> no cartão de pacientes (o paciente já foi avisado).</li>
+    <li><strong>Reembolsos a decidir:</strong> pagamentos de atendimentos que não aconteceram.</li>
+  </ul>
+  <h4>Fazer um reembolso</h4>
+  <ol class="passos">
+    <li>Em Reembolsos a decidir, toque em <span class="botao claro">Reembolsar</span>.</li>
+    <li>Escreva o motivo e toque em <strong>Confirmar reembolso</strong>. O dinheiro volta ao paciente pelo serviço de pagamento.</li>
+  </ol>
+  <div class="caixa cuidado"><span class="titulo">Reembolso não se desfaz</span>Confira o valor e o paciente antes de confirmar. Tocar duas vezes não devolve duas vezes: a plataforma impede.</div>
+
+  <h3>9.7 Equipe, indicadores e pedidos LGPD</h3>
+  <ul>
+    <li><span class="menu">Equipe</span>: convidar recepção e administração (médicos entram pelo credenciamento), suspender e reativar acessos, conferir o CRM.</li>
+    <li><span class="menu">Indicadores</span>: gráficos de consultas, cancelamentos, receita, tempo de espera na fila e documentos assinados (7, 30 ou 90 dias). Só números, nunca dado de saúde.</li>
+    <li><span class="menu">Pedidos LGPD</span>: pedidos dos pacientes sobre os próprios dados, com prazo de 15 dias e aviso de prazo vencido.</li>
+  </ul>
+  <figure><img src="imagens/32-admin-indicadores.jpg" alt="Indicadores" style="max-height:80mm"><figcaption>Indicadores da plataforma.</figcaption></figure>
+
+  <h3>9.8 Auditoria</h3>
+  <p>Em <span class="menu">Auditoria</span> você vê <strong>quem fez o quê e quando</strong>: aprovações, mudanças de preço e de porcentagem, repasses, reembolsos, prontuários abertos, exportação de dados. Filtre por assunto. Ninguém consegue apagar nem alterar esses registros.</p>
+
+  <h3>9.9 Configurações</h3>
+  <p>Nome que os pacientes veem, razão social, responsável técnico, fuso horário e porcentagem padrão do médico. Toda mudança fica na auditoria. O CNPJ e a conta de recebimento (serviço de pagamento) são configurados pelo suporte técnico.</p>
+</section>
+
+<!-- ===================== 10. DINHEIRO DOS MEDICOS ===================== -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">10</span>Dinheiro dos médicos: porcentagens e repasses</h2>
+  <div class="caixa imagine"><span class="titulo">Imagine assim</span>O paciente paga a consulta para a plataforma. A plataforma é como um cofre: cada consulta que o médico faz coloca uma parte (a porcentagem dele) num “cofrinho com o nome do médico”. De tempos em tempos, a administração transfere o que está no cofrinho para a conta do médico — e anota aqui que transferiu.</div>
+  <h3>10.1 Como a conta é feita</h3>
+  <p>Consulta de <strong>R$ 100,00</strong> e porcentagem de <strong>70%</strong>:</p>
+  <table>
+    <tr><th>Quem</th><th>Quanto</th></tr>
+    <tr><td>Médico</td><td>R$ 70,00 (70% de 100)</td></tr>
+    <tr><td>Plataforma</td><td>R$ 30,00 (antes das taxas do serviço de pagamento)</td></tr>
+  </table>
+  <ul>
+    <li>Só conta consulta <strong>concluída</strong> e <strong>paga</strong>. Cancelada ou reembolsada não conta.</li>
+    <li>Cada consulta guarda a porcentagem do dia em que nasceu.</li>
+    <li>Quando a conta dá centavos quebrados, arredonda <strong>para baixo</strong> (ex.: 70% de R$ 33,33 = R$ 23,33).</li>
+  </ul>
+  <h3>10.2 Registrar que pagou o médico</h3>
+  <ol class="passos">
+    <li>Faça a transferência no <strong>banco da empresa</strong> (Pix ou TED), como de costume.</li>
+    <li>Na plataforma, abra <span class="menu">Financeiro</span>. Na linha do médico, toque em <span class="botao claro">Registrar pagamento</span>.</li>
+    <li>Confira o valor (já vem preenchido com o saldo), a data e escreva como pagou (ex.: “Pix 15/11”).</li>
+    <li>Toque em <span class="botao">Registrar</span>. O “A receber” do médico diminui, e ele vê o pagamento em Meus ganhos.</li>
+  </ol>
+  <div class="caixa cuidado"><span class="titulo">A plataforma não transfere dinheiro sozinha</span>Ela só registra. A transferência é feita por você, no banco. E não aceita registrar mais do que o médico tem a receber (para evitar um zero a mais digitado por engano).</div>
+  <div class="caixa dica"><span class="titulo">Registrou errado?</span>Toque em <strong>Cancelar registro</strong> e escreva o motivo. O registro continua visível (riscado) e o saldo volta. Depois registre o valor certo.</div>
+</section>
+
+<!-- =========================== 11. VALIDAR ============================ -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">11</span>Validar um documento</h2>
+  <p>Qualquer pessoa (farmácia, empresa, laboratório) pode conferir se uma receita ou atestado é verdadeiro, <strong>sem ter conta</strong>:</p>
+  <ol class="passos">
+    <li>Abra o endereço da plataforma e toque em <strong>Validar documento</strong>.</li>
+    <li>Digite o <strong>código</strong> impresso no rodapé do documento.</li>
+    <li>Aparece se é autêntico: tipo, número, data, médico com CRM e só as <strong>iniciais</strong> do paciente. O conteúdo de saúde nunca aparece.</li>
+  </ol>
+  <figure><img src="imagens/40-validar.jpg" alt="Validar documento" style="max-height:70mm"><figcaption>A página pública de validação.</figcaption></figure>
+</section>
+
+<!-- ========================= 12. PRIVACIDADE ========================== -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">12</span>Privacidade e segurança</h2>
+  <table>
+    <tr><th>O que a plataforma faz</th><th>Por quê</th></tr>
+    <tr><td>Guarda os dados em São Paulo</td><td>Os dados de saúde ficam no Brasil.</td></tr>
+    <tr><td>Cada pessoa só vê o que precisa</td><td>A recepção e a administração não leem prontuário.</td></tr>
+    <tr><td>O prontuário finalizado não muda</td><td>Correção só por adendo; o original fica guardado (guarda de 20 anos).</td></tr>
+    <tr><td>Tudo fica registrado</td><td>Quem abriu, quem mudou, quando. O paciente vê quem abriu o prontuário dele.</td></tr>
+    <tr><td>Cada aceite tem versão, data e IP</td><td>Prova do que a pessoa concordou.</td></tr>
+    <tr><td>Videochamada não é gravada</td><td>A conversa é só entre paciente e médico.</td></tr>
+    <tr><td>Número do cartão não passa pela plataforma</td><td>Vai direto ao serviço de pagamento.</td></tr>
+    <tr><td>Selfie do médico com acesso restrito</td><td>É dado biométrico: só a administração, com registro de cada abertura.</td></tr>
+  </table>
+  <div class="caixa lembre"><span class="titulo">Seus direitos</span>Em Minha conta, qualquer pessoa pode corrigir dados, baixar uma cópia de tudo, ver quem acessou e pedir algo à plataforma. Pedidos de exclusão não apagam o prontuário: a lei manda guardá-lo por 20 anos.</div>
+</section>
+
+<!-- ======================== 13. QUANDO DA ERRADO ======================= -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">13</span>Quando algo dá errado</h2>
+  <table>
+    <tr><th>O que aconteceu</th><th>O que fazer</th></tr>
+    <tr><td>O e-mail de confirmação não chegou</td><td>Olhe o spam; espere 1 minuto e toque em <strong>Reenviar o e-mail</strong>. Se nunca chega, avise o suporte técnico: falta configurar o envio de e-mails (capítulo 14).</td></tr>
+    <tr><td>O link do e-mail diz que venceu</td><td>Tente entrar com a senha. Se a conta não estava confirmada, a tela oferece reenviar.</td></tr>
+    <tr><td>“E-mail ou senha incorretos”</td><td>Confira as letras maiúsculas. Use <strong>Esqueci minha senha</strong>.</td></tr>
+    <tr><td>Não aparece especialidade que eu queria</td><td>Ainda não há médico daquela especialidade aprovado. Use o pronto atendimento ou volte depois.</td></tr>
+    <tr><td>Estou na fila e ninguém aceita</td><td>Os médicos daquela linha já foram avisados. Se ninguém aceitar em 2 horas, a espera é encerrada e o Pix é devolvido.</td></tr>
+    <tr><td>Não consigo marcar consulta: “pagamento pendente”</td><td>Pague a consulta anterior (painel › Pagar agora).</td></tr>
+    <tr><td>A sala de vídeo não mostra imagem</td><td>Permita câmera e microfone no navegador (ícone de cadeado ao lado do endereço). Feche outros programas que usam a câmera.</td></tr>
+    <tr><td>Médico: “CRM aguardando verificação”</td><td>A administração ainda não conferiu seu CRM. Até lá não dá para emitir documentos nem ficar online.</td></tr>
+    <tr><td>Médico: não recebo pedidos</td><td>Confira se está <strong>online</strong> e se a administração liberou o pronto atendimento ou suas especialidades.</td></tr>
+    <tr><td>Administração: “Acima do saldo”</td><td>O valor do repasse é maior do que o médico tem a receber. Confira o número digitado.</td></tr>
+    <tr><td>“A API não respondeu” / “Serviço indisponível”</td><td>Espere 30 segundos e tente de novo (o servidor gratuito “acorda” devagar). Persistindo, avise o suporte.</td></tr>
+  </table>
+</section>
+
+<!-- ========================== 14. PARTE TECNICA ======================== -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">14</span>Para quem instala e mantém (parte técnica)</h2>
+  <p>Esta parte é para a pessoa que cuida do servidor. Os detalhes completos estão em <span class="mono">docs/publicar.md</span> e nos registros de decisão <span class="mono">docs/adr-*.md</span>.</p>
+  <h3>14.1 Rodar na sua máquina</h3>
+<pre>pnpm install            # instala tudo
+pnpm configurar         # cria apps/api/.env e apps/web/.env.local
+pnpm verificar          # mostra o que falta preencher
+pnpm db:migrar          # cria/atualiza as tabelas (banco de DESENVOLVIMENTO)
+pnpm dev                # site em http://localhost:3000, API em http://localhost:3333</pre>
+  <div class="caixa cuidado"><span class="titulo">Nunca teste no banco da produção</span>O <span class="mono">apps/api/.env</span> da sua máquina deve apontar para um projeto Supabase de desenvolvimento. Comandos que gravam em banco remoto pedem <span class="mono">CONFIRMAR_BANCO_REMOTO=sim</span> de propósito.</div>
+
+  <h3>14.2 Variáveis principais (API)</h3>
+  <table>
+    <tr><th>Variável</th><th>Para que serve</th></tr>
+    <tr><td><span class="mono">PLATAFORMA_SLUG</span></td><td>Liga o modo “a plataforma é a clínica”. Sem ela, funciona o modo antigo de várias clínicas.</td></tr>
+    <tr><td><span class="mono">PLATAFORMA_ADMIN_EMAILS</span></td><td>Quem pode fazer a configuração inicial. Obrigatório em produção.</td></tr>
+    <tr><td><span class="mono">PAGAMENTO_PROVEDOR</span>, <span class="mono">PAGAMENTO_ACCESS_TOKEN</span>, <span class="mono">PAGAMENTO_CHAVE_PUBLICA</span></td><td>Conta de recebimento (Mercado Pago). Sem elas, fora de produção, tudo roda no pagamento simulado.</td></tr>
+    <tr><td><span class="mono">IDENTIDADE_PROVEDOR</span></td><td><span class="mono">manual</span> (padrão, sem custo) ou <span class="mono">externo</span> (serviço de reconhecimento facial, com <span class="mono">IDENTIDADE_WEBHOOK_SEGREDO</span>).</td></tr>
+    <tr><td><span class="mono">VIDEO_PROVEDOR</span> / <span class="mono">VIDEO_API_KEY</span></td><td>Videochamada de verdade (Daily). Sem ela, a sala abre com um aviso no lugar da imagem.</td></tr>
+    <tr><td><span class="mono">EMAIL_PROVEDOR</span> / <span class="mono">EMAIL_API_KEY</span></td><td>Avisos por e-mail (Resend). Sem ela, os avisos ficam só no sino.</td></tr>
+  </table>
+
+  <h3>14.3 E-mail de confirmação (Supabase)</h3>
+  <ol class="passos">
+    <li><strong>Authentication › URL Configuration:</strong> Site URL = endereço publicado do site; em Redirect URLs, inclua <span class="mono">https://SEU-SITE/**</span>.</li>
+    <li><strong>Authentication › SMTP:</strong> configure um SMTP próprio. O embutido do Supabase só entrega para a equipe do projeto e tem limite por hora — é a causa de “às vezes não chega”.</li>
+    <li><strong>Email Templates:</strong> use os modelos com <span class="mono">token_hash</span> descritos em <span class="mono">docs/publicar.md</span>: assim a confirmação funciona em qualquer aparelho.</li>
+  </ol>
+
+  <h3>14.4 Publicar uma versão nova</h3>
+  <ol class="passos">
+    <li>Rode as migrações no banco publicado (<span class="mono">CONFIRMAR_BANCO_REMOTO=sim pnpm db:migrar</span>) e <span class="mono">pnpm db:verificar-rls</span>.</li>
+    <li>Publique a <strong>API</strong> (Render) e espere <span class="mono">/pronto</span> responder.</li>
+    <li>Depois publique o <strong>site</strong> (Vercel).</li>
+  </ol>
+
+  <h3>14.5 Testes automáticos</h3>
+<pre>pnpm typecheck          # tipos
+pnpm test               # testes de unidade
+pnpm test:banco         # testes contra um Postgres DESCARTÁVEL (DATABASE_URL_TESTE)</pre>
+</section>
+
+<!-- ========================= 15. ROTEIRO DE TESTES ===================== -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">15</span>Roteiro de testes</h2>
+  <p>Faça na ordem, num ambiente de teste. Use uma janela anônima (ou outro navegador) para cada pessoa.</p>
+  <div class="caixa dica"><span class="titulo">Cartões de teste</span><span class="mono">4242 4242 4242 4242</span> funciona; <span class="mono">4000 0000 0000 0002</span> é recusado no fim da consulta. Qualquer validade futura e qualquer código. O Pix de teste tem o botão <strong>Simular o pagamento</strong>.</div>
+  <h3>A. Conta e acesso</h3>
+  <table class="check">
+    <tr><th></th><th>Faça</th><th>Deve acontecer</th></tr>
+    <tr><td>☐</td><td>Crie uma conta de paciente.</td><td>E-mail de confirmação; depois dos dados, cai no painel sem escolher clínica.</td></tr>
+    <tr><td>☐</td><td>No cadastro, espere 1 minuto e reenvie o e-mail.</td><td>Chega outro e-mail; o mais novo funciona.</td></tr>
+    <tr><td>☐</td><td>Abra um link de confirmação já usado.</td><td>Tela explicando que venceu, com caminho para entrar.</td></tr>
+    <tr><td>☐</td><td>“Esqueci minha senha” com um e-mail qualquer.</td><td>A mesma mensagem, com ou sem conta.</td></tr>
+  </table>
+  <h3>B. Médico</h3>
+  <table class="check">
+    <tr><th></th><th>Faça</th><th>Deve acontecer</th></tr>
+    <tr><td>☐</td><td>Crie uma conta marcando “Sou médico(a)”.</td><td>Vai para Credenciamento; sem acesso a pacientes ou fila.</td></tr>
+    <tr><td>☐</td><td>Envie os documentos e a selfie sem aceitar o termo.</td><td>Recusado. Aceitando: “Em análise”.</td></tr>
+    <tr><td>☐</td><td>Depois de aprovado, fique online.</td><td>A lista de pacientes aguardando aparece.</td></tr>
+    <tr><td>☐</td><td>Dois médicos aptos online; um paciente entra na fila.</td><td>O pedido aparece (com som) para os dois; quem aceita primeiro atende; para o outro, ele some.</td></tr>
+    <tr><td>☐</td><td>Finalize a evolução e tente editar.</td><td>Só adendo é possível.</td></tr>
+  </table>
+  <h3>C. Paciente e pagamento</h3>
+  <table class="check">
+    <tr><th></th><th>Faça</th><th>Deve acontecer</th></tr>
+    <tr><td>☐</td><td>Sem cartão: Teleconsulta › especialidade › Agendar.</td><td>Horário reservado e tela de Pix.</td></tr>
+    <tr><td>☐</td><td>Cadastre o cartão 4242 e entre no pronto atendimento.</td><td>Nada cobrado antes; ao encerrar, aviso “Consulta paga no cartão”.</td></tr>
+    <tr><td>☐</td><td>Cartão 4000…0002: faça e encerre uma consulta.</td><td>Aviso de recusa, pendência e bloqueio até pagar por Pix.</td></tr>
+  </table>
+  <h3>D. Administração</h3>
+  <table class="check">
+    <tr><th></th><th>Faça</th><th>Deve acontecer</th></tr>
+    <tr><td>☐</td><td>Tente aprovar um credenciamento sem confirmar a identidade.</td><td>Botão bloqueado.</td></tr>
+    <tr><td>☐</td><td>Defina a porcentagem padrão 70% e a de um médico 75%.</td><td>Médicos mostra 70% (padrão) e 75% (própria).</td></tr>
+    <tr><td>☐</td><td>Depois de uma consulta paga de R$ 100,00, abra Financeiro.</td><td>Ganho do médico R$ 70,00 (ou 75,00) e “A receber” igual.</td></tr>
+    <tr><td>☐</td><td>Registre um repasse maior que o saldo.</td><td>Recusado: acima do saldo.</td></tr>
+    <tr><td>☐</td><td>Registre o valor certo; depois cancele com motivo.</td><td>Saldo cai e volta; o registro fica riscado.</td></tr>
+    <tr><td>☐</td><td>Reembolse um pagamento pendente de reembolso.</td><td>Some da lista; aparece em “Devolvido”.</td></tr>
+    <tr><td>☐</td><td>Abra Auditoria › Financeiro.</td><td>Aparecem as ações acima, com quem e quando.</td></tr>
+  </table>
+</section>
+
+<!-- =========================== 16. GLOSSARIO ========================== -->
+<section class="capitulo">
+  <h2><span class="numero-capitulo">16</span>Glossário: palavras difíceis</h2>
+  <dl class="glossario">
+    <dt>Adendo</dt><dd>Uma correção acrescentada ao prontuário sem apagar o texto original.</dd>
+    <dt>Assinatura digital (ICP-Brasil)</dt><dd>Assinatura eletrônica com valor legal, feita com um certificado digital. Prova quem assinou e que o documento não foi alterado.</dd>
+    <dt>Auditoria</dt><dd>A lista de tudo o que foi feito na plataforma, com quem fez e quando. Ninguém consegue apagar.</dd>
+    <dt>CID-10</dt><dd>Código internacional que identifica uma doença (ex.: J06 = infecção das vias aéreas).</dd>
+    <dt>CRM</dt><dd>O registro do médico no Conselho Regional de Medicina. Sem ele ativo, ninguém pode atender.</dd>
+    <dt>Credenciamento</dt><dd>A análise que a administração faz antes de um médico começar a atender: documentos, identidade e CRM.</dd>
+    <dt>Especialidade</dt><dd>A área em que o médico se especializou (ortopedia, pediatria...). Comprovada pelo título de especialista.</dd>
+    <dt>Fila</dt><dd>A lista de pacientes esperando atendimento imediato, na ordem de chegada.</dd>
+    <dt>LGPD</dt><dd>Lei Geral de Proteção de Dados: a lei que diz como dados pessoais devem ser cuidados.</dd>
+    <dt>Online (médico)</dt><dd>Quando o médico avisou que está disponível e recebe pedidos de atendimento imediato.</dd>
+    <dt>Pendência</dt><dd>Uma consulta já feita que ainda não foi paga (o cartão foi recusado).</dd>
+    <dt>Pix</dt><dd>Pagamento instantâneo pelo aplicativo do banco, com QR Code ou código “copia e cola”.</dd>
+    <dt>Porcentagem do médico</dt><dd>A parte do valor de cada consulta que fica com o médico.</dd>
+    <dt>Prontuário</dt><dd>A ficha de saúde do paciente: consultas, evolução, exames, documentos. Guardado por 20 anos.</dd>
+    <dt>Reembolso</dt><dd>Devolver ao paciente o dinheiro de um atendimento que não aconteceu.</dd>
+    <dt>Repasse</dt><dd>A transferência que a plataforma faz ao médico do que ele ganhou.</dd>
+    <dt>Responsável técnico</dt><dd>O médico que responde pela plataforma perante o Conselho de Medicina.</dd>
+    <dt>RQE</dt><dd>Registro de Qualificação de Especialista: o número que comprova a especialidade no Conselho.</dd>
+    <dt>Saldo a receber</dt><dd>Tudo o que o médico ganhou menos o que já foi transferido para ele.</dd>
+    <dt>SOAP</dt><dd>Jeito organizado de escrever a consulta: <strong>S</strong>ubjetivo (o que o paciente conta), <strong>O</strong>bjetivo (o que o médico vê), <strong>A</strong>valiação e <strong>P</strong>lano.</dd>
+    <dt>Teleconsulta</dt><dd>Consulta com especialista por vídeo.</dd>
+    <dt>Pronto atendimento</dt><dd>Atendimento com clínico geral, para queixas do dia a dia.</dd>
+  </dl>
+  <p style="margin-top:8mm; color: var(--suave); font-size: 9pt;">Os textos de Termos de uso e Política de privacidade são uma base técnica e devem passar por revisão jurídica antes da publicação. Este guia descreve o comportamento da plataforma; ele não é um parecer jurídico.</p>
+</section>
+
+</main>
+</body>
+</html>

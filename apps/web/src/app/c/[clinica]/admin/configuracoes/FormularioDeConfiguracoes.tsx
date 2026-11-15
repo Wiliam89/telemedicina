@@ -48,7 +48,7 @@ export function FormularioDeConfiguracoes({ slug, inicial, medicos }: { slug: st
     if (nome.trim() !== inicial.nomeFantasia) corpo.nomeFantasia = nome.trim();
     if (razao.trim() !== inicial.razaoSocial) corpo.razaoSocial = razao.trim();
     if (fuso !== inicial.fusoHorario) corpo.fusoHorario = fuso;
-    if ((rt || null) !== inicial.responsavelTecnicoId) corpo.responsavelTecnicoId = rt || null;
+    if (rt && rt !== inicial.responsavelTecnicoId) corpo.responsavelTecnicoId = rt;
     if (bps !== inicial.repassePadraoBps) corpo.repassePadraoBps = bps;
     if (Object.keys(corpo).length === 0) return setOk("Nada mudou.");
     setOcupado(true);
@@ -88,7 +88,7 @@ export function FormularioDeConfiguracoes({ slug, inicial, medicos }: { slug: st
         <div className="space-y-1.5">
           <label htmlFor="rt" className="block text-sm font-medium">Responsável técnico (médico)</label>
           <select id="rt" value={rt} onChange={(e) => setRt(e.target.value)} className={`${CLASSE_CONTROLE} border-linha`}>
-            <option value="">Ainda não definido</option>
+            {inicial.responsavelTecnicoId ? null : <option value="">Ainda não definido</option>}
             {aptos.map((m) => (
               <option key={m.id} value={m.id}>{m.nomeCompleto} — CRM {m.crm}-{m.crmUf}</option>
             ))}
