@@ -12,6 +12,7 @@
  *   GET  /consultas?de=&ate=          minha agenda no periodo
  *   POST /consultas/:id/cancelar
  *   POST /consultas/:id/status        iniciar / concluir (medico)
+ *   (retorno, falta e avaliacao: rotas/retorno.ts - ADR-0027)
  *
  * Tudo dentro de uma clinica: exige login + cabecalho X-Clinica.
  */
@@ -38,6 +39,7 @@ import { fusoDaClinica, notificar, quandoNaClinica } from "../notificacoes/index
 import { ErroHttp } from "../erros.js";
 import { cartaoAtivo, exigirSemPendencia, precoPara } from "../cobranca.js";
 import { percentualDoMedico } from "../repasse.js";
+import { exigirSemRestricao } from "../restricoes.js";
 import type { ResolvedorDePagamento } from "../pagamento/index.js";
 import { liberarReservasVencidas, registrarPendenciaDeEstorno } from "../reservas.js";
 import { MINUTOS_DE_RESERVA } from "./pagamentos.js";
@@ -78,6 +80,8 @@ export const esquemaMarcar = z.object({
   especialidade: z.string().refine(especialidadeExiste, "especialidade desconhecida").optional(),
   /** ADR-0023: "pix" para pagar antes mesmo tendo cartao; "cartao" para exigir o cartao cadastrado. */
   cobranca: z.enum(["cartao", "pix"]).optional(),
+  /** ADR-0027: marcar o RETORNO SEM CUSTO desta consulta (mesmo medico, dentro do prazo). */
+  retornoDe: z.string().uuid("retornoDe invalido").optional(),
 });
 
 export const esquemaCancelar = z.object({ motivo: z.string().trim().min(3, "diga o motivo do cancelamento").max(300) });
@@ -317,12 +321,36 @@ export async function rotasAgenda(
       );
     if (!envolvidos.some((v) => v.perfilId === pacienteId)) throw new ErroHttp(400, "PACIENTE_SEM_VINCULO", "Este paciente não está cadastrado nesta clínica.");
     if (!envolvidos.some((v) => v.perfilId === dados.medicoId)) throw new ErroHttp(400, "MEDICO_NAO_ATENDE_AQUI", "Este médico não atende nesta clínica.");
+    // ADR-0027: paciente impedido pela administracao nao marca (nem o retorno).
+    await exigirSemRestricao(banco, req.contexto.clinicaId, pacienteId);
+
+    /**
+     * ADR-0027 - RETORNO SEM CUSTO (Resolucao CFM 1.958/2010). E a continuacao
+     * da consulta original: mesmo paciente, mesmo medico, mesma linha, dentro
+     * do prazo que o medico liberou. Nao e cobrado e nao gera repasse.
+     */
+    let retorno: { id: string; ate: Date } | null = null;
+    if (dados.retornoDe) {
+      const [original] = await banco
+        .select({ id: consultas.id, pacienteId: consultas.pacienteId, medicoId: consultas.medicoId, status: consultas.status, retornoAte: consultas.retornoAte, retornoDe: consultas.retornoDe, linha: consultas.linha, especialidade: consultas.especialidade })
+        .from(consultas)
+        .where(and(eq(consultas.id, dados.retornoDe), eq(consultas.clinicaId, req.contexto.clinicaId)))
+        .limit(1);
+      if (!original || original.pacienteId !== pacienteId) throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta original não encontrada.");
+      if (original.status !== "concluida" || original.retornoDe || !original.retornoAte) throw new ErroHttp(409, "SEM_RETORNO", "Esta consulta não tem retorno sem custo liberado pelo médico.");
+      if (original.medicoId !== dados.medicoId) throw new ErroHttp(409, "RETORNO_E_COM_O_MESMO_MEDICO", "O retorno é com o mesmo médico da consulta.");
+      if (new Date(dados.inicio) > original.retornoAte) throw new ErroHttp(409, "RETORNO_FORA_DO_PRAZO", "Este horário passa do prazo do retorno sem custo. Escolha uma data até o fim do prazo.");
+      retorno = { id: original.id, ate: original.retornoAte };
+      dados.linha = original.linha;
+      dados.especialidade = original.especialidade ?? undefined;
+    }
 
     // ADR-0024: o medico precisa atender esta linha. Pronto atendimento e do
     // clinico geral; teleconsulta de uma especialidade, so de quem a tem conferida.
     if (dados.linha === "pronto_atendimento" && dados.especialidade) throw new ErroHttp(400, "LINHA_INVALIDA", "O pronto atendimento não tem especialidade.");
     const especialidade = dados.linha === "teleconsulta" ? dados.especialidade ?? null : null;
-    if (dados.linha === "pronto_atendimento" || especialidade) {
+    // No retorno, o medico continua o proprio atendimento: a aptidao ja foi conferida na original.
+    if (!retorno && (dados.linha === "pronto_atendimento" || especialidade)) {
       const [aptidao] = await banco.select({ especialidades: medicos.especialidades, atendeProntoAtendimento: medicos.atendeProntoAtendimento }).from(medicos).where(eq(medicos.perfilId, dados.medicoId)).limit(1);
       if (!aptidao || !medicoAtende(aptidao, dados.linha, especialidade)) {
         throw new ErroHttp(409, "MEDICO_NAO_ATENDE_ESTA_LINHA", dados.linha === "pronto_atendimento" ? "Este médico não atende o pronto atendimento." : "Este médico não atende esta especialidade.");
@@ -348,7 +376,7 @@ export async function rotasAgenda(
     // vale para quem tem preco, mas nao conectou conta de recebimento: em
     // producao ninguem conseguiria pagar, e o paciente ficaria preso na tela.
     const preco = await precoPara(banco, req.contexto.clinicaId, dados.linha, "agendado", { medicoId: dados.medicoId, especialidade });
-    const cobraNaPlataforma = Boolean(preco) && (await opcoes.resolvedor.temRecebimento(req.contexto.clinicaId));
+    const cobraNaPlataforma = !retorno && Boolean(preco) && (await opcoes.resolvedor.temRecebimento(req.contexto.clinicaId));
 
     /**
      * ADR-0023 - COMO ESTA CONSULTA SERA COBRADA.
@@ -391,6 +419,7 @@ export async function rotasAgenda(
           marcadoPor: req.usuario.id,
           linha: dados.linha,
           especialidade,
+          retornoDe: retorno?.id ?? null,
           ...(cobraNaPlataforma ? { valorCombinadoCentavos: preco!.valorCentavos } : {}),
           ...(cobraNaPlataforma && cartaoId
             ? { formaDeCobranca: "cartao_ao_final" as const, cartaoId }
@@ -404,7 +433,7 @@ export async function rotasAgenda(
           acao: "consulta.marcada",
           tabela: "consultas",
           registroId: id,
-          detalhes: { medicoId: dados.medicoId, pacienteId, inicio: dados.inicio, porEquipe: pacienteId !== req.usuario.id, linha: dados.linha, especialidade, cobranca: cartaoId ? "cartao_ao_final" : cobraNaPlataforma ? "pix" : "fora_da_plataforma" },
+          detalhes: { medicoId: dados.medicoId, pacienteId, inicio: dados.inicio, porEquipe: pacienteId !== req.usuario.id, linha: dados.linha, especialidade, cobranca: retorno ? "retorno_sem_custo" : cartaoId ? "cartao_ao_final" : cobraNaPlataforma ? "pix" : "fora_da_plataforma", retornoDe: retorno?.id ?? null },
           ip: req.ip,
         });
       });
@@ -412,7 +441,9 @@ export async function rotasAgenda(
       // A trava do banco: alguem marcou o mesmo horario no intervalo entre
       // a conferencia acima e esta gravacao.
       const codigo = (erro as { cause?: { code?: string } }).cause?.code ?? (erro as { code?: string }).code;
-      const detalhe = String((erro as { cause?: { constraint?: string } }).cause?.constraint ?? "");
+      const causa = (erro as { cause?: { constraint?: string; constraint_name?: string } }).cause;
+      const detalhe = String(causa?.constraint_name ?? causa?.constraint ?? "");
+      if (codigo === "23505" && (detalhe.includes("um_retorno") || retorno)) throw new ErroHttp(409, "RETORNO_JA_MARCADO", "Este retorno já foi marcado. Veja em Minhas consultas.");
       if (codigo === "23P01") {
         if (detalhe.includes("paciente")) throw new ErroHttp(409, "PACIENTE_JA_TEM_CONSULTA", "Você já tem outra consulta neste horário.");
         throw new ErroHttp(409, "HORARIO_INDISPONIVEL", "Este horário acabou de ser ocupado. Escolha outro.");
@@ -430,7 +461,7 @@ export async function rotasAgenda(
         perfilId: criada!.paciente.id,
         clinicaId: req.contexto.clinicaId,
         tipo: "consulta_marcada",
-        titulo: pagar ? "Consulta reservada: conclua o pagamento" : "Consulta marcada",
+        titulo: pagar ? "Consulta reservada: conclua o pagamento" : retorno ? "Retorno marcado (sem custo)" : "Consulta marcada",
         corpo: `Teleconsulta com Dr(a). ${criada!.medico.nomeCompleto} ${quando}, em ${local.nome}.${pagar ? " O horário fica reservado por pouco tempo até o pagamento." : ""}`,
         link: pagar ? `/c/${local.slug}/pagamento/${id}` : `/c/${local.slug}/agenda`,
         chave: `consulta_marcada:${id}`,
@@ -628,6 +659,11 @@ export async function rotasAgenda(
       especialidadeDaConsulta: consultas.especialidade,
       formaDeCobranca: consultas.formaDeCobranca,
       valorCombinadoCentavos: consultas.valorCombinadoCentavos,
+      retornoAte: consultas.retornoAte,
+      retornoDe: consultas.retornoDe,
+      ausencia: consultas.ausencia,
+      retornoMarcado: sql<boolean>`exists (select 1 from consultas r where r.retorno_de = ${consultas.id} and r.status <> 'cancelada')`,
+      notaDaAvaliacao: sql<number | null>`(select a.nota from avaliacoes_consulta a where a.consulta_id = ${consultas.id})`,
     };
   }
 
@@ -642,6 +678,7 @@ function formatarConsulta(l: {
   pacienteId: string; pacienteNome: string; medicoId: string; medicoNome: string; especialidade: string | null;
   crm: string; crmUf: string; motivoCancelamento: string | null;
   linha: "pronto_atendimento" | "teleconsulta"; especialidadeDaConsulta: string | null; formaDeCobranca: "antecipada" | "cartao_ao_final"; valorCombinadoCentavos: number | null;
+  retornoAte: Date | null; retornoDe: string | null; ausencia: string | null; retornoMarcado: boolean; notaDaAvaliacao: number | null;
 }): ConsultaResumo {
   return {
     id: l.id,
@@ -656,6 +693,11 @@ function formatarConsulta(l: {
     especialidadeDaConsulta: l.especialidadeDaConsulta,
     formaDeCobranca: l.formaDeCobranca,
     valorCombinadoCentavos: l.valorCombinadoCentavos,
+    retornoAte: l.retornoAte ? new Date(l.retornoAte).toISOString() : null,
+    retornoDe: l.retornoDe,
+    retornoMarcado: Boolean(l.retornoMarcado),
+    ausencia: (l.ausencia as ConsultaResumo["ausencia"]) ?? null,
+    notaDaAvaliacao: l.notaDaAvaliacao === null || l.notaDaAvaliacao === undefined ? null : Number(l.notaDaAvaliacao),
   };
 }
 
@@ -663,5 +705,4 @@ function formatarConsulta(l: {
 // join precisa de outro nome.
 const perfilDoMedico = alias(perfis, "perfil_do_medico");
 
-// `sql` fica importado para uso futuro em filtros mais complexos da agenda.
-void sql;
+

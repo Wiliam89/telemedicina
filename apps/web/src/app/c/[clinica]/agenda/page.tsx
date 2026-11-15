@@ -27,7 +27,10 @@ export default async function PaginaAgenda({ params }: { params: Promise<{ clini
   const { token, perfil, clinica } = await contextoDaClinica(slug);
   const fuso = clinica.fusoHorario;
 
-  const r = await chamarApi<ConsultaResumo[]>("/consultas", { token, clinica: slug });
+  // Desde 30 dias atras: e o prazo para avaliar a consulta e para o medico liberar o retorno.
+  const desde = new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(new Date(Date.now() - 30 * 86400000));
+  const ate = new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(new Date(Date.now() + 45 * 86400000));
+  const r = await chamarApi<ConsultaResumo[]>(`/consultas?de=${desde}&ate=${ate}`, { token, clinica: slug });
 
   const titulo =
     clinica.papel === "paciente" ? "Minhas consultas" : clinica.papel === "medico" ? "Meus atendimentos" : "Agenda da clínica";
@@ -46,7 +49,7 @@ export default async function PaginaAgenda({ params }: { params: Promise<{ clini
     <div className="space-y-8">
       <CabecalhoDaPagina
         titulo={titulo}
-        descricao="Consultas de ontem até os próximos 30 dias, no fuso horário da clínica."
+        descricao="Consultas dos últimos 30 dias e dos próximos 45, no fuso horário da clínica."
         acoes={
           <>
             {temPapel(clinica, "medico") ? (
@@ -76,7 +79,7 @@ export default async function PaginaAgenda({ params }: { params: Promise<{ clini
       ) : porDia.size === 0 ? (
         <Vazio
           Icone={CalendarDays}
-          titulo="Nenhuma consulta nos próximos 30 dias"
+          titulo="Nenhuma consulta neste período"
           acao={clinica.papel === "paciente" ? <LinkBotao href={`/c/${slug}/marcar`}>Marcar consulta</LinkBotao> : undefined}
         >
           {clinica.papel === "medico" ? "Cadastre seus horários de atendimento para receber marcações." : null}
@@ -113,13 +116,15 @@ export default async function PaginaAgenda({ params }: { params: Promise<{ clini
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="font-medium">{nome}</p>
                           <StatusDaConsulta status={c.status} />
+                          {c.retornoDe ? <Etiqueta tom="selo">Retorno sem custo</Etiqueta> : null}
+                          {c.ausencia ? <Etiqueta tom="alerta">{c.ausencia === "paciente" ? "Paciente faltou" : "Médico faltou"}</Etiqueta> : null}
                         </div>
                         <p className="mt-0.5 text-sm text-tinta-suave">
                           {detalhe}
                           {clinica.papel === "recepcao" || clinica.papel === "admin_clinica" ? ` · Dr(a). ${c.medico.nomeCompleto}` : ""}
                         </p>
                       </div>
-                      <AcoesDaConsulta slug={slug} consulta={c} papel={clinica.papel} souOMedico={c.medico.id === perfil.id} />
+                      <AcoesDaConsulta slug={slug} consulta={c} papel={clinica.papel} souOMedico={c.medico.id === perfil.id} souOPaciente={c.paciente.id === perfil.id} />
                     </li>
                   );
                 })}

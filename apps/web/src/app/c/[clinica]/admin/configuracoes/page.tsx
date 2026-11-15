@@ -20,7 +20,7 @@ export default async function PaginaConfiguracoes({ params }: { params: Promise<
   ]);
   return (
     <div className="space-y-8">
-      <CabecalhoDaPagina sobretitulo="Administração" titulo="Configurações" descricao="Dados da empresa e a porcentagem padrão dos médicos. Cada alteração fica registrada na auditoria." />
+      <CabecalhoDaPagina sobretitulo="Administração" titulo="Configurações" descricao="Dados da empresa, porcentagem padrão dos médicos e prazo do retorno sem custo. Cada alteração fica registrada na auditoria." />
       {!config.ok ? (
         <Aviso tipo="erro">{config.erro.mensagem}</Aviso>
       ) : (

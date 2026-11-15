@@ -9,7 +9,7 @@ import { resolve } from "node:path";
 import type { Sql } from "postgres";
 
 /** As tabelas que a migracao 0000 cria. Se mudar o schema, atualize aqui. */
-export const TABELAS_ESPERADAS = ["clinicas", "perfis", "vinculos", "convites", "medicos", "pacientes", "disponibilidades", "bloqueios", "consultas", "plantoes", "precos", "pagamentos", "fila_atendimento", "evolucoes", "documentos", "salas_de_video", "fichas_clinicas", "sinais_vitais", "anexos", "verificacoes_crm", "cartoes_salvos", "credenciamentos_medicos", "documentos_do_medico", "verificacoes_de_identidade", "percentuais_medicos", "repasses_medicos", "consentimentos", "solicitacoes_titular", "notificacoes", "auditoria"] as const;
+export const TABELAS_ESPERADAS = ["clinicas", "perfis", "vinculos", "convites", "medicos", "pacientes", "disponibilidades", "bloqueios", "consultas", "plantoes", "precos", "pagamentos", "fila_atendimento", "evolucoes", "documentos", "salas_de_video", "fichas_clinicas", "sinais_vitais", "anexos", "verificacoes_crm", "cartoes_salvos", "credenciamentos_medicos", "documentos_do_medico", "verificacoes_de_identidade", "percentuais_medicos", "repasses_medicos", "avaliacoes_consulta", "restricoes_pacientes", "consentimentos", "solicitacoes_titular", "notificacoes", "auditoria"] as const;
 
 /**
  * Onde fica a pasta das migracoes.
@@ -168,7 +168,7 @@ export function rlsCompleto(e: EstadoBanco): boolean {
  * (0002 cria a maioria; 0010, 0019 a 0023, 0026 e 0027 acrescentam). Se adicionar politica,
  * atualize este numero - e o que faz `pnpm verificar` notar a falta.
  */
-export const POLITICAS_ESPERADAS = 53;
+export const POLITICAS_ESPERADAS = 58;
 
 /** Resumo em uma palavra, usado pela API e pelo painel. */
 export function resumirEstado(e: EstadoBanco): "migrado" | "faltam_migracoes" | "sem_tabelas" {

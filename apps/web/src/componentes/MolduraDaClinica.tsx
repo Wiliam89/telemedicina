@@ -15,6 +15,8 @@ import {
   ShieldCheck,
   Stethoscope,
   Wallet,
+  Contact,
+  HeartHandshake,
   FileText,
   HeartPulse,
   Inbox,
@@ -86,6 +88,8 @@ const GRUPOS: { titulo: string; itens: Item[] }[] = [
     itens: [
       { rotulo: "Painel da administração", caminho: "admin", Icone: ShieldCheck, papeis: ["admin_clinica"] },
       { rotulo: "Médicos", caminho: "admin/medicos", Icone: Stethoscope, papeis: ["admin_clinica"] },
+      { rotulo: "Pacientes", caminho: "admin/pacientes", Icone: Contact, papeis: ["admin_clinica"] },
+      { rotulo: "Qualidade e faltas", caminho: "admin/qualidade", Icone: HeartHandshake, papeis: ["admin_clinica"] },
       { rotulo: "Credenciamentos", caminho: "credenciamentos", Icone: IdCard, papeis: ["admin_clinica"] },
       { rotulo: "Financeiro", caminho: "admin/financeiro", Icone: Wallet, papeis: ["admin_clinica"] },
       { rotulo: "Valores das consultas", caminho: "precos", Icone: Tags, papeis: ["admin_clinica"] },

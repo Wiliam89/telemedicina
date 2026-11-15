@@ -17,7 +17,8 @@
     "./atendimento": "./src/atendimento.ts",
     "./credenciamento": "./src/credenciamento.ts",
     "./cobranca": "./src/cobranca.ts",
-    "./admin": "./src/admin.ts"
+    "./admin": "./src/admin.ts",
+    "./retorno": "./src/retorno.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

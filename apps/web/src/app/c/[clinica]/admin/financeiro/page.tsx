@@ -12,6 +12,7 @@ import { dataCurta } from "@/lib/datas";
 import { emReais } from "@/lib/dinheiro";
 import { temPapel } from "@/lib/papeis";
 import { CancelarRepasse, Reembolsar, RegistrarRepasse } from "./AcoesFinanceiras";
+import { BaixarPlanilha } from "./BaixarPlanilha";
 
 export const metadata: Metadata = { title: "Financeiro" };
 
@@ -52,6 +53,7 @@ export default async function PaginaFinanceiro({ params, searchParams }: { param
         <Aviso tipo="erro">{r.erro.mensagem}</Aviso>
       ) : (
         <>
+          <BaixarPlanilha slug={slug} de={r.dados.periodo.de} ate={r.dados.periodo.ate} />
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Indicador Icone={BadgeDollarSign} rotulo="Recebido no período" valor={emReais(r.dados.receitaBrutaCentavos)} />
             <Indicador Icone={Wallet} tom="info" rotulo="Ganho dos médicos" valor={emReais(r.dados.repasseDoPeriodoCentavos)} detalhe="das consultas do período" />

@@ -26,6 +26,7 @@ export function MarcarConsulta({
   especialidade,
   cartao = null,
   valorCentavos = null,
+  retorno = null,
 }: {
   slug: string;
   fuso: string;
@@ -36,11 +37,16 @@ export function MarcarConsulta({
   /** ADR-0023: com cartao, a consulta e debitada ao final; sem cartao, Pix em seguida. */
   cartao?: CartaoResumo | null;
   valorCentavos?: number | null;
+  /** ADR-0027: marcando o RETORNO SEM CUSTO de uma consulta, ate a data-limite. */
+  retorno?: { de: string; ate: string } | null;
 }) {
   const router = useRouter();
   const [prefiroPix, setPrefiroPix] = useState(false);
   const usaCartao = Boolean(cartao && !cartao.vencido && !prefiroPix);
-  const dias = proximosDias(14, fuso);
+  // No retorno, os dias vao ate o fim do prazo que o medico liberou.
+  const dias = retorno
+    ? proximosDias(Math.min(90, Math.max(1, Math.ceil((new Date(retorno.ate).getTime() - Date.now()) / 86400000) + 1)), fuso).filter((d) => d <= new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(new Date(retorno.ate)))
+    : proximosDias(14, fuso);
 
   const [medicoId, setMedicoId] = useState(medicos[0]!.id);
   const [dia, setDia] = useState(dias[0]!);
@@ -61,7 +67,7 @@ export function MarcarConsulta({
         clinica: slug,
       });
       if (cancelado) return;
-      if (r.ok) setHorarios(r.dados);
+      if (r.ok) setHorarios(retorno ? r.dados.filter((h) => new Date(h.inicio) <= new Date(retorno.ate)) : r.dados);
       else {
         setHorarios([]);
         setErro(r.erro.mensagem);
@@ -88,6 +94,7 @@ export function MarcarConsulta({
         ...(linha ? { linha } : {}),
         ...(linha === "teleconsulta" && especialidade ? { especialidade } : {}),
         ...(cartao && prefiroPix ? { cobranca: "pix" } : {}),
+        ...(retorno ? { retornoDe: retorno.de } : {}),
       },
     });
     if (r.ok) {
@@ -174,7 +181,13 @@ export function MarcarConsulta({
         ajuda="Uma linha sobre o que você sente. Não é o prontuário: é só para o profissional se preparar."
       />
 
-      {valorCentavos !== null ? (
+      {retorno ? (
+        <Aviso tipo="ok">
+          Retorno <strong>sem custo</strong>, com o mesmo médico, até{" "}
+          {new Intl.DateTimeFormat("pt-BR", { timeZone: fuso, day: "2-digit", month: "long" }).format(new Date(retorno.ate))}. Se surgir uma queixa nova, o médico pode orientar uma nova consulta.
+        </Aviso>
+      ) : null}
+      {valorCentavos !== null && !retorno ? (
         <div className="max-w-md rounded-xl border border-linha bg-superficie-alt p-4 text-sm">
           {usaCartao ? (
             <>

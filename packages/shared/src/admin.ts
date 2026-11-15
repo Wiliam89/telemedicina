@@ -121,6 +121,38 @@ export interface MeusGanhos {
   repasses: Omit<RepasseRegistrado, "medicoId" | "medicoNome" | "registradoPor">[];
 }
 
+/** ADR-0027: um paciente como a administracao o ve. So cadastro e numeros, nunca dado clinico. */
+export interface PacienteNaAdministracao {
+  id: string;
+  nomeCompleto: string;
+  /** Mascarado: ***.456.789-** */
+  cpfMascarado: string | null;
+  telefone: string | null;
+  cadastradoEm: string;
+  consultasConcluidas: number;
+  faltas: number;
+  /** Consultas concluidas com cartao recusado e nao pagas. */
+  pagamentosPendentes: number;
+  restricao: { motivo: string; desde: string } | null;
+}
+
+/** ADR-0027: indicadores de qualidade do periodo. */
+export interface IndicadoresDeQualidade {
+  periodo: { de: string; ate: string };
+  consultasQueDeviamAcontecer: number;
+  faltasDoPaciente: number;
+  faltasDoMedico: number;
+  /** % das consultas que deviam acontecer. */
+  taxaDeFaltaDoPaciente: number;
+  taxaDeFaltaDoMedico: number;
+  canceladas: number;
+  fila: { entradas: number; atendidas: number; desistencias: number; taxaDeDesistencia: number };
+  retornos: { liberados: number; marcados: number };
+  satisfacao: { respostas: number; nps: number | null; media: number | null; promotores: number; neutros: number; detratores: number };
+  porMedico: { medicoId: string; nome: string; respostas: number; nps: number | null; faltasDoMedico: number }[];
+  comentarios: { nota: number; comentario: string; criadoEm: string }[];
+}
+
 /** Rotulo legivel das acoes de auditoria mais comuns. As demais aparecem como estao. */
 export const NOME_DA_ACAO: Record<string, string> = {
   "clinica.criada": "Plataforma configurada",
@@ -145,4 +177,11 @@ export const NOME_DA_ACAO: Record<string, string> = {
   "medico.atendimento_alterado": "Atendimento do médico alterado",
   "prontuario.lido": "Prontuário aberto",
   "lgpd.dados_exportados": "Dados pessoais exportados",
+  "consulta.retorno_liberado": "Retorno sem custo liberado",
+  "consulta.falta_registrada": "Falta registrada",
+  "consulta.avaliada": "Consulta avaliada pelo paciente",
+  "paciente.restringido": "Paciente impedido de marcar",
+  "paciente.restricao_encerrada": "Paciente liberado para marcar",
+  "financeiro.planilha_exportada": "Planilha financeira baixada",
+  "clinica.regras_de_retorno_alteradas": "Prazo de retorno alterado",
 };

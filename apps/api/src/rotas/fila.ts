@@ -35,6 +35,7 @@ import { especialidadeExiste, medicoAtende, rotuloDoPedido, type ChamadoNaFila, 
 import { registrarAuditoria } from "../auditoria.js";
 import type { Autenticador } from "../autenticacao.js";
 import { cartaoAtivo, exigirSemPendencia, precoPara } from "../cobranca.js";
+import { exigirSemRestricao } from "../restricoes.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
 import { exigirCrmVerificado, situacoesCrm } from "../crm.js";
 import { ErroHttp } from "../erros.js";
@@ -239,6 +240,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
     if (req.contexto.papel !== "paciente") {
       throw new ErroHttp(403, "SO_PACIENTE", "Só paciente entra na fila de atendimento.");
     }
+    await exigirSemRestricao(banco, req.contexto.clinicaId, req.usuario.id);
     const especialidade = dados.linha === "teleconsulta" ? dados.especialidade! : null;
 
     // Especialidade que ninguem atende aqui deixaria o paciente esperando para sempre.

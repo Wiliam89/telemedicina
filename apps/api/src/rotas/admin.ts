@@ -5,7 +5,8 @@
  *
  *   GET   /admin/resumo                      o painel: hoje, 30 dias e pendencias
  *   GET   /admin/configuracoes               os dados da plataforma
- *   PATCH /admin/configuracoes               nome, razao social, fuso, RT, % padrao
+ *   PATCH /admin/configuracoes               nome, razao social, fuso, RT, % padrao, prazo de retorno
+ *   (pacientes, indicadores e planilha: admin-gestao.ts - ADR-0027)
  *   GET   /admin/medicos                     cada medico: aptidao, %, ganhos, saldo
  *   PUT   /admin/medicos/:id/percentual      a porcentagem propria do medico (ou volta a padrao)
  *   GET   /admin/financeiro?de&ate           receita, repasse por medico, reembolsos
@@ -150,6 +151,7 @@ export async function rotasAdmin(app: FastifyInstance, opcoes: { banco: Banco; a
       .select({
         nomeFantasia: clinicas.nomeFantasia, razaoSocial: clinicas.razaoSocial, cnpj: clinicas.cnpj, slug: clinicas.slug, status: clinicas.status,
         fusoHorario: clinicas.fusoHorario, responsavelTecnicoId: clinicas.responsavelTecnicoId, repassePadraoBps: clinicas.repassePadraoBps,
+        retornoPrazoMaximoDias: clinicas.retornoPrazoMaximoDias,
       })
       .from(clinicas)
       .where(eq(clinicas.id, req.contexto.clinicaId))
@@ -171,6 +173,8 @@ export async function rotasAdmin(app: FastifyInstance, opcoes: { banco: Banco; a
         /** Troca-se por outro; nao se deixa a plataforma sem (Resolucao CFM 2.314/2022). */
         responsavelTecnicoId: z.string().uuid("responsável técnico inválido").optional(),
         repassePadraoBps: bps.nullable().optional(),
+        /** ADR-0027: maior prazo de retorno sem custo que o medico pode dar (0 = sem retorno pelo sistema). */
+        retornoPrazoMaximoDias: z.number().int("prazo em dias inteiros").min(0, "mínimo 0 dias").max(90, "máximo 90 dias").optional(),
       })
       .strict()
       .refine((d) => Object.keys(d).length > 0, "nada para alterar")
@@ -195,7 +199,12 @@ export async function rotasAdmin(app: FastifyInstance, opcoes: { banco: Banco; a
       await registrarAuditoria(tx, {
         quem: req.usuario.id,
         clinicaId: req.contexto.clinicaId,
-        acao: dados.repassePadraoBps !== undefined && Object.keys(dados).length === 1 ? "repasse.percentual_padrao_alterado" : "clinica.configuracoes_alteradas",
+        acao:
+          dados.repassePadraoBps !== undefined && Object.keys(dados).length === 1
+            ? "repasse.percentual_padrao_alterado"
+            : dados.retornoPrazoMaximoDias !== undefined && Object.keys(dados).length === 1
+              ? "clinica.regras_de_retorno_alteradas"
+              : "clinica.configuracoes_alteradas",
         tabela: "clinicas",
         registroId: req.contexto.clinicaId,
         detalhes: { de, para: dados },

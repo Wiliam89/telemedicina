@@ -23,6 +23,7 @@ import type { Resposta } from "@tele/shared";
 import { especialidadeExiste, rotuloDoPedido, tipoDePreco } from "@tele/shared/atendimento";
 import { calcularComissao, ErroDePagamento, type Cobranca, type ContextoDePagamento, type PedidoDeCobranca, type ResolvedorDePagamento } from "../pagamento/index.js";
 import { cartaoAtivo, exigirSemPendencia, precoPara } from "../cobranca.js";
+import { exigirSemRestricao } from "../restricoes.js";
 import { registrarAuditoria } from "../auditoria.js";
 import type { Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
@@ -398,6 +399,8 @@ export async function rotasPagamentos(
     if (req.contexto.papel !== "paciente") {
       throw new ErroHttp(403, "SO_PACIENTE", "Só paciente paga pronto atendimento.");
     }
+    // ADR-0027: paciente impedido nao paga um atendimento que nao podera receber.
+    await exigirSemRestricao(banco, req.contexto.clinicaId, req.usuario.id);
     // ADR-0023: quem deve uma consulta anterior regulariza antes de pagar outra.
     await exigirSemPendencia(banco, req.usuario.id, req.contexto.clinicaId);
 

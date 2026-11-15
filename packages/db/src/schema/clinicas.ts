@@ -82,9 +82,18 @@ export const clinicas = pgTable("clinicas", {
    * (7000 = 70%). Nulo = ainda nao definido (o painel avisa).
    */
   repassePadraoBps: integer("repasse_padrao_bps"),
+  /**
+   * ADR-0027: o maior prazo de RETORNO SEM CUSTO que o medico pode liberar
+   * (Resolucao CFM 1.958/2010: o prazo e do medico; a plataforma so limita).
+   * 0 = a plataforma nao oferece retorno pelo sistema.
+   */
+  retornoPrazoMaximoDias: integer("retorno_prazo_maximo_dias").notNull().default(30),
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [check("clinicas_repasse_padrao_faixa", sql`${t.repassePadraoBps} is null or ${t.repassePadraoBps} between 0 and 10000`)]);
+}, (t) => [
+  check("clinicas_repasse_padrao_faixa", sql`${t.repassePadraoBps} is null or ${t.repassePadraoBps} between 0 and 10000`),
+  check("clinicas_retorno_prazo_faixa", sql`${t.retornoPrazoMaximoDias} between 0 and 90`),
+]);
 
 export type Clinica = typeof clinicas.$inferSelect;
 export type NovaClinica = typeof clinicas.$inferInsert;

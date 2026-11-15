@@ -139,6 +139,7 @@ export type {
   VerificacaoDeIdentidadeResumo,
 } from "./credenciamento.js";
 export type { CartaoResumo, FormaDeCobranca, MeiosDePagamento, PendenciaDePagamento } from "./cobranca.js";
+export type { IndicadoresDeQualidade, PacienteNaAdministracao } from "./admin.js";
 export type { EventoDeAuditoria, Financeiro, LinhaFinanceira, MedicoNaAdministracao, MeusGanhos, PendenciaDeReembolso, RepasseRegistrado, ResumoDaAdministracao } from "./admin.js";
 
 /**
@@ -270,6 +271,16 @@ export interface ConsultaResumo {
   /** ADR-0023: Pix antes, ou cartao cadastrado debitado ao final. */
   formaDeCobranca?: FormaDeCobranca;
   valorCombinadoCentavos?: number | null;
+  /** ADR-0027: na consulta original, ate quando o retorno sem custo pode ser marcado. */
+  retornoAte?: string | null;
+  /** ADR-0027: na consulta de retorno, qual consulta ela continua. */
+  retornoDe?: string | null;
+  /** ADR-0027: o retorno desta consulta ja foi marcado. */
+  retornoMarcado?: boolean;
+  /** ADR-0027: quem faltou (consulta encerrada por falta). */
+  ausencia?: "paciente" | "medico" | null;
+  /** ADR-0027: a nota que o paciente deu (0-10), se ja avaliou. */
+  notaDaAvaliacao?: number | null;
 }
 
 /** Nome de cada dia da semana, indexado por 0-6 (domingo a sabado). */

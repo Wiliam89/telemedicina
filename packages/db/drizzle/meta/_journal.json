@@ -204,6 +204,13 @@
       "when": 1794716442201,
       "tag": "0028_indice_e_trava_do_repasse",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1794753326880,
+      "tag": "0029_retorno_faltas_avaliacoes_restricoes",
+      "breakpoints": true
     }
   ]
 }

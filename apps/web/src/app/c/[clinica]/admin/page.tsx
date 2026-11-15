@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, BadgeDollarSign, CalendarCheck2, ClipboardList, IdCard, Inbox, Percent, Radio, RotateCcw, Siren, Stethoscope, Users, Wallet } from "lucide-react";
+import { ArrowRight, Contact, HeartHandshake, BadgeDollarSign, CalendarCheck2, ClipboardList, IdCard, Inbox, Percent, Radio, RotateCcw, Siren, Stethoscope, Users, Wallet } from "lucide-react";
 import type { ResumoDaAdministracao } from "@tele/shared";
 import { formatarPercentual } from "@tele/shared/admin";
 import { Aviso } from "@/componentes/Aviso";
@@ -37,14 +37,16 @@ export default async function PaginaAdministracao({ params }: { params: Promise<
   ].filter((p) => p.n > 0);
 
   const atalhos = [
-    { titulo: "Médicos", texto: "Porcentagens, especialidades e quem está online", href: `${base}/admin/medicos`, Icone: Stethoscope },
-    { titulo: "Financeiro", texto: "Receita, repasses aos médicos e reembolsos", href: `${base}/admin/financeiro`, Icone: Wallet },
+    { titulo: "Médicos", texto: "Alterar a porcentagem de cada médico, o que atende e quem está online", href: `${base}/admin/medicos`, Icone: Stethoscope },
+    { titulo: "Pacientes", texto: "Cadastro, faltas, pendências e bloqueio por fraude", href: `${base}/admin/pacientes`, Icone: Contact },
+    { titulo: "Qualidade e faltas", texto: "Nota dos pacientes (NPS), faltas e fila", href: `${base}/admin/qualidade`, Icone: HeartHandshake },
+    { titulo: "Financeiro", texto: "Receita, repasses, reembolsos e planilha para o contador", href: `${base}/admin/financeiro`, Icone: Wallet },
     { titulo: "Valores das consultas", texto: "Quanto custa cada atendimento", href: `${base}/precos`, Icone: BadgeDollarSign },
     { titulo: "Credenciamentos", texto: "Novos médicos querendo atender", href: `${base}/credenciamentos`, Icone: IdCard },
     { titulo: "Equipe", texto: "Recepção, administração, suspender acesso", href: `${base}/equipe`, Icone: Users },
     { titulo: "Indicadores", texto: "Gráficos de consultas e atendimento", href: `${base}/indicadores`, Icone: CalendarCheck2 },
     { titulo: "Auditoria", texto: "Quem fez o quê, e quando", href: `${base}/admin/auditoria`, Icone: ClipboardList },
-    { titulo: "Configurações", texto: "Dados da empresa, porcentagem padrão, fuso", href: `${base}/admin/configuracoes`, Icone: Percent },
+    { titulo: "Configurações", texto: "Empresa, porcentagem padrão, prazo do retorno, fuso", href: `${base}/admin/configuracoes`, Icone: Percent },
   ];
 
   return (

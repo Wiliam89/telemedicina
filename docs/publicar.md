@@ -209,11 +209,16 @@ Sem o passo 3, o link padrão continua funcionando, mas só abre a sessão no
 mesmo navegador do cadastro; em outro aparelho a pessoa vê "e-mail confirmado,
 entre com sua senha".
 
-## Ordem de publicação desta versão (migração 0026)
+## Ordem de publicação desta versão (migrações 0026 a 0029)
 
 O deploy não é atômico: por alguns minutos, a API antiga roda sobre o banco novo.
+As quatro migrações só acrescentam (colunas, tabelas, políticas), então a API
+antiga continua funcionando com o banco novo. O contrário quebra: a API nova
+grava colunas que o banco antigo não tem. **Banco primeiro, push depois.**
 
-1. Rode a migração no banco publicado (`CONFIRMAR_BANCO_REMOTO=sim pnpm db:migrar`) e `pnpm db:verificar-rls` (esperado: 50 políticas).
+O passo a passo com palavras simples está em `docs/o-que-voce-precisa-fazer.md`.
+
+1. Rode a migração no banco publicado (`CONFIRMAR_BANCO_REMOTO=sim pnpm db:migrar`) e `pnpm db:verificar-rls` (esperado: 58 políticas). Confira em `/saude` da API: `migracoesAplicadas` deve ser 30.
 2. Publique a **API** (Render) com as variáveis novas e espere o `/pronto` responder.
 3. Só então publique o **site** (Vercel).
 4. **Não** cadastre preço por especialidade nem deixe paciente entrar na fila com cartão antes do passo 2 terminar: a API antiga não entende esses dois dados novos.

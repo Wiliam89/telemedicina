@@ -6,7 +6,7 @@
  * seguintes, sempre ligados a uma linha desta tabela.
  */
 import { sql } from "drizzle-orm";
-import { check, index, integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, integer, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { cartoesSalvos } from "./cartoes.js";
 import { clinicas } from "./clinicas.js";
 import { medicos } from "./medicos.js";
@@ -68,6 +68,22 @@ export const consultas = pgTable(
     valorCombinadoCentavos: integer("valor_combinado_centavos"),
     /** ADR-0026: a porcentagem do medico congelada quando a consulta nasceu. Nulo = consulta anterior a regra. */
     repasseMedicoBps: integer("repasse_medico_bps"),
+    /**
+     * ADR-0027 - RETORNO SEM CUSTO (Resolucao CFM 1.958/2010, art. 1, par. 1).
+     *
+     *   retorno_ate  na consulta ORIGINAL: ate quando o paciente pode marcar o
+     *                retorno sem pagar. Quem libera e o medico, no prazo que
+     *                ele julgar (a plataforma limita o maximo).
+     *   retorno_de   na consulta de RETORNO: qual consulta ela continua. Nao e
+     *                cobrada, nao gera repasse e nao tem retorno proprio.
+     */
+    retornoAte: timestamp("retorno_ate", { withTimezone: true }),
+    retornoDe: uuid("retorno_de").references((): AnyPgColumn => consultas.id, { onDelete: "restrict" }),
+    /**
+     * ADR-0027: quem faltou. Consulta com falta e encerrada como cancelada,
+     * mas a falta conta nos indicadores (e a do medico gera estorno).
+     */
+    ausencia: text("ausencia"),
     /** O que o paciente escreveu ao agendar. Nao e o prontuario. */
     motivo: text("motivo"),
     /**
@@ -102,6 +118,11 @@ export const consultas = pgTable(
     check("consultas_cartao_ao_final_completo", sql`${t.formaDeCobranca} <> 'cartao_ao_final' or (${t.cartaoId} is not null and ${t.valorCombinadoCentavos} is not null)`),
     check("consultas_repasse_faixa", sql`${t.repasseMedicoBps} is null or ${t.repasseMedicoBps} between 0 and 10000`),
     check("consultas_valor_combinado", sql`${t.valorCombinadoCentavos} is null or ${t.valorCombinadoCentavos} > 0`),
+    // Retorno nao se cobra e nao tem retorno proprio.
+    check("consultas_retorno_sem_custo", sql`${t.retornoDe} is null or (${t.valorCombinadoCentavos} is null and ${t.retornoAte} is null)`),
+    check("consultas_ausencia", sql`${t.ausencia} is null or (${t.ausencia} in ('paciente', 'medico') and ${t.status} = 'cancelada')`),
+    // Um retorno valido por consulta (o cancelado libera outro).
+    uniqueIndex("consultas_um_retorno").on(t.retornoDe).where(sql`${t.retornoDe} is not null and ${t.status} <> 'cancelada'`),
     // "Minha agenda de hoje" e a pergunta mais comum: indice por medico e horario.
     index("consultas_medico_inicio").on(t.medicoId, t.inicio),
     index("consultas_paciente_inicio").on(t.pacienteId, t.inicio),

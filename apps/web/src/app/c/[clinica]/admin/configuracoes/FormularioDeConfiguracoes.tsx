@@ -16,6 +16,8 @@ export interface Configuracoes {
   fusoHorario: string;
   responsavelTecnicoId: string | null;
   repassePadraoBps: number | null;
+  /** ADR-0027: o maior prazo de retorno sem custo (0 = sem retorno pelo sistema). */
+  retornoPrazoMaximoDias: number;
 }
 
 const FUSOS = [
@@ -32,6 +34,7 @@ export function FormularioDeConfiguracoes({ slug, inicial, medicos }: { slug: st
   const [fuso, setFuso] = useState(inicial.fusoHorario);
   const [rt, setRt] = useState(inicial.responsavelTecnicoId ?? "");
   const [percentual, setPercentual] = useState(inicial.repassePadraoBps === null ? "" : String(inicial.repassePadraoBps / 100).replace(".", ","));
+  const [prazoRetorno, setPrazoRetorno] = useState(String(inicial.retornoPrazoMaximoDias ?? 30));
   const [erro, setErro] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
@@ -50,6 +53,9 @@ export function FormularioDeConfiguracoes({ slug, inicial, medicos }: { slug: st
     if (fuso !== inicial.fusoHorario) corpo.fusoHorario = fuso;
     if (rt && rt !== inicial.responsavelTecnicoId) corpo.responsavelTecnicoId = rt;
     if (bps !== inicial.repassePadraoBps) corpo.repassePadraoBps = bps;
+    const prazo = Number(prazoRetorno);
+    if (!Number.isInteger(prazo) || prazo < 0 || prazo > 90) return setErro("Prazo de retorno inválido: use um número de 0 a 90 dias.");
+    if (prazo !== inicial.retornoPrazoMaximoDias) corpo.retornoPrazoMaximoDias = prazo;
     if (Object.keys(corpo).length === 0) return setOk("Nada mudou.");
     setOcupado(true);
     const r = await acaoNaApi("/admin/configuracoes", { metodo: "PATCH", clinica: slug, corpo });
@@ -78,6 +84,25 @@ export function FormularioDeConfiguracoes({ slug, inicial, medicos }: { slug: st
           />
         </div>
         <p className="text-sm text-tinta-suave">Vale para médicos sem porcentagem própria (definida na tela Médicos) e só para consultas marcadas a partir de agora.</p>
+      </fieldset>
+
+      <fieldset className="space-y-5 rounded-xl border border-linha bg-superficie p-5 shadow-cartao">
+        <legend className="px-1 font-titulo text-base">Retorno sem custo</legend>
+        <div className="max-w-xs">
+          <Campo
+            id="prazo-retorno"
+            rotulo="Prazo máximo do retorno (dias)"
+            inputMode="numeric"
+            placeholder="30"
+            value={prazoRetorno}
+            onChange={(e) => setPrazoRetorno(e.target.value.replace(/\D/g, "").slice(0, 2))}
+            ajuda="O médico escolhe o prazo de cada retorno, até este limite. Use 0 para não oferecer retorno pelo sistema."
+          />
+        </div>
+        <p className="text-sm text-tinta-suave">
+          Pela Resolução CFM 1.958/2010, o retorno para mostrar exames pedidos na consulta não é cobrado, no prazo que o médico definir. Se aparecer uma
+          queixa nova, é consulta nova. O retorno não gera repasse ao médico, porque faz parte da consulta original.
+        </p>
       </fieldset>
 
       <fieldset className="space-y-5 rounded-xl border border-linha bg-superficie p-5 shadow-cartao">
