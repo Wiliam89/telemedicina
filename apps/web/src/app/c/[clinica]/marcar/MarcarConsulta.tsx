@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { CartaoResumo, ConsultaResumo, HorarioLivre, LinhaDeAtendimento, MedicoResumo } from "@tele/shared";
 import { nomeDaEspecialidade } from "@tele/shared/atendimento";
+import { PRAZO_DE_RETORNO_TETO_DIAS } from "@tele/shared/retorno";
 import { emReais } from "@/lib/dinheiro";
 import { Aviso } from "@/componentes/Aviso";
 import { Botao } from "@/componentes/Botao";
@@ -45,7 +46,7 @@ export function MarcarConsulta({
   const usaCartao = Boolean(cartao && !cartao.vencido && !prefiroPix);
   // No retorno, os dias vao ate o fim do prazo que o medico liberou.
   const dias = retorno
-    ? proximosDias(Math.min(90, Math.max(1, Math.ceil((new Date(retorno.ate).getTime() - Date.now()) / 86400000) + 1)), fuso).filter((d) => d <= new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(new Date(retorno.ate)))
+    ? proximosDias(Math.min(PRAZO_DE_RETORNO_TETO_DIAS, Math.max(1, Math.ceil((new Date(retorno.ate).getTime() - Date.now()) / 86400000) + 1)), fuso).filter((d) => d <= new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(new Date(retorno.ate)))
     : proximosDias(14, fuso);
 
   const [medicoId, setMedicoId] = useState(medicos[0]!.id);

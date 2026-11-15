@@ -149,7 +149,7 @@ export function AcoesDaConsulta({
   }
 
   // ADR-0027: passada a tolerancia, o outro lado (ou a equipe) registra a falta.
-  const passouDaHora = consulta.status === "agendada" && podeRegistrarFalta(inicio, new Date());
+  const passouDaHora = podeRegistrarFalta(inicio, new Date());
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -195,12 +195,12 @@ export function AcoesDaConsulta({
         </Botao>
       ) : null}
       {liberarRetorno}
-      {passouDaHora && (souOMedico || equipe) ? (
+      {passouDaHora && (souOMedico || equipe) && (consulta.status === "agendada" || consulta.status === "em_andamento") ? (
         <Botao variante="secundario" tamanho="p" disabled={ocupado} onClick={() => falta("paciente")}>
           Paciente faltou
         </Botao>
       ) : null}
-      {passouDaHora && (souOPaciente || equipe) ? (
+      {passouDaHora && (souOPaciente || equipe) && consulta.status === "agendada" ? (
         <Botao variante="secundario" tamanho="p" disabled={ocupado} onClick={() => falta("medico")}>
           Médico não veio
         </Botao>

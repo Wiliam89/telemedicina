@@ -273,10 +273,12 @@ export async function rotasGestao(app: FastifyInstance, opcoes: { banco: Banco; 
        * falta. Assim a receita da planilha bate com a do banco.
        */
       const linhas = await s<{
-        pagamento: string; consulta: string | null; recebido_em: Date | null; estornado_em: Date | null; status: string; metodo: string; valor: number;
+        pagamento: string; consulta: string | null; recebido_em: Date | null; estornado_em: Date | null; status: string; metodo: string; valor: number; recebido_no_periodo: boolean | null; devolvido_no_periodo: boolean | null;
         situacao: string | null; ausencia: string | null; linha: string | null; especialidade: string | null; medico: string | null; crm: string | null; uf: string | null; bps: number | null;
       }[]>`
         select pg.id as pagamento, pg.consulta_id as consulta, pg.confirmado_em as recebido_em, pg.estornado_em, pg.status, pg.metodo, pg.valor_centavos as valor,
+               (pg.confirmado_em >= ${de}::timestamptz and pg.confirmado_em < ${ate}::timestamptz) as recebido_no_periodo,
+               (pg.status = 'estornado' and pg.estornado_em >= ${de}::timestamptz and pg.estornado_em < ${ate}::timestamptz) as devolvido_no_periodo,
                c.status as situacao, c.ausencia, c.linha, c.especialidade, pf.nome_completo as medico, m.crm, m.crm_uf as uf,
                coalesce(c.repasse_medico_bps, pm.percentual_bps, cl.repasse_padrao_bps, 0) as bps
         from pagamentos pg
@@ -296,8 +298,9 @@ export async function rotasGestao(app: FastifyInstance, opcoes: { banco: Banco; 
       csv = montarCsv(
         ["Data do recebimento", "Data da devolução", "Pagamento", "Consulta", "Situação da consulta", "Tipo", "Especialidade", "Médico", "CRM", "Forma", "Valor recebido (R$)", "Valor devolvido (R$)", "% do médico", "Parte do médico (R$)", "Parte da plataforma (R$)"],
         linhas.map((l) => {
-          const valor = Number(l.valor);
-          const devolvido = l.status === "estornado" ? valor : 0;
+          // Cada valor no periodo em que ACONTECEU: devolver em novembro nao reescreve outubro.
+          const valor = l.recebido_no_periodo ? Number(l.valor) : 0;
+          const devolvido = l.devolvido_no_periodo ? Number(l.valor) : 0;
           const liquido = valor - devolvido;
           // Ganho do medico: so consulta concluida e paga (mesma regra de repasse.ts, arredonda para baixo).
           const medico = l.situacao === "concluida" ? Math.floor((liquido * Number(l.bps ?? 0)) / 10000) : 0;

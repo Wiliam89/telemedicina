@@ -129,7 +129,13 @@ export async function rotasRetorno(app: FastifyInstance, opcoes: { banco: Banco;
     // Quem registra a falta e o OUTRO lado (ou a equipe): ninguem diz que ele mesmo faltou.
     const pode = quem === "paciente" ? c.medicoId === req.usuario.id || equipe : c.pacienteId === req.usuario.id || equipe;
     if (!pode) throw new ErroHttp(403, "NAO_PODE_REGISTRAR_FALTA", quem === "paciente" ? "Só o médico da consulta ou a equipe registram a falta do paciente." : "Só o paciente da consulta ou a equipe registram a falta do médico.");
-    if (c.status !== "agendada") throw new ErroHttp(409, "FALTA_SO_EM_AGENDADA", "A falta só pode ser registrada numa consulta agendada que não começou.");
+    /**
+     * O medico que abre a sala e espera deixa a consulta "em andamento" (video.ts).
+     * Se o paciente nunca entrou, ainda e falta DO PACIENTE - e e o caso mais
+     * comum. Falta do medico so com a consulta ainda agendada (ele nao entrou).
+     */
+    const permitidos = quem === "paciente" ? ["agendada", "em_andamento"] : ["agendada"];
+    if (!permitidos.includes(c.status)) throw new ErroHttp(409, "FALTA_SO_EM_AGENDADA", "A falta só pode ser registrada numa consulta que ainda não aconteceu.");
     if (!podeRegistrarFalta(c.inicio, new Date())) {
       throw new ErroHttp(409, "CEDO_PARA_FALTA", `Espere ${TOLERANCIA_DE_FALTA_MINUTOS} minutos depois do horário marcado para registrar a falta.`);
     }
@@ -137,13 +143,13 @@ export async function rotasRetorno(app: FastifyInstance, opcoes: { banco: Banco;
     await banco.transaction(async (tx) => {
       // Trava a consulta: falta, "Iniciar" e entrada na sala nao se cruzam.
       const [agora] = await tx.select({ status: consultas.status }).from(consultas).where(eq(consultas.id, id)).for("update");
-      if (agora?.status !== "agendada") throw new ErroHttp(409, "ESTADO_MUDOU", "Esta consulta acabou de mudar (o atendimento pode ter começado). Recarregue a página.");
+      if (!agora || !permitidos.includes(agora.status)) throw new ErroHttp(409, "ESTADO_MUDOU", "Esta consulta acabou de mudar (o atendimento pode ter começado). Recarregue a página.");
       // Quem e acusado de faltar mas entrou na sala, nao faltou.
       const acusado = quem === "paciente" ? c.pacienteId : c.medicoId;
       const [entrou] = await tx
         .select({ id: auditoria.id })
         .from(auditoria)
-        .where(and(eq(auditoria.acao, "video.entrou"), eq(auditoria.registroId, id), eq(auditoria.quem, acusado)))
+        .where(and(eq(auditoria.tabela, "salas_de_video"), eq(auditoria.registroId, id), eq(auditoria.acao, "video.entrou"), eq(auditoria.quem, acusado)))
         .limit(1);
       if (entrou) {
         throw new ErroHttp(409, "ENTROU_NA_SALA", quem === "paciente" ? "O paciente entrou na sala desta consulta: não é falta." : "O médico entrou na sala desta consulta: não é falta.");
@@ -159,7 +165,7 @@ export async function rotasRetorno(app: FastifyInstance, opcoes: { banco: Banco;
           expiraReservaEm: null,
           atualizadoEm: new Date(),
         })
-        .where(and(eq(consultas.id, id), eq(consultas.status, "agendada")))
+        .where(and(eq(consultas.id, id), inArray(consultas.status, permitidos as ("agendada" | "em_andamento")[])))
         .returning({ id: consultas.id });
       if (feitas.length === 0) throw new ErroHttp(409, "ESTADO_MUDOU", "Esta consulta acabou de mudar. Recarregue a página.");
 

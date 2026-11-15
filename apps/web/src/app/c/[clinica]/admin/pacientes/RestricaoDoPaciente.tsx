@@ -72,7 +72,7 @@ export function RestricaoDoPaciente({ slug, pacienteId, restrito, aoMudar }: { s
         placeholder="Ex.: pagamentos contestados repetidas vezes"
         className="w-full rounded-lg border border-linha bg-superficie px-3 py-2 text-sm"
       />
-      <p className="text-xs text-tinta-suave">O paciente não poderá marcar nem entrar na fila, mas continua vendo as próprias consultas e documentos. Não escreva dado de saúde no motivo.</p>
+      <p className="text-xs text-tinta-suave">O paciente não poderá marcar nem entrar na fila, mas continua vendo as próprias consultas e documentos. O paciente pode ver este motivo na cópia dos dados dele: não escreva dado de saúde.</p>
       {erro ? <p role="alert" className="text-sm text-alerta">{erro}</p> : null}
       <div className="flex gap-2">
         <Botao type="submit" variante="perigo" tamanho="p" carregando={ocupado}>Impedir</Botao>

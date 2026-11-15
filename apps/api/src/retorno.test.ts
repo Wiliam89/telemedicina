@@ -248,6 +248,26 @@ describe.skipIf(!temBanco)("retorno sem custo, faltas e gestao (ADR-0027)", () =
     if (cancelar.statusCode === 200) expect(depois!.status).toBe("cancelada");
   });
 
+  it("4c. medico esperando na sala e paciente que nao veio: e falta do paciente, e nada e cobrado", async () => {
+    const esperando = await consulta({ status: "agendada", minutos: -40 });
+    // O medico entra na sala (como faz video.ts): a consulta fica em andamento.
+    await banco.$client`update consultas set status = 'em_andamento' where id = ${esperando}`;
+    await banco.$client`insert into auditoria (quem, clinica_id, acao, tabela, registro_id) values (${medicoA}, ${clinicaId}, 'video.entrou', 'salas_de_video', ${esperando})`;
+    // O paciente nao pode dizer que o medico faltou: ele estava na sala.
+    expect((await chamar(paciente, "POST", `/consultas/${esperando}/falta`, { quem: "medico" })).statusCode).toBe(409);
+    expect((await chamar(medicoA, "POST", `/consultas/${esperando}/falta`, { quem: "paciente" })).statusCode).toBe(200);
+    const [c] = await banco.$client`select status, ausencia from consultas where id = ${esperando}`;
+    expect(c).toMatchObject({ status: "cancelada", ausencia: "paciente" });
+    const [cobrado] = await banco.$client`select count(*)::int as n from pagamentos where consulta_id = ${esperando}`;
+    expect(cobrado!.n).toBe(0);
+
+    // Se o paciente entrou, nao e falta.
+    const veio = await consulta({ status: "agendada", minutos: -45 });
+    await banco.$client`update consultas set status = 'em_andamento' where id = ${veio}`;
+    await banco.$client`insert into auditoria (quem, clinica_id, acao, tabela, registro_id) values (${paciente}, ${clinicaId}, 'video.entrou', 'salas_de_video', ${veio})`;
+    expect((await chamar(medicoA, "POST", `/consultas/${veio}/falta`, { quem: "paciente" })).json().erro.codigo).toBe("ENTROU_NA_SALA");
+  });
+
   it("5. avaliacao: so o paciente, uma vez, de 0 a 10, e nao se altera", async () => {
     expect((await chamar(paciente, "POST", `/consultas/${original}/avaliacao`, { nota: 11 })).statusCode).toBe(400);
     expect((await chamar(medicoA, "POST", `/consultas/${original}/avaliacao`, { nota: 10 })).json().erro.codigo).toBe("SO_O_PACIENTE");
@@ -356,5 +376,16 @@ describe.skipIf(!temBanco)("retorno sem custo, faltas e gestao (ADR-0027)", () =
     const [a] = await banco.$client`select count(*)::int as n from auditoria where clinica_id = ${clinicaId} and acao = 'financeiro.planilha_exportada'`;
     expect(a!.n).toBe(2);
     expect((await chamar(admin, "GET", "/admin/financeiro/planilha?de=2026-01-10&ate=2026-01-01")).json().erro.codigo).toBe("PERIODO_INVALIDO");
+
+    // Recebido em marco, devolvido em abril: cada valor no seu mes, sem contar duas vezes.
+    const cid = await consulta({ status: "concluida", minutos: -400 * 24 * 60 });
+    await banco.$client`insert into pagamentos (clinica_id, pagador_id, consulta_id, metodo, status, valor_centavos, valor_clinica_centavos, valor_plataforma_centavos, provedor, provedor_id, chave_idempotencia, confirmado_em, estornado_em, motivo_estorno)
+      values (${clinicaId}, ${paciente}, ${cid}, 'pix', 'estornado', 8800, 8800, 0, 'local_teste', ${randomUUID()}, ${randomUUID()}, '2025-03-10T15:00:00Z', '2025-04-05T15:00:00Z', 'teste')`;
+    const marco = (await chamar(admin, "GET", "/admin/financeiro/planilha?de=2025-03-01&ate=2025-03-31")).body.slice(1).trim().split("\r\n");
+    const abril = (await chamar(admin, "GET", "/admin/financeiro/planilha?de=2025-04-01&ate=2025-04-30")).body.slice(1).trim().split("\r\n");
+    expect(marco).toHaveLength(2);
+    expect(abril).toHaveLength(2);
+    expect(marco[1]).toContain(";88,00;0,00;");
+    expect(abril[1]).toContain(";0,00;88,00;");
   });
 });
