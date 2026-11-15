@@ -40,6 +40,7 @@ import { exigirCrmVerificado, situacoesCrm } from "../crm.js";
 import { ErroHttp } from "../erros.js";
 import { notificar } from "../notificacoes/index.js";
 import type { ResolvedorDePagamento } from "../pagamento/index.js";
+import { percentualDoMedico } from "../repasse.js";
 import { expirarEsquecidosDaFila, registrarPendenciaDeEstorno } from "../reservas.js";
 
 /**
@@ -504,6 +505,8 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
     const plantao = await plantaoAbertoDe(req.usuario.id, req.contexto.clinicaId);
     if (!plantao) throw new ErroHttp(409, "SEM_PLANTAO_ABERTO", "Fique online antes de aceitar pacientes.");
     const aptidao = await aptidaoDe(req.usuario.id);
+    // ADR-0026: a porcentagem do medico no momento em que ele aceita.
+    const repasseMedicoBps = await percentualDoMedico(banco, req.contexto.clinicaId, req.usuario.id);
 
     const resultado = await banco.transaction(async (tx) => {
       /**
@@ -546,6 +549,7 @@ export async function rotasFila(app: FastifyInstance, opcoes: { banco: Banco; au
                 inicio: agora,
                 fim: new Date(agora.getTime() + MINUTOS_DO_ATENDIMENTO * 60000),
                 status: "em_andamento",
+                repasseMedicoBps,
                 linha: p.linha,
                 especialidade: p.especialidade,
                 // ADR-0023: quem entrou com cartao e debitado quando esta consulta for encerrada.

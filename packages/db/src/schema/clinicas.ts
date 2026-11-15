@@ -10,7 +10,8 @@
  * durante a criacao (o RT e definido assim que ha um medico vinculado);
  * a rota de ativacao exige que esteja preenchida.
  */
-import { pgEnum, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { check, integer, pgEnum, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
 import { perfis } from "./perfis.js";
 
 export const statusClinicaEnum = pgEnum("status_clinica", ["em_implantacao", "ativa", "suspensa", "encerrada"]);
@@ -76,9 +77,14 @@ export const clinicas = pgTable("clinicas", {
   pagamentoTokenCifrado: text("pagamento_token_cifrado"),
   pagamentoRefreshCifrado: text("pagamento_refresh_cifrado"),
   pagamentoTokenExpiraEm: timestamp("pagamento_token_expira_em", { withTimezone: true }),
+  /**
+   * ADR-0026: quanto do valor de cada consulta e do MEDICO, em pontos-base
+   * (7000 = 70%). Nulo = ainda nao definido (o painel avisa).
+   */
+  repassePadraoBps: integer("repasse_padrao_bps"),
   criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
   atualizadoEm: timestamp("atualizado_em", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [check("clinicas_repasse_padrao_faixa", sql`${t.repassePadraoBps} is null or ${t.repassePadraoBps} between 0 and 10000`)]);
 
 export type Clinica = typeof clinicas.$inferSelect;
 export type NovaClinica = typeof clinicas.$inferInsert;

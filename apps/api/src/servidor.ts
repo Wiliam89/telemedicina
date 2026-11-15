@@ -34,6 +34,7 @@ import { ArmazenamentoSupabaseDeAnexos, type ArmazenamentoDeAnexos } from "./ane
 import { rodarManutencao } from "./reservas.js";
 import { cobrarConsultasConcluidas } from "./cobranca.js";
 import { criarProvedorDeIdentidade, type ProvedorDeIdentidade } from "./identidade/provedor.js";
+import { rotasAdmin } from "./rotas/admin.js";
 import { rotasAtendimento } from "./rotas/atendimento.js";
 import { rotasCartoes } from "./rotas/cartoes.js";
 import { rotasCredenciamento } from "./rotas/credenciamento.js";
@@ -315,6 +316,7 @@ export async function criarServidor(opcoes: OpcoesServidor = {}) {
   await app.register(rotasAgenda, { banco, autenticar, producao, resolvedor: resolvedorDePagamento, ...(aoConcluir ? { aoConcluir } : {}) });
   await app.register(rotasFila, { banco, autenticar, producao, resolvedor: resolvedorDePagamento });
   await app.register(rotasAtendimento, { banco, autenticar });
+  await app.register(rotasAdmin, { banco, autenticar, resolvedor: resolvedorDePagamento });
   await app.register(rotasCartoes, { banco, autenticar, resolvedor: resolvedorDePagamento });
   await app.register(rotasCredenciamento, {
     banco,

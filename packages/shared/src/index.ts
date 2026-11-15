@@ -139,6 +139,7 @@ export type {
   VerificacaoDeIdentidadeResumo,
 } from "./credenciamento.js";
 export type { CartaoResumo, FormaDeCobranca, MeiosDePagamento, PendenciaDePagamento } from "./cobranca.js";
+export type { EventoDeAuditoria, Financeiro, LinhaFinanceira, MedicoNaAdministracao, MeusGanhos, PendenciaDeReembolso, RepasseRegistrado, ResumoDaAdministracao } from "./admin.js";
 
 /**
  * GET /plataforma (publica): a plataforma opera como UMA clinica (ADR-0022)?

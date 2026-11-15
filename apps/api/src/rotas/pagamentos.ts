@@ -537,6 +537,46 @@ export async function rotasPagamentos(
     return { ok: true, dados: { status: "confirmado" } };
   });
 
+  /**
+   * REEMBOLSO pela administracao (ADR-0026). So de pagamento CONFIRMADO, e o
+   * estado final vem do provedor: se ele disser que devolveu, vira
+   * "estornado" pela mesma regra do aviso (aplicarEstado). A linha fica
+   * trancada durante a chamada: dois cliques nao pedem dois reembolsos.
+   */
+  app.post("/admin/pagamentos/:id/reembolsar", { preHandler: [...dentroDaClinica, exigirPapel("admin_clinica")] }, async (req): Promise<Resposta<{ status: string }>> => {
+    const { id } = z.object({ id: z.string().uuid("id invalido") }).parse(req.params);
+    const { motivo } = z.object({ motivo: z.string().trim().min(5, "explique o motivo do reembolso").max(300) }).strict().parse(req.body);
+
+    const resultado = await banco.transaction(async (tx) => {
+      const [p] = await tx
+        .select({ status: pagamentos.status, provedorId: pagamentos.provedorId, valor: pagamentos.valorCentavos, pagador: pagamentos.pagadorId })
+        .from(pagamentos)
+        .where(and(eq(pagamentos.id, id), eq(pagamentos.clinicaId, req.contexto.clinicaId)))
+        .for("update");
+      if (!p) throw new ErroHttp(404, "PAGAMENTO_NAO_ENCONTRADO", "Pagamento não encontrado.");
+      if (p.status === "estornado") return { status: "estornado" };
+      if (p.status !== "confirmado" || !p.provedorId) throw new ErroHttp(409, "NAO_REEMBOLSAVEL", "Só se reembolsa pagamento confirmado.");
+
+      let contexto;
+      try {
+        contexto = await resolvedor.para(req.contexto.clinicaId);
+      } catch (erro) {
+        traduzir(erro);
+      }
+      let devolvido;
+      try {
+        devolvido = await contexto.provedor.estornar(contexto.credenciais, p.provedorId);
+      } catch (erro) {
+        traduzir(erro);
+      }
+      await registrarAuditoria(tx, { quem: req.usuario.id, clinicaId: req.contexto.clinicaId, acao: "pagamento.reembolsado", tabela: "pagamentos", registroId: id, detalhes: { valorCentavos: p.valor, motivo, statusNoProvedor: devolvido.status }, ip: req.ip });
+      // Ainda com a linha trancada: o segundo clique so a ve depois que ela ja mudou de estado.
+      await aplicarEstado(tx, id, devolvido.status, devolvido.bruto);
+      return { status: devolvido.status };
+    });
+    return { ok: true, dados: { status: resultado.status } };
+  });
+
   // --- webhook: a fonte da verdade -----------------------------------------
 
   /**
@@ -618,7 +658,7 @@ export async function rotasPagamentos(
    * O provedor pode avisar fora de ordem, entao so as mudancas abaixo valem. Um
    * aviso atrasado de "pendente" nao pode desfazer um "confirmado".
    */
-  async function aplicarEstado(b: Banco, pagamentoId: string, status: string, bruto: Record<string, unknown>): Promise<void> {
+  async function aplicarEstado(b: Banco | Transacao, pagamentoId: string, status: string, bruto: Record<string, unknown>): Promise<void> {
     const novo = ESTADOS_CONHECIDOS.find((e) => e === status);
     if (!novo) return;
 

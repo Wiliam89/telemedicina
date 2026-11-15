@@ -16,7 +16,8 @@
     "./lgpd": "./src/lgpd.ts",
     "./atendimento": "./src/atendimento.ts",
     "./credenciamento": "./src/credenciamento.ts",
-    "./cobranca": "./src/cobranca.ts"
+    "./cobranca": "./src/cobranca.ts",
+    "./admin": "./src/admin.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

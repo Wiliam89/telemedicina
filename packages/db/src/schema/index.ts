@@ -26,6 +26,7 @@ export * from "./salas-video.js";
 export * from "./prontuario-paciente.js";
 export * from "./verificacoes-crm.js";
 export * from "./credenciamento.js";
+export * from "./repasses.js";
 export * from "./lgpd.js";
 export * from "./notificacoes.js";
 export * from "./auditoria.js";

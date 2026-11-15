@@ -37,6 +37,7 @@ import { exigirCrmVerificado } from "../crm.js";
 import { fusoDaClinica, notificar, quandoNaClinica } from "../notificacoes/index.js";
 import { ErroHttp } from "../erros.js";
 import { cartaoAtivo, exigirSemPendencia, precoPara } from "../cobranca.js";
+import { percentualDoMedico } from "../repasse.js";
 import type { ResolvedorDePagamento } from "../pagamento/index.js";
 import { liberarReservasVencidas, registrarPendenciaDeEstorno } from "../reservas.js";
 import { MINUTOS_DE_RESERVA } from "./pagamentos.js";
@@ -373,10 +374,13 @@ export async function rotasAgenda(
       throw new ErroHttp(409, "SEM_CARTAO", "Você não tem cartão válido cadastrado. Cadastre um ou pague por Pix.");
     }
 
+    // ADR-0026: a porcentagem do medico do dia em que a consulta foi marcada.
+    const repasseMedicoBps = await percentualDoMedico(banco, req.contexto.clinicaId, dados.medicoId);
     const id = randomUUID();
     try {
       await banco.transaction(async (tx) => {
         await tx.insert(consultas).values({
+          repasseMedicoBps,
           id,
           clinicaId: req.contexto.clinicaId,
           pacienteId,

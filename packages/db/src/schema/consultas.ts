@@ -66,6 +66,8 @@ export const consultas = pgTable(
      * que foi combinado.
      */
     valorCombinadoCentavos: integer("valor_combinado_centavos"),
+    /** ADR-0026: a porcentagem do medico congelada quando a consulta nasceu. Nulo = consulta anterior a regra. */
+    repasseMedicoBps: integer("repasse_medico_bps"),
     /** O que o paciente escreveu ao agendar. Nao e o prontuario. */
     motivo: text("motivo"),
     /**
@@ -98,6 +100,7 @@ export const consultas = pgTable(
           or (${t.status} = 'cancelada' and ${t.canceladoEm} is not null)`,
     ),
     check("consultas_cartao_ao_final_completo", sql`${t.formaDeCobranca} <> 'cartao_ao_final' or (${t.cartaoId} is not null and ${t.valorCombinadoCentavos} is not null)`),
+    check("consultas_repasse_faixa", sql`${t.repasseMedicoBps} is null or ${t.repasseMedicoBps} between 0 and 10000`),
     check("consultas_valor_combinado", sql`${t.valorCombinadoCentavos} is null or ${t.valorCombinadoCentavos} > 0`),
     // "Minha agenda de hoje" e a pergunta mais comum: indice por medico e horario.
     index("consultas_medico_inicio").on(t.medicoId, t.inicio),
