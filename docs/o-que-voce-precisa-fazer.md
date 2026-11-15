@@ -23,6 +23,24 @@ Hoje o banco publicado tem **26** das **30** gavetas. Faltam 4.
 
 ---
 
+## Parte 0: deixar este computador enviar para o GitHub (2 minutos)
+
+Quando eu tento enviar o código para o GitHub, o Windows abre uma janela
+pedindo para você **entrar na sua conta do GitHub**. Da última vez ninguém
+viu a janela, e o envio ficou parado esperando.
+
+1. Me escreva: **"pode enviar as branches"**.
+2. Fique de olho na tela: vai aparecer uma janela **"Connect to GitHub"**
+   (às vezes atrás das outras; olhe a barra de tarefas lá embaixo).
+3. Clique em **Sign in with your browser**.
+4. No navegador, entre na conta **Wiliam89** e clique em **Authorize**.
+5. Pronto: o Windows guarda a autorização e não pergunta de novo.
+
+> Isso envia as branches de trabalho, **não** a `main`. O site publicado só
+> muda na Parte 4.
+
+---
+
 ## Parte 1: me dar o endereço do banco (5 minutos)
 
 Eu consigo criar as gavetas sozinho, mas preciso do **endereço do banco**. É
