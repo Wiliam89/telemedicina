@@ -16,7 +16,7 @@ export interface Configuracoes {
   fusoHorario: string;
   responsavelTecnicoId: string | null;
   repassePadraoBps: number | null;
-  /** ADR-0027: o maior prazo de retorno sem custo (0 = sem retorno pelo sistema). */
+  /** ADR-0027: o prazo de retorno SUGERIDO ao medico (o medico decide; CFM 1.958/2010). */
   retornoPrazoMaximoDias: number;
 }
 
@@ -54,7 +54,7 @@ export function FormularioDeConfiguracoes({ slug, inicial, medicos }: { slug: st
     if (rt && rt !== inicial.responsavelTecnicoId) corpo.responsavelTecnicoId = rt;
     if (bps !== inicial.repassePadraoBps) corpo.repassePadraoBps = bps;
     const prazo = Number(prazoRetorno);
-    if (!Number.isInteger(prazo) || prazo < 0 || prazo > 90) return setErro("Prazo de retorno inválido: use um número de 0 a 90 dias.");
+    if (!Number.isInteger(prazo) || prazo < 1 || prazo > 90) return setErro("Prazo sugerido de retorno inválido: use um número de 1 a 90 dias.");
     if (prazo !== inicial.retornoPrazoMaximoDias) corpo.retornoPrazoMaximoDias = prazo;
     if (Object.keys(corpo).length === 0) return setOk("Nada mudou.");
     setOcupado(true);
@@ -91,17 +91,18 @@ export function FormularioDeConfiguracoes({ slug, inicial, medicos }: { slug: st
         <div className="max-w-xs">
           <Campo
             id="prazo-retorno"
-            rotulo="Prazo máximo do retorno (dias)"
+            rotulo="Prazo sugerido do retorno (dias)"
             inputMode="numeric"
             placeholder="30"
             value={prazoRetorno}
             onChange={(e) => setPrazoRetorno(e.target.value.replace(/\D/g, "").slice(0, 2))}
-            ajuda="O médico escolhe o prazo de cada retorno, até este limite. Use 0 para não oferecer retorno pelo sistema."
+            ajuda="É o prazo que vale quando o médico não digita outro. O médico pode escolher mais ou menos dias (até 180)."
           />
         </div>
         <p className="text-sm text-tinta-suave">
-          Pela Resolução CFM 1.958/2010, o retorno para mostrar exames pedidos na consulta não é cobrado, no prazo que o médico definir. Se aparecer uma
-          queixa nova, é consulta nova. O retorno não gera repasse ao médico, porque faz parte da consulta original.
+          Pela Resolução CFM 1.958/2010, o retorno para mostrar exames pedidos na consulta não é cobrado, e o prazo é decisão do médico: a plataforma
+          só sugere um padrão, não limita. Se aparecer uma queixa nova, é consulta nova. O retorno não gera repasse ao médico, porque faz parte da
+          consulta original.
         </p>
       </fieldset>
 

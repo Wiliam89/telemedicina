@@ -50,7 +50,7 @@ Aí eu:
 
 - confiro que é o banco certo (pelo nome do servidor, sem mostrar a senha);
 - crio as 4 gavetas que faltam;
-- confiro que as 58 regras de segurança estão no lugar.
+- confiro que as 57 regras de segurança estão no lugar.
 
 > **Não tem o Render à mão?** No Supabase: abra o projeto, clique em
 > **Connect** (no alto), escolha **Session pooler** e copie o endereço. Troque
@@ -126,7 +126,7 @@ Eu não entro com a sua senha (é regra de segurança). Depois que eu publicar:
 3. No menu, abra **Administração**. Você deve ver: Painel, Médicos,
    **Pacientes**, **Qualidade e faltas**, Credenciamentos, Financeiro...
 4. Em **Configurações**, ponha a **porcentagem padrão** dos médicos (ex.: 70)
-   e o **prazo máximo do retorno** (ex.: 30 dias). Clique em **Salvar**.
+   e o **prazo sugerido do retorno** (ex.: 30 dias; o médico pode mudar em cada consulta). Clique em **Salvar**.
 5. Em **Médicos**, mude a porcentagem de um médico. Ela deve aparecer como "própria".
 6. Em **Financeiro**, clique em **Planilha das consultas**. Um arquivo deve baixar.
 

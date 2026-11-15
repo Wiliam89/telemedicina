@@ -2,13 +2,12 @@ import { describe, expect, it } from "vitest";
 import { calcularNps, celulaCsv, centavosParaCsv, montarCsv, podeRegistrarFalta, prazoDeRetornoValido, taxa } from "./retorno.js";
 
 describe("retorno, faltas e planilha (ADR-0027)", () => {
-  it("prazo de retorno: de 1 dia ao maximo da plataforma, nunca acima de 90", () => {
-    expect(prazoDeRetornoValido(30, 30)).toBe(true);
-    expect(prazoDeRetornoValido(31, 30)).toBe(false);
-    expect(prazoDeRetornoValido(0, 30)).toBe(false);
-    expect(prazoDeRetornoValido(7.5, 30)).toBe(false);
-    expect(prazoDeRetornoValido(91, 120)).toBe(false);
-    expect(prazoDeRetornoValido(1, 0)).toBe(false);
+  it("prazo de retorno: o medico escolhe de 1 dia ao teto tecnico de 180", () => {
+    expect(prazoDeRetornoValido(30)).toBe(true);
+    expect(prazoDeRetornoValido(180)).toBe(true);
+    expect(prazoDeRetornoValido(181)).toBe(false);
+    expect(prazoDeRetornoValido(0)).toBe(false);
+    expect(prazoDeRetornoValido(7.5)).toBe(false);
   });
 
   it("falta so depois da tolerancia de 15 minutos", () => {

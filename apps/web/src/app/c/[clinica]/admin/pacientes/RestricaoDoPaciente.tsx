@@ -9,7 +9,7 @@ import { acaoNaApi } from "@/lib/navegador";
  * Impedir (ou voltar a permitir) que o paciente MARQUE consulta e entre na
  * fila. Ele continua entrando para ver os proprios documentos (LGPD).
  */
-export function RestricaoDoPaciente({ slug, pacienteId, restrito }: { slug: string; pacienteId: string; restrito: boolean }) {
+export function RestricaoDoPaciente({ slug, pacienteId, restrito, aoMudar }: { slug: string; pacienteId: string; restrito: boolean; /** Recarrega a lista (a busca vive no navegador). */ aoMudar?: (e: { preventDefault(): void }) => void }) {
   const router = useRouter();
   const [aberto, setAberto] = useState(false);
   const [motivo, setMotivo] = useState("");
@@ -24,6 +24,7 @@ export function RestricaoDoPaciente({ slug, pacienteId, restrito }: { slug: stri
     if (!r.ok) return setErro(r.erro.mensagem);
     setAberto(false);
     setMotivo("");
+    if (aoMudar) aoMudar({ preventDefault() {} });
     router.refresh();
   }
 

@@ -55,10 +55,7 @@ CREATE POLICY "avaliacoes_consulta: paciente ve as suas" ON "avaliacoes_consulta
   FOR SELECT TO authenticated
   USING ("paciente_id" = (SELECT auth.uid()));
 --> statement-breakpoint
-CREATE POLICY "avaliacoes_consulta: medico ve as dele" ON "avaliacoes_consulta"
-  FOR SELECT TO authenticated
-  USING ("medico_id" = (SELECT auth.uid()));
---> statement-breakpoint
+-- O medico NAO ve a nota individual (evita retaliacao ao paciente): so o agregado, pela API.
 CREATE POLICY "avaliacoes_consulta: administracao ve as da clinica" ON "avaliacoes_consulta"
   FOR SELECT TO authenticated
   USING ((SELECT "public"."tem_papel"("clinica_id", ARRAY['admin_clinica']::"public"."papel_vinculo"[])));
@@ -73,12 +70,19 @@ CREATE POLICY "restricoes_pacientes: administracao ve as da clinica" ON "restric
 --> statement-breakpoint
 
 -- Avaliacao dada nao se altera nem se apaga (vale o que o paciente disse).
+-- Unica excecao: APAGAR O COMENTARIO (texto livre, pode ter dado pessoal) a
+-- pedido do paciente (LGPD, art. 18). Nota e datas ficam.
 CREATE OR REPLACE FUNCTION "public"."avaliacao_imutavel"()
 RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  RAISE EXCEPTION 'Avaliacao registrada nao se altera nem se apaga.' USING ERRCODE = 'restrict_violation';
+  IF TG_OP = 'UPDATE' AND NEW.comentario IS NULL AND OLD.comentario IS NOT NULL
+     AND NEW.nota = OLD.nota AND NEW.consulta_id = OLD.consulta_id AND NEW.paciente_id = OLD.paciente_id
+     AND NEW.medico_id = OLD.medico_id AND NEW.clinica_id = OLD.clinica_id AND NEW.criado_em = OLD.criado_em THEN
+    RETURN NEW;
+  END IF;
+  RAISE EXCEPTION 'Avaliacao registrada nao se altera nem se apaga (so o comentario pode ser apagado).' USING ERRCODE = 'restrict_violation';
 END;
 $$;
 --> statement-breakpoint

@@ -233,6 +233,14 @@ export async function rotasVideo(
         detalhes: { papel: souMedico ? "medico" : "paciente", provedor: provedor.nome },
         ip: req.ip,
       });
+      // ADR-0027: o medico entrou, o atendimento comecou. Sem isto, a consulta
+      // ficaria "agendada" durante a chamada e alguem poderia registrar falta.
+      if (souMedico) {
+        await banco
+          .update(consultas)
+          .set({ status: "em_andamento", atualizadoEm: new Date() })
+          .where(and(eq(consultas.id, consultaId), eq(consultas.status, "agendada")));
+      }
 
       return {
         ok: true,

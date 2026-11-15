@@ -64,7 +64,7 @@ let hora = 3;
 async function consulta(opcoes: { medico?: string; paciente?: string; status: string; minutos: number; pago?: number; retornoAte?: Date }) {
   const id = randomUUID();
   hora += 1;
-  const inicio = new Date(Date.now() + opcoes.minutos * 60000 - (opcoes.minutos < 0 ? hora * 60000 : 0));
+  const inicio = new Date(Date.now() + opcoes.minutos * 60000 - (opcoes.minutos < 0 ? hora * 35 * 60000 : 0));
   await banco.$client`insert into consultas (id, clinica_id, paciente_id, medico_id, inicio, fim, status, marcado_por, linha, repasse_medico_bps, retorno_ate)
     values (${id}, ${clinicaId}, ${opcoes.paciente ?? paciente}, ${opcoes.medico ?? medicoA}, ${inicio.toISOString()}::timestamptz, ${new Date(inicio.getTime() + 1800000).toISOString()}::timestamptz,
             ${opcoes.status}, ${paciente}, 'pronto_atendimento', 7000, ${opcoes.retornoAte?.toISOString() ?? null}::timestamptz)`;
@@ -131,7 +131,7 @@ describe.skipIf(!temBanco)("retorno sem custo, faltas e gestao (ADR-0027)", () =
 
     expect((await chamar(paciente, "POST", `/consultas/${original}/retorno`, { dias: 15 })).statusCode).toBe(403);
     expect((await chamar(medicoB, "POST", `/consultas/${original}/retorno`, { dias: 15 })).json().erro.codigo).toBe("NAO_E_SEU_ATENDIMENTO");
-    expect((await chamar(medicoA, "POST", `/consultas/${original}/retorno`, { dias: 31 })).json().erro.codigo).toBe("PRAZO_INVALIDO");
+    expect((await chamar(medicoA, "POST", `/consultas/${original}/retorno`, { dias: 181 })).json().erro.codigo).toBe("PRAZO_INVALIDO");
     expect((await chamar(medicoA, "POST", `/consultas/${original}/retorno`, { dias: 0 })).json().erro.codigo).toBe("PRAZO_INVALIDO");
 
     const ok = await chamar(medicoA, "POST", `/consultas/${original}/retorno`, { dias: 15 });
@@ -178,19 +178,23 @@ describe.skipIf(!temBanco)("retorno sem custo, faltas e gestao (ADR-0027)", () =
     retornoId = denovo.json().dados.id as string;
   });
 
-  it("3. fora do prazo, nao; e a administracao pode desligar o retorno pelo sistema", async () => {
+  it("3. fora do prazo, nao; a administracao so SUGERE o prazo, quem decide e o medico", async () => {
     const curto = await consulta({ status: "concluida", minutos: -3 * 60, retornoAte: new Date(Date.now() + 86400000) });
     const livres = await horarios(medicoA, 3);
     expect((await chamar(paciente, "POST", "/consultas", { medicoId: medicoA, inicio: livres[4]!.inicio, linha: "pronto_atendimento", retornoDe: curto })).json().erro.codigo).toBe("RETORNO_FORA_DO_PRAZO");
 
-    expect((await chamar(medicoA, "PATCH", "/admin/configuracoes", { retornoPrazoMaximoDias: 0 })).statusCode).toBe(403);
+    expect((await chamar(medicoA, "PATCH", "/admin/configuracoes", { retornoPrazoMaximoDias: 10 })).statusCode).toBe(403);
     expect((await chamar(admin, "PATCH", "/admin/configuracoes", { retornoPrazoMaximoDias: 91 })).statusCode).toBe(400);
-    expect((await chamar(admin, "PATCH", "/admin/configuracoes", { retornoPrazoMaximoDias: 0 })).statusCode).toBe(200);
-    const outra = await consulta({ status: "concluida", minutos: -4 * 60 });
-    expect((await chamar(medicoA, "POST", `/consultas/${outra}/retorno`, { dias: 7 })).json().erro.codigo).toBe("RETORNO_DESLIGADO");
+    // Nao existe mais "desligar" o retorno: o prazo e do medico (CFM 1.958/2010).
+    expect((await chamar(admin, "PATCH", "/admin/configuracoes", { retornoPrazoMaximoDias: 0 })).statusCode).toBe(400);
     expect((await chamar(admin, "PATCH", "/admin/configuracoes", { retornoPrazoMaximoDias: 45 })).statusCode).toBe(200);
     expect((await chamar(admin, "GET", "/admin/configuracoes")).json().dados.retornoPrazoMaximoDias).toBe(45);
-    expect((await chamar(medicoA, "POST", `/consultas/${outra}/retorno`, { dias: 40 })).statusCode).toBe(200);
+    // Sem dizer o prazo, vale o sugerido (45 dias)...
+    const outra = await consulta({ status: "concluida", minutos: -4 * 60 });
+    const padrao = await chamar(medicoA, "POST", `/consultas/${outra}/retorno`, {});
+    expect(Math.abs(new Date(padrao.json().dados.retornoAte as string).getTime() - (Date.now() + 45 * 86400000))).toBeLessThan(60000);
+    // ...e o medico pode dar mais que o sugerido.
+    expect((await chamar(medicoA, "POST", `/consultas/${outra}/retorno`, { dias: 120 })).statusCode).toBe(200);
     const [a] = await banco.$client`select 1 from auditoria where clinica_id = ${clinicaId} and acao = 'clinica.regras_de_retorno_alteradas'`;
     expect(a).toBeDefined();
   });
@@ -218,6 +222,32 @@ describe.skipIf(!temBanco)("retorno sem custo, faltas e gestao (ADR-0027)", () =
     expect((await chamar(admin, "POST", `/consultas/${outra}/falta`, { quem: "paciente" })).statusCode).toBe(200);
   });
 
+  it("4b. quem entrou na sala nao faltou; falta e Iniciar ao mesmo tempo nao dao erro 500", async () => {
+    const naSala = await consulta({ status: "agendada", minutos: -30 });
+    await banco.$client`insert into auditoria (quem, clinica_id, acao, tabela, registro_id) values (${medicoA}, ${clinicaId}, 'video.entrou', 'salas_de_video', ${naSala})`;
+    expect((await chamar(paciente, "POST", `/consultas/${naSala}/falta`, { quem: "medico" })).json().erro.codigo).toBe("ENTROU_NA_SALA");
+    const [c] = await banco.$client`select status from consultas where id = ${naSala}`;
+    expect(c!.status).toBe("agendada");
+
+    const disputa = await consulta({ status: "agendada", minutos: -35 });
+    const [falta, iniciar] = await Promise.all([
+      chamar(medicoA, "POST", `/consultas/${disputa}/falta`, { quem: "paciente" }),
+      chamar(medicoA, "POST", `/consultas/${disputa}/status`, { status: "em_andamento" }),
+    ]);
+    expect([falta.statusCode, iniciar.statusCode].sort()).toEqual([200, 409]);
+
+    // Cancelada nao volta a "em andamento" por um Iniciar atrasado.
+    const cancelada = await consulta({ status: "agendada", minutos: 60 * 24 });
+    const [cancelar, iniciar2] = await Promise.all([
+      chamar(paciente, "POST", `/consultas/${cancelada}/cancelar`, { motivo: "imprevisto" }),
+      chamar(medicoA, "POST", `/consultas/${cancelada}/status`, { status: "em_andamento" }),
+    ]);
+    expect([cancelar.statusCode, iniciar2.statusCode]).not.toContain(500);
+    const [depois] = await banco.$client`select status from consultas where id = ${cancelada}`;
+    expect(["cancelada", "em_andamento"]).toContain(depois!.status);
+    if (cancelar.statusCode === 200) expect(depois!.status).toBe("cancelada");
+  });
+
   it("5. avaliacao: so o paciente, uma vez, de 0 a 10, e nao se altera", async () => {
     expect((await chamar(paciente, "POST", `/consultas/${original}/avaliacao`, { nota: 11 })).statusCode).toBe(400);
     expect((await chamar(medicoA, "POST", `/consultas/${original}/avaliacao`, { nota: 10 })).json().erro.codigo).toBe("SO_O_PACIENTE");
@@ -234,6 +264,25 @@ describe.skipIf(!temBanco)("retorno sem custo, faltas e gestao (ADR-0027)", () =
     // A auditoria guarda a nota, nunca o texto livre.
     const [a] = await banco.$client`select detalhes from auditoria where acao = 'consulta.avaliada' and registro_id = ${original}`;
     expect(JSON.stringify(a!.detalhes)).not.toContain("pontual");
+    // O medico nao ve a nota individual (so o agregado, na administracao).
+    const doMedico = (await chamar(medicoA, "GET", `/consultas/${original}`)).json().dados;
+    expect(doMedico.notaDaAvaliacao).toBeNull();
+    expect((await chamar(paciente, "GET", `/consultas/${original}`)).json().dados.notaDaAvaliacao).toBe(9);
+    expect((await chamar(paciente2, "GET", `/consultas/${original}`)).statusCode).toBe(404);
+    // A exportacao da LGPD traz a avaliacao.
+    const meus = JSON.parse((await chamar(paciente, "GET", "/lgpd/meus-dados")).body);
+    expect(meus.avaliacoesDeConsultas[0]).toMatchObject({ nota: 9 });
+  });
+
+  it("5b. o paciente apaga o proprio comentario; a nota fica", async () => {
+    const outra = await consulta({ status: "concluida", minutos: -6 * 60 });
+    expect((await chamar(paciente, "POST", `/consultas/${outra}/avaliacao`, { nota: 4, comentario: "texto que quero apagar" })).statusCode).toBe(201);
+    expect((await chamar(medicoA, "POST", `/consultas/${outra}/avaliacao/apagar-comentario`)).statusCode).toBe(404);
+    expect((await chamar(paciente, "POST", `/consultas/${outra}/avaliacao/apagar-comentario`)).statusCode).toBe(200);
+    const [a] = await banco.$client`select nota, comentario from avaliacoes_consulta where consulta_id = ${outra}`;
+    expect(a).toMatchObject({ nota: 4, comentario: null });
+    // Fora apagar o comentario, nada muda.
+    await expect(banco.$client`update avaliacoes_consulta set nota = 10 where consulta_id = ${outra}`).rejects.toThrow();
   });
 
   it("6. restricao: impede marcar e entrar na fila, mas o paciente continua vendo o que e dele", async () => {
@@ -261,24 +310,27 @@ describe.skipIf(!temBanco)("retorno sem custo, faltas e gestao (ADR-0027)", () =
     const todos = (await chamar(admin, "GET", "/admin/pacientes")).json().dados as { id: string; cpfMascarado: string; faltas: number; consultasConcluidas: number }[];
     const p = todos.find((x) => x.id === paciente)!;
     expect(p.cpfMascarado).toMatch(/^\*\*\*\.\d{3}\.\d{3}-\*\*$/);
-    expect(p.faltas).toBe(2);
+    const [nf] = await banco.$client`select count(*)::int as n from consultas where paciente_id = ${paciente} and ausencia = 'paciente'`;
+    expect(p.faltas).toBe(nf!.n);
+    expect(nf!.n).toBeGreaterThanOrEqual(2);
     expect(p.consultasConcluidas).toBeGreaterThanOrEqual(3);
     const comFaltas = (await chamar(admin, "GET", "/admin/pacientes?filtro=com_faltas")).json().dados as { id: string }[];
     expect(comFaltas.map((x) => x.id)).toEqual([paciente]);
     // Busca nao aceita curinga do SQL como atalho.
-    expect((await chamar(admin, "GET", "/admin/pacientes?busca=%25")).json().dados).toHaveLength(0);
+    expect((await chamar(admin, "POST", "/admin/pacientes/buscar", { busca: "%" })).json().dados).toHaveLength(0);
   });
 
   it("8. indicadores de faltas e de satisfacao (NPS)", async () => {
     expect((await chamar(medicoA, "GET", "/admin/indicadores")).statusCode).toBe(403);
     const r = (await chamar(admin, "GET", "/admin/indicadores")).json().dados;
-    expect(r.faltasDoPaciente).toBe(2);
+    const [nf] = await banco.$client`select count(*)::int as n from consultas where clinica_id = ${clinicaId} and ausencia = 'paciente'`;
+    expect(r.faltasDoPaciente).toBe(nf!.n);
     expect(r.faltasDoMedico).toBe(1);
     expect(r.taxaDeFaltaDoPaciente).toBeGreaterThan(0);
-    expect(r.satisfacao).toMatchObject({ respostas: 1, nps: 100, promotores: 1, detratores: 0 });
+    expect(r.satisfacao).toMatchObject({ respostas: 2, nps: 0, promotores: 1, detratores: 1 });
     expect(r.comentarios[0].comentario).toBe("Atendimento pontual e atencioso.");
     expect(r.retornos.liberados).toBeGreaterThanOrEqual(2);
-    expect(r.porMedico.find((m: { medicoId: string }) => m.medicoId === medicoA)).toMatchObject({ respostas: 1, nps: 100, faltasDoMedico: 1 });
+    expect(r.porMedico.find((m: { medicoId: string }) => m.medicoId === medicoA)).toMatchObject({ respostas: 2, nps: 0, faltasDoMedico: 1 });
   });
 
   it("9. planilha para o contador: CSV que o Excel abre, sem paciente, sem formula, auditada", async () => {
@@ -290,10 +342,11 @@ describe.skipIf(!temBanco)("retorno sem custo, faltas e gestao (ADR-0027)", () =
     expect(r.headers["content-disposition"]).toContain("attachment");
     expect(r.body.charCodeAt(0)).toBe(0xfeff);
     const linhas = r.body.slice(1).trim().split("\r\n");
-    expect(linhas[0]).toContain("Valor pago (R$)");
+    expect(linhas[0]).toContain("Valor recebido (R$)");
     // Pago 70,00 com 70% para o medico: 49,00 e 21,00.
     expect(linhas.some((l) => l.endsWith(";70,00;0,00;70,00;49,00;21,00"))).toBe(true);
-    // O retorno aparece sem custo.
+    // O dinheiro de consulta que nao aconteceu tambem aparece (a receita bate com o banco).
+    expect(linhas.some((l) => l.includes("Falta do médico") && l.endsWith(";70,00;0,00;;0,00;70,00"))).toBe(true);
     expect(r.body).not.toContain(`Pessoa ${paciente.slice(0, 6)}`);
     // Nome com cara de formula vira texto.
     expect(r.body).toContain(`"'=HYPERLINK(""http://mal.example"")"`);

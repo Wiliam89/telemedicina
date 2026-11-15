@@ -218,7 +218,7 @@ grava colunas que o banco antigo não tem. **Banco primeiro, push depois.**
 
 O passo a passo com palavras simples está em `docs/o-que-voce-precisa-fazer.md`.
 
-1. Rode a migração no banco publicado (`CONFIRMAR_BANCO_REMOTO=sim pnpm db:migrar`) e `pnpm db:verificar-rls` (esperado: 58 políticas). Confira em `/saude` da API: `migracoesAplicadas` deve ser 30.
+1. Rode a migração no banco publicado (`CONFIRMAR_BANCO_REMOTO=sim pnpm db:migrar`) e `pnpm db:verificar-rls` (esperado: 57 políticas). Confira em `/saude` da API: `migracoesAplicadas` deve ser 30.
 2. Publique a **API** (Render) com as variáveis novas e espere o `/pronto` responder.
 3. Só então publique o **site** (Vercel).
 4. **Não** cadastre preço por especialidade nem deixe paciente entrar na fila com cartão antes do passo 2 terminar: a API antiga não entende esses dois dados novos.

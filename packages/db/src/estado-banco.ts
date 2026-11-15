@@ -168,7 +168,7 @@ export function rlsCompleto(e: EstadoBanco): boolean {
  * (0002 cria a maioria; 0010, 0019 a 0023, 0026 e 0027 acrescentam). Se adicionar politica,
  * atualize este numero - e o que faz `pnpm verificar` notar a falta.
  */
-export const POLITICAS_ESPERADAS = 58;
+export const POLITICAS_ESPERADAS = 57;
 
 /** Resumo em uma palavra, usado pela API e pelo painel. */
 export function resumirEstado(e: EstadoBanco): "migrado" | "faltam_migracoes" | "sem_tabelas" {

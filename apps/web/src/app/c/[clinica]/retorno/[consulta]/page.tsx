@@ -19,10 +19,11 @@ export default async function PaginaRetorno({ params }: { params: Promise<{ clin
   const { clinica: slug, consulta: consultaId } = await params;
   const { token, perfil, clinica } = await contextoDaClinica(slug);
   const fuso = clinica.fusoHorario;
-  const desde = new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(new Date(Date.now() - 60 * 86400000));
-  const ate = new Intl.DateTimeFormat("en-CA", { timeZone: fuso }).format(new Date(Date.now() + 1 * 86400000));
-  const r = await chamarApi<ConsultaResumo[]>(`/consultas?de=${desde}&ate=${ate}`, { token, clinica: slug });
-  const original = r.ok ? r.dados.find((c) => c.id === consultaId && c.paciente.id === perfil.id) : undefined;
+  // Busca pelo id, sem janela de datas: o prazo do retorno pode ser longo.
+  if (!/^[0-9a-f-]{36}$/i.test(consultaId)) notFound();
+  const r = await chamarApi<ConsultaResumo>(`/consultas/${consultaId}`, { token, clinica: slug });
+  if (!r.ok && r.erro.codigo === "CONSULTA_NAO_ENCONTRADA") notFound();
+  const original = r.ok && r.dados.paciente.id === perfil.id ? r.dados : undefined;
   if (r.ok && !original) notFound();
 
   const disponivel = original && original.status === "concluida" && original.retornoAte && !original.retornoMarcado && new Date(original.retornoAte) > new Date();

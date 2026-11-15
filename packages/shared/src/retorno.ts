@@ -10,25 +10,30 @@
  *   art. 1, par. 1  quando ha exames que nao puderam ser vistos na consulta,
  *                   o ato continua, "com tempo determinado a criterio do
  *                   medico, nao gerando cobranca de honorario".
- *   art. 1, par. 2  se no retorno aparecem sinais ou sintomas novos, que
- *                   pedem nova anamnese e nova conduta, e CONSULTA NOVA.
- *   art. 2          doenca de tratamento prolongado: as reavaliacoes podem
+ *   art. 1, par. 2  doenca distinta, no mesmo atendimento, e outro ato.
+ *   art. 2          sinais ou sintomas novos, que pedem nova anamnese e nova
+ *                   conduta: e CONSULTA NOVA.
+ *   art. 3          doenca de tratamento prolongado: as reavaliacoes podem
  *                   ser cobradas, a criterio do medico.
+ *   art. 4          identificar essas hipoteses cabe somente ao medico.
  *
- * Por isso: quem libera o retorno e o MEDICO, no prazo que ele escolher, ate
- * o maximo que a plataforma aceita. O retorno e com o mesmo medico, sem
- * custo, e nao tem retorno proprio.
+ * Por isso: quem libera o retorno e o MEDICO, no prazo que ele escolher. A
+ * plataforma so SUGERE um prazo padrao e tem um teto tecnico alto, nunca uma
+ * trava abaixo da decisao medica. O retorno e com o mesmo medico, sem custo,
+ * e nao tem retorno proprio.
  */
 
-/** Maior prazo que a administracao pode configurar (90 dias). */
-export const PRAZO_DE_RETORNO_TETO_DIAS = 90;
+/** Teto tecnico do prazo que o medico escolhe (so contra erro de digitacao). */
+export const PRAZO_DE_RETORNO_TETO_DIAS = 180;
+/** Prazo sugerido quando a administracao nao definiu outro. */
+export const PRAZO_SUGERIDO_SEM_CONFIGURACAO = 30;
 
 /** Depois de quantos minutos do horario marcado ja se pode registrar falta. */
 export const TOLERANCIA_DE_FALTA_MINUTOS = 15;
 
-/** O medico pode liberar este prazo? (1 dia ate o maximo da plataforma) */
-export function prazoDeRetornoValido(dias: number, maximoDaPlataforma: number): boolean {
-  return Number.isInteger(dias) && dias >= 1 && dias <= Math.min(maximoDaPlataforma, PRAZO_DE_RETORNO_TETO_DIAS);
+/** O prazo que o medico escolheu e valido? (1 dia ate o teto tecnico) */
+export function prazoDeRetornoValido(dias: number): boolean {
+  return Number.isInteger(dias) && dias >= 1 && dias <= PRAZO_DE_RETORNO_TETO_DIAS;
 }
 
 /** A data-limite do retorno: o fim do ultimo dia do prazo, contado a partir de agora. */

@@ -80,26 +80,28 @@ export function AcoesDaConsulta({
   );
 
   // --- O MEDICO LIBERA O RETORNO SEM CUSTO (ADR-0027, Resolucao CFM 1.958/2010) ---
-  const podeLiberarRetorno = souOMedico && !consulta.retornoDe && !consulta.retornoMarcado && recente && (consulta.status === "concluida" || consulta.status === "em_andamento");
+  // "=== false": com a API antiga (sem estes campos), o botao nao aparece.
+  const podeLiberarRetorno = souOMedico && !consulta.retornoDe && consulta.retornoMarcado === false && Date.now() - inicio.getTime() <= 90 * DIA && (consulta.status === "concluida" || consulta.status === "em_andamento");
   const liberarRetorno = podeLiberarRetorno ? (
     <form
       className="flex flex-wrap items-center gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        const dias = Number(diasDeRetorno);
-        if (!Number.isInteger(dias) || dias < 1) return setErro("Diga em quantos dias o retorno pode ser marcado (ex.: 30).");
-        void chamar(`/consultas/${consulta.id}/retorno`, { dias }, "Retorno liberado. O paciente foi avisado.");
+        // Vazio = o prazo sugerido pela plataforma. O prazo e decisao do medico (CFM 1.958/2010).
+        const dias = diasDeRetorno === "" ? undefined : Number(diasDeRetorno);
+        if (dias !== undefined && (!Number.isInteger(dias) || dias < 1 || dias > 180)) return setErro("Diga em quantos dias o retorno pode ser marcado: de 1 a 180.");
+        void chamar(`/consultas/${consulta.id}/retorno`, dias === undefined ? {} : { dias }, "Retorno liberado. O paciente foi avisado.");
       }}
     >
       <label htmlFor={`retorno-${consulta.id}`} className="text-sm text-tinta-suave">
-        {consulta.retornoAte ? "Retorno sem custo até " + new Date(consulta.retornoAte).toLocaleDateString("pt-BR") + ". Mudar prazo (dias):" : "Retorno sem custo em até"}
+        {consulta.retornoAte ? "Retorno sem custo até " + new Date(consulta.retornoAte).toLocaleDateString("pt-BR") + ". Novo prazo, em dias:" : "Retorno sem custo: prazo em dias (vazio = padrão)"}
       </label>
       <input
         id={`retorno-${consulta.id}`}
         inputMode="numeric"
-        placeholder="30"
+        placeholder="padrão"
         value={diasDeRetorno}
-        onChange={(e) => setDiasDeRetorno(e.target.value.replace(/\D/g, "").slice(0, 2))}
+        onChange={(e) => setDiasDeRetorno(e.target.value.replace(/\D/g, "").slice(0, 3))}
         className="w-16 rounded-lg border border-linha bg-superficie px-2 py-1.5 text-sm"
       />
       <Botao type="submit" variante="secundario" tamanho="p" carregando={ocupado}>
@@ -110,7 +112,7 @@ export function AcoesDaConsulta({
 
   if (encerrada) {
     const podeMarcarRetorno = souOPaciente && consulta.status === "concluida" && consulta.retornoAte && !consulta.retornoMarcado && new Date(consulta.retornoAte) > new Date();
-    const podeAvaliar = souOPaciente && consulta.status === "concluida" && (consulta.notaDaAvaliacao === null || consulta.notaDaAvaliacao === undefined) && recente;
+    const podeAvaliar = souOPaciente && consulta.status === "concluida" && consulta.notaDaAvaliacao === null && recente;
     return (
       <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
         {mensagens}
@@ -251,13 +253,27 @@ function Avaliar({ slug, consultaId }: { slug: string; consultaId: string }) {
   return (
     <fieldset className="w-full space-y-3 rounded-xl border border-linha bg-superficie-alt p-4">
       <legend className="px-1 text-sm font-medium">De 0 a 10, quanto você recomendaria este atendimento a um amigo?</legend>
-      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Nota de 0 a 10">
+      <div
+        className="flex flex-wrap gap-1.5"
+        role="radiogroup"
+        aria-label="Nota de 0 a 10"
+        onKeyDown={(e) => {
+          // Setas mudam a nota, como manda o padrao de grupo de opcoes (WAI-ARIA).
+          if (!["ArrowRight", "ArrowUp", "ArrowLeft", "ArrowDown"].includes(e.key)) return;
+          e.preventDefault();
+          const passo = e.key === "ArrowRight" || e.key === "ArrowUp" ? 1 : -1;
+          const nova = Math.min(10, Math.max(0, (nota ?? (passo > 0 ? -1 : 11)) + passo));
+          setNota(nova);
+          (e.currentTarget.querySelectorAll("button")[nova] as HTMLButtonElement | undefined)?.focus();
+        }}
+      >
         {Array.from({ length: 11 }, (_, n) => (
           <button
             key={n}
             type="button"
             role="radio"
             aria-checked={nota === n}
+            tabIndex={nota === n || (nota === null && n === 0) ? 0 : -1}
             onClick={() => setNota(n)}
             className={"h-9 w-9 rounded-lg border text-sm font-medium " + (nota === n ? "border-selo bg-selo text-white" : "border-linha bg-superficie hover:border-selo")}
           >

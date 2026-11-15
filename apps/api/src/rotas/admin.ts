@@ -173,8 +173,8 @@ export async function rotasAdmin(app: FastifyInstance, opcoes: { banco: Banco; a
         /** Troca-se por outro; nao se deixa a plataforma sem (Resolucao CFM 2.314/2022). */
         responsavelTecnicoId: z.string().uuid("responsável técnico inválido").optional(),
         repassePadraoBps: bps.nullable().optional(),
-        /** ADR-0027: maior prazo de retorno sem custo que o medico pode dar (0 = sem retorno pelo sistema). */
-        retornoPrazoMaximoDias: z.number().int("prazo em dias inteiros").min(0, "mínimo 0 dias").max(90, "máximo 90 dias").optional(),
+        /** ADR-0027: prazo de retorno SUGERIDO ao medico (quem decide e o medico, CFM 1.958/2010). */
+        retornoPrazoMaximoDias: z.number().int("prazo em dias inteiros").min(1, "mínimo 1 dia").max(90, "máximo 90 dias").optional(),
       })
       .strict()
       .refine((d) => Object.keys(d).length > 0, "nada para alterar")

@@ -26,6 +26,8 @@ import { ErroHttp } from "../erros.js";
 
 const DIA = 86400000;
 const DIAS_MAXIMOS = 400;
+/** Acima disso, pede um periodo menor em vez de cortar a planilha sem avisar. */
+const LINHAS_MAXIMAS = 20000;
 const dataIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "data no formato AAAA-MM-DD");
 
 /** "12345678901" -> "***.456.789-**" (o suficiente para conferir com a pessoa). */
@@ -56,11 +58,17 @@ export async function rotasGestao(app: FastifyInstance, opcoes: { banco: Banco; 
 
   // --- pacientes ---------------------------------------------------------------------
 
-  app.get("/admin/pacientes", { preHandler: soAdmin }, async (req): Promise<Resposta<PacienteNaAdministracao[]>> => {
-    const q = z
-      .object({ busca: z.string().trim().max(80).optional(), filtro: z.enum(["todos", "restritos", "com_faltas", "com_pendencia"]).default("todos") })
-      .parse(req.query);
-    const clinicaId = req.contexto.clinicaId;
+  const esquemaBusca = z.object({ busca: z.string().trim().max(80).optional(), filtro: z.enum(["todos", "restritos", "com_faltas", "com_pendencia"]).default("todos") });
+
+  /**
+   * A BUSCA vai no corpo (POST /admin/pacientes/buscar), nunca na URL: nome e
+   * CPF na URL acabam em log de servidor e historico do navegador (LGPD).
+   * O GET aceita so o filtro.
+   */
+  app.get("/admin/pacientes", { preHandler: soAdmin }, async (req) => listarPacientes(req.contexto.clinicaId, { filtro: esquemaBusca.parse({ filtro: (req.query as { filtro?: string }).filtro }).filtro }));
+  app.post("/admin/pacientes/buscar", { preHandler: soAdmin }, async (req) => listarPacientes(req.contexto.clinicaId, esquemaBusca.strict().parse(req.body ?? {})));
+
+  async function listarPacientes(clinicaId: string, q: z.infer<typeof esquemaBusca>): Promise<Resposta<PacienteNaAdministracao[]>> {
     // % e _ digitados sao letras, nao curingas do ILIKE.
     const nome = q.busca ? `%${q.busca.replace(/[%_\\]/g, (c) => `\\${c}`)}%` : null;
     const digitos = q.busca ? q.busca.replace(/\D/g, "") : "";
@@ -106,7 +114,7 @@ export async function rotasGestao(app: FastifyInstance, opcoes: { banco: Banco; 
         restricao: l.motivo ? { motivo: l.motivo, desde: new Date(l.restrito_em!).toISOString() } : null,
       })),
     };
-  });
+   }
 
   app.post("/admin/pacientes/:id/restringir", { preHandler: soAdmin }, async (req, reply): Promise<Resposta<{ restrito: true }>> => {
     const { id } = z.object({ id: z.string().uuid("id inválido") }).parse(req.params);
@@ -259,43 +267,56 @@ export async function rotasGestao(app: FastifyInstance, opcoes: { banco: Banco; 
 
     let csv: string;
     if (q.tipo === "consultas") {
+      /**
+       * Parte do DINHEIRO, nao da consulta: todo pagamento recebido ou
+       * devolvido no periodo entra, inclusive de consulta cancelada ou com
+       * falta. Assim a receita da planilha bate com a do banco.
+       */
       const linhas = await s<{
-        id: string; inicio: Date; linha: string; especialidade: string | null; medico: string; crm: string; uf: string;
-        forma: string; retorno: boolean; pago: number; estornado: number; bps: number;
+        pagamento: string; consulta: string | null; recebido_em: Date | null; estornado_em: Date | null; status: string; metodo: string; valor: number;
+        situacao: string | null; ausencia: string | null; linha: string | null; especialidade: string | null; medico: string | null; crm: string | null; uf: string | null; bps: number | null;
       }[]>`
-        select c.id, c.inicio, c.linha, c.especialidade, pf.nome_completo as medico, m.crm, m.crm_uf as uf, c.forma_de_cobranca as forma,
-               (c.retorno_de is not null) as retorno,
-               coalesce((select sum(pg.valor_centavos) from pagamentos pg where pg.consulta_id = c.id and pg.status = 'confirmado'), 0)::bigint as pago,
-               coalesce((select sum(pg.valor_centavos) from pagamentos pg where pg.consulta_id = c.id and pg.status = 'estornado'), 0)::bigint as estornado,
+        select pg.id as pagamento, pg.consulta_id as consulta, pg.confirmado_em as recebido_em, pg.estornado_em, pg.status, pg.metodo, pg.valor_centavos as valor,
+               c.status as situacao, c.ausencia, c.linha, c.especialidade, pf.nome_completo as medico, m.crm, m.crm_uf as uf,
                coalesce(c.repasse_medico_bps, pm.percentual_bps, cl.repasse_padrao_bps, 0) as bps
-        from consultas c
-        join clinicas cl on cl.id = c.clinica_id
-        join medicos m on m.perfil_id = c.medico_id
-        join perfis pf on pf.id = c.medico_id
-        left join percentuais_medicos pm on pm.clinica_id = c.clinica_id and pm.medico_id = c.medico_id
-        where c.clinica_id = ${clinicaId} and c.status = 'concluida' and c.inicio >= ${de}::timestamptz and c.inicio < ${ate}::timestamptz
-        order by c.inicio
-        limit 20000`;
+        from pagamentos pg
+        join clinicas cl on cl.id = pg.clinica_id
+        left join consultas c on c.id = pg.consulta_id
+        left join medicos m on m.perfil_id = c.medico_id
+        left join perfis pf on pf.id = c.medico_id
+        left join percentuais_medicos pm on pm.clinica_id = pg.clinica_id and pm.medico_id = c.medico_id
+        where pg.clinica_id = ${clinicaId} and pg.status in ('confirmado', 'estornado')
+          and ((pg.confirmado_em >= ${de}::timestamptz and pg.confirmado_em < ${ate}::timestamptz)
+            or (pg.estornado_em >= ${de}::timestamptz and pg.estornado_em < ${ate}::timestamptz))
+        order by coalesce(pg.confirmado_em, pg.estornado_em)
+        limit ${LINHAS_MAXIMAS + 1}`;
+      if (linhas.length > LINHAS_MAXIMAS) throw new ErroHttp(400, "PLANILHA_GRANDE_DEMAIS", "Período com movimento demais para uma planilha só. Escolha um período menor.");
       const data = new Intl.DateTimeFormat("pt-BR", { timeZone: fuso, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      const SITUACAO: Record<string, string> = { concluida: "Concluída", cancelada: "Cancelada", agendada: "Agendada", em_andamento: "Em andamento", aguardando_pagamento: "Aguardando pagamento" };
       csv = montarCsv(
-        ["Data", "Consulta", "Tipo", "Especialidade", "Médico", "CRM", "Cobrança", "Valor pago (R$)", "Valor estornado (R$)", "% do médico", "Parte do médico (R$)", "Parte da plataforma (R$)"],
+        ["Data do recebimento", "Data da devolução", "Pagamento", "Consulta", "Situação da consulta", "Tipo", "Especialidade", "Médico", "CRM", "Forma", "Valor recebido (R$)", "Valor devolvido (R$)", "% do médico", "Parte do médico (R$)", "Parte da plataforma (R$)"],
         linhas.map((l) => {
-          const pago = Number(l.pago);
-          // Mesma regra de repasse.ts: arredonda para baixo.
-          const medico = Math.floor((pago * Number(l.bps)) / 10000);
+          const valor = Number(l.valor);
+          const devolvido = l.status === "estornado" ? valor : 0;
+          const liquido = valor - devolvido;
+          // Ganho do medico: so consulta concluida e paga (mesma regra de repasse.ts, arredonda para baixo).
+          const medico = l.situacao === "concluida" ? Math.floor((liquido * Number(l.bps ?? 0)) / 10000) : 0;
           return [
-            data.format(new Date(l.inicio)),
-            l.id.slice(0, 8),
-            l.retorno ? "Retorno sem custo" : l.linha === "pronto_atendimento" ? "Pronto atendimento" : "Teleconsulta",
+            l.recebido_em ? data.format(new Date(l.recebido_em)) : "",
+            l.estornado_em ? data.format(new Date(l.estornado_em)) : "",
+            l.pagamento.slice(0, 8),
+            l.consulta?.slice(0, 8) ?? "",
+            l.ausencia === "paciente" ? "Falta do paciente" : l.ausencia === "medico" ? "Falta do médico" : l.situacao ? (SITUACAO[l.situacao] ?? l.situacao) : "Sem consulta",
+            l.linha === "pronto_atendimento" ? "Pronto atendimento" : l.linha === "teleconsulta" ? "Teleconsulta" : "",
             l.especialidade ?? "",
-            l.medico,
-            `${l.crm}-${l.uf}`,
-            l.retorno ? "Sem custo" : l.forma === "cartao_ao_final" ? "Cartão ao final" : "Pix antecipado",
-            centavosParaCsv(pago),
-            centavosParaCsv(Number(l.estornado)),
-            (Number(l.bps) / 100).toFixed(2).replace(".", ","),
+            l.medico ?? "",
+            l.crm ? `${l.crm}-${l.uf}` : "",
+            l.metodo === "pix" ? "Pix" : l.metodo === "cartao_credito" ? "Cartão" : l.metodo,
+            centavosParaCsv(valor),
+            centavosParaCsv(devolvido),
+            l.situacao === "concluida" ? (Number(l.bps ?? 0) / 100).toFixed(2).replace(".", ",") : "",
             centavosParaCsv(medico),
-            centavosParaCsv(pago - medico),
+            centavosParaCsv(liquido - medico),
           ];
         }),
       );
@@ -307,7 +328,8 @@ export async function rotasGestao(app: FastifyInstance, opcoes: { banco: Banco; 
         join perfis pf on pf.id = r.medico_id
         where r.clinica_id = ${clinicaId} and r.pago_em >= ${de}::timestamptz and r.pago_em < ${ate}::timestamptz
         order by r.pago_em
-        limit 20000`;
+        limit ${LINHAS_MAXIMAS + 1}`;
+      if (linhas.length > LINHAS_MAXIMAS) throw new ErroHttp(400, "PLANILHA_GRANDE_DEMAIS", "Período com movimento demais para uma planilha só. Escolha um período menor.");
       const data = new Intl.DateTimeFormat("pt-BR", { timeZone: fuso, day: "2-digit", month: "2-digit", year: "numeric" });
       csv = montarCsv(
         ["Data do pagamento", "Médico", "CRM", "Valor (R$)", "Referência", "Situação", "Motivo do cancelamento"],

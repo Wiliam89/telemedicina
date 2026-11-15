@@ -112,6 +112,11 @@ export async function rotasLgpd(app: FastifyInstance, opcoes: { banco: Banco; au
       .limit(1);
     if (!pessoa) throw new ErroHttp(404, "PERFIL_NAO_ENCONTRADO", "Você ainda não tem perfil.");
 
+    const [minhasAvaliacoes, minhasRestricoes] = await Promise.all([
+      // ADR-0027: as notas que dei e, se houver, as restricoes de marcar (com o motivo).
+      banco.$client`select a.nota, a.comentario, a.criado_em as "avaliadaEm", c.inicio as "consultaEm" from avaliacoes_consulta a join consultas c on c.id = a.consulta_id where a.paciente_id = ${eu} order by a.criado_em`,
+      banco.$client`select r.motivo, r.criado_em as "desde", r.encerrado_em as "ate" from restricoes_pacientes r where r.paciente_id = ${eu} order by r.criado_em`,
+    ]);
     const [meusCartoes, meuCredenciamento, meusDocumentosProfissionais, minhasConferencias] = await Promise.all([
       // ADR-0023: o que guardamos do cartao (nunca o numero) e a autorizacao dada.
       banco.select({ bandeira: cartoesSalvos.bandeira, final: cartoesSalvos.ultimos4, validadeMes: cartoesSalvos.validadeMes, validadeAno: cartoesSalvos.validadeAno, status: cartoesSalvos.status, autorizadoEm: cartoesSalvos.autorizadoEm, autorizacaoVersao: cartoesSalvos.autorizacaoVersao, removidoEm: cartoesSalvos.removidoEm }).from(cartoesSalvos).where(eq(cartoesSalvos.perfilId, eu)),
@@ -161,6 +166,8 @@ export async function rotasLgpd(app: FastifyInstance, opcoes: { banco: Banco; au
       consentimentos: aceites,
       solicitacoes: pedidos,
       cartoes: meusCartoes,
+      avaliacoesDeConsultas: minhasAvaliacoes,
+      restricoesDeMarcacao: minhasRestricoes,
       ...(meuCredenciamento.length > 0 || meusDocumentosProfissionais.length > 0
         ? {
             credenciamentoMedico: {

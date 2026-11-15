@@ -6,15 +6,16 @@
  *   POST /consultas/:id/retorno    o medico libera o retorno sem custo (prazo em dias)
  *   POST /consultas/:id/falta      registra que o paciente ou o medico faltou
  *   POST /consultas/:id/avaliacao  o paciente da a nota (0 a 10) da consulta
+ *   POST /consultas/:id/avaliacao/apagar-comentario   o paciente apaga o proprio comentario (LGPD)
  *
  * O retorno em si e marcado em POST /consultas, com `retornoDe` (agenda.ts).
  */
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { avaliacoesConsulta, clinicas, consultas, filaAtendimento, pagamentos, perfis, type Banco } from "@tele/db";
+import { auditoria, avaliacoesConsulta, clinicas, consultas, filaAtendimento, pagamentos, perfis, type Banco } from "@tele/db";
 import type { Resposta } from "@tele/shared";
-import { podeRegistrarFalta, prazoDeRetornoValido, retornoAte, TOLERANCIA_DE_FALTA_MINUTOS } from "@tele/shared/retorno";
+import { PRAZO_DE_RETORNO_TETO_DIAS, PRAZO_SUGERIDO_SEM_CONFIGURACAO, podeRegistrarFalta, prazoDeRetornoValido, retornoAte, TOLERANCIA_DE_FALTA_MINUTOS } from "@tele/shared/retorno";
 import { registrarAuditoria } from "../auditoria.js";
 import type { Autenticador } from "../autenticacao.js";
 import { criarExigirClinica, exigirPapel } from "../contexto.js";
@@ -22,8 +23,8 @@ import { ErroHttp } from "../erros.js";
 import { fusoDaClinica, notificar } from "../notificacoes/index.js";
 import { registrarPendenciaDeEstorno } from "../reservas.js";
 
-/** Ate quantos dias depois da consulta o medico ainda pode liberar o retorno. */
-const DIAS_PARA_LIBERAR_RETORNO = 30;
+/** Ate quantos dias depois da consulta o medico ainda pode liberar o retorno (exames demoram). */
+const DIAS_PARA_LIBERAR_RETORNO = 90;
 /** Ate quantos dias depois da consulta o paciente ainda pode avaliar. */
 const DIAS_PARA_AVALIAR = 30;
 const DIA = 86400000;
@@ -57,21 +58,26 @@ export async function rotasRetorno(app: FastifyInstance, opcoes: { banco: Banco;
 
   app.post("/consultas/:id/retorno", { preHandler: soMedico }, async (req): Promise<Resposta<{ retornoAte: string }>> => {
     const { id } = idDaRota.parse(req.params);
-    const { dias } = z.object({ dias: z.number().int("o prazo é em dias inteiros") }).strict().parse(req.body);
+    // Sem "dias", vale o prazo sugerido pela plataforma. Quem decide e o medico.
+    const corpo = z.object({ dias: z.number().int("o prazo é em dias inteiros").optional() }).strict().parse(req.body ?? {});
     const c = await consulta(id, req.contexto.clinicaId);
 
     if (c.medicoId !== req.usuario.id) throw new ErroHttp(403, "NAO_E_SEU_ATENDIMENTO", "Só o médico que atendeu libera o retorno.");
-    // Resolucao CFM 1.958/2010, par. 2: sintoma novo no retorno e consulta nova.
+    // Resolucao CFM 1.958/2010, art. 2: sinal ou sintoma novo no retorno e consulta nova.
     if (c.retornoDe) throw new ErroHttp(409, "RETORNO_DE_RETORNO", "Esta consulta já é um retorno. Se houver queixa nova, o paciente marca uma nova consulta.");
     if (c.status !== "em_andamento" && c.status !== "concluida") throw new ErroHttp(409, "CONSULTA_NAO_REALIZADA", "O retorno só pode ser liberado numa consulta em andamento ou concluída.");
     if (Date.now() - c.inicio.getTime() > DIAS_PARA_LIBERAR_RETORNO * DIA) {
       throw new ErroHttp(409, "PRAZO_PARA_LIBERAR", `O retorno só pode ser liberado até ${DIAS_PARA_LIBERAR_RETORNO} dias depois da consulta.`);
     }
 
-    const [cl] = await banco.select({ maximo: clinicas.retornoPrazoMaximoDias }).from(clinicas).where(eq(clinicas.id, req.contexto.clinicaId)).limit(1);
-    const maximo = cl?.maximo ?? 0;
-    if (maximo === 0) throw new ErroHttp(409, "RETORNO_DESLIGADO", "A plataforma não oferece retorno pelo sistema no momento.");
-    if (!prazoDeRetornoValido(dias, maximo)) throw new ErroHttp(400, "PRAZO_INVALIDO", `Escolha um prazo de 1 a ${maximo} dias.`);
+    /**
+     * O prazo e do MEDICO (Resolucao CFM 1.958/2010, art. 1, par. 1; art. 4).
+     * A plataforma so sugere um padrao (clinicas.retorno_prazo_maximo_dias,
+     * hoje lido como "prazo sugerido") e tem um teto tecnico alto.
+     */
+    const [cl] = await banco.select({ sugerido: clinicas.retornoPrazoMaximoDias }).from(clinicas).where(eq(clinicas.id, req.contexto.clinicaId)).limit(1);
+    const dias = corpo.dias ?? (cl?.sugerido || PRAZO_SUGERIDO_SEM_CONFIGURACAO);
+    if (!prazoDeRetornoValido(dias)) throw new ErroHttp(400, "PRAZO_INVALIDO", `Escolha um prazo de 1 a ${PRAZO_DE_RETORNO_TETO_DIAS} dias.`);
 
     const [jaMarcado] = await banco
       .select({ id: consultas.id })
@@ -104,7 +110,7 @@ export async function rotasRetorno(app: FastifyInstance, opcoes: { banco: Banco;
         tipo: "consulta_marcada",
         titulo: "Retorno sem custo liberado",
         corpo: `Dr(a). ${medico?.nome ?? ""} liberou seu retorno sem custo até ${dataLimite}. Marque em Minhas consultas.`,
-        link: `/c/${local.slug}/agenda`,
+        link: `/c/${local.slug}/retorno/${id}`,
         chave: `retorno_liberado:${id}:${ate.toISOString().slice(0, 10)}`,
       },
     ]);
@@ -129,6 +135,19 @@ export async function rotasRetorno(app: FastifyInstance, opcoes: { banco: Banco;
     }
 
     await banco.transaction(async (tx) => {
+      // Trava a consulta: falta, "Iniciar" e entrada na sala nao se cruzam.
+      const [agora] = await tx.select({ status: consultas.status }).from(consultas).where(eq(consultas.id, id)).for("update");
+      if (agora?.status !== "agendada") throw new ErroHttp(409, "ESTADO_MUDOU", "Esta consulta acabou de mudar (o atendimento pode ter começado). Recarregue a página.");
+      // Quem e acusado de faltar mas entrou na sala, nao faltou.
+      const acusado = quem === "paciente" ? c.pacienteId : c.medicoId;
+      const [entrou] = await tx
+        .select({ id: auditoria.id })
+        .from(auditoria)
+        .where(and(eq(auditoria.acao, "video.entrou"), eq(auditoria.registroId, id), eq(auditoria.quem, acusado)))
+        .limit(1);
+      if (entrou) {
+        throw new ErroHttp(409, "ENTROU_NA_SALA", quem === "paciente" ? "O paciente entrou na sala desta consulta: não é falta." : "O médico entrou na sala desta consulta: não é falta.");
+      }
       const feitas = await tx
         .update(consultas)
         .set({
@@ -236,5 +255,17 @@ export async function rotasRetorno(app: FastifyInstance, opcoes: { banco: Banco;
     }
     void reply.code(201);
     return { ok: true, dados: { nota: dados.nota } };
+  });
+
+  // LGPD, art. 18: o comentario e texto livre do paciente; ele pode apaga-lo (a nota fica).
+  app.post("/consultas/:id/avaliacao/apagar-comentario", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<{ apagado: true }>> => {
+    const { id } = idDaRota.parse(req.params);
+    const feitas = await banco
+      .update(avaliacoesConsulta)
+      .set({ comentario: null })
+      .where(and(eq(avaliacoesConsulta.consultaId, id), eq(avaliacoesConsulta.clinicaId, req.contexto.clinicaId), eq(avaliacoesConsulta.pacienteId, req.usuario.id), isNotNull(avaliacoesConsulta.comentario)))
+      .returning({ id: avaliacoesConsulta.id });
+    if (feitas.length === 0) throw new ErroHttp(404, "SEM_COMENTARIO", "Não há comentário seu nesta consulta para apagar.");
+    return { ok: true, dados: { apagado: true } };
   });
 }

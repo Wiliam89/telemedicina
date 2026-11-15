@@ -292,7 +292,9 @@ export async function rotasAgenda(
    * motivos das proprias consultas, mas nao os dos colegas.
    */
   function paraQuemPede(c: ConsultaResumo, usuarioId: string): ConsultaResumo {
-    return c.paciente.id === usuarioId || c.medico.id === usuarioId ? c : { ...c, motivo: null };
+    // ADR-0027: a nota individual e so do paciente (evita retaliacao); o medico ve o agregado.
+    const comNota = c.paciente.id === usuarioId ? c : { ...c, notaDaAvaliacao: null };
+    return c.paciente.id === usuarioId || c.medico.id === usuarioId ? comNota : { ...comNota, motivo: null };
   }
 
   // --- consultas ------------------------------------------------------------
@@ -539,6 +541,18 @@ export async function rotasAgenda(
     return { ok: true, dados: linhas.map(formatarConsulta).map((c) => paraQuemPede(c, req.usuario.id)) };
   });
 
+  /** Uma consulta so, para quem pode ve-la (o paciente, o medico ou a equipe). */
+  app.get("/consultas/:id", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<ConsultaResumo>> => {
+    const { id } = z.object({ id: z.string().uuid("id invalido") }).parse(req.params);
+    const [c] = await consultasPorId(banco, [id]);
+    const souEquipe = req.contexto.papeis.some((p) => p === "recepcao" || p === "admin_clinica");
+    const [daClinica] = await banco.select({ id: consultas.id }).from(consultas).where(and(eq(consultas.id, id), eq(consultas.clinicaId, req.contexto.clinicaId))).limit(1);
+    if (!c || !daClinica || (c.paciente.id !== req.usuario.id && c.medico.id !== req.usuario.id && !souEquipe)) {
+      throw new ErroHttp(404, "CONSULTA_NAO_ENCONTRADA", "Consulta não encontrada.");
+    }
+    return { ok: true, dados: paraQuemPede(c, req.usuario.id) };
+  });
+
   app.post("/consultas/:id/cancelar", { preHandler: dentroDaClinica }, async (req): Promise<Resposta<ConsultaResumo>> => {
     const { id } = z.object({ id: z.string().uuid("id invalido") }).parse(req.params);
     const { motivo } = esquemaCancelar.parse(req.body);
@@ -621,7 +635,13 @@ export async function rotasAgenda(
     }
 
     await banco.transaction(async (tx) => {
-      await tx.update(consultas).set({ status, atualizadoEm: new Date() }).where(eq(consultas.id, id));
+      // So muda se ninguem mudou antes (cancelamento ou falta no mesmo instante).
+      const feitas = await tx
+        .update(consultas)
+        .set({ status, atualizadoEm: new Date() })
+        .where(and(eq(consultas.id, id), eq(consultas.status, consulta.status)))
+        .returning({ id: consultas.id });
+      if (feitas.length === 0) throw new ErroHttp(409, "ESTADO_MUDOU", "Esta consulta acabou de mudar. Recarregue a página.");
       await registrarAuditoria(tx, {
         quem: req.usuario.id,
         clinicaId: req.contexto.clinicaId,

@@ -290,7 +290,7 @@
     <li>Escolha uma nota de <strong>0 a 10</strong>: “quanto você recomendaria este atendimento a um amigo?”.</li>
     <li>Se quiser, escreva o que podemos melhorar e toque em <strong>Enviar avaliação</strong>.</li>
   </ol>
-  <div class="caixa cuidado"><span class="titulo">Não escreva dados de saúde</span>O comentário vai para a equipe da plataforma, não para o prontuário. Fale do atendimento (pontualidade, vídeo, educação), não da sua doença. A avaliação vale uma vez por consulta e fica aberta por 30 dias.</div>
+  <div class="caixa cuidado"><span class="titulo">Não escreva dados de saúde</span>O comentário vai para a equipe da plataforma, não para o prontuário. Fale do atendimento (pontualidade, vídeo, educação), não da sua doença. A avaliação vale uma vez por consulta e fica aberta por 30 dias. O médico não vê a sua nota: a plataforma vê só a média.</div>
 
   <h3>5.9 E se o médico não aparecer?</h3>
   <p>Se já passaram <strong>15 minutos</strong> do horário e o médico não entrou, toque em <span class="botao claro">Médico não veio</span>, na Agenda. A consulta é encerrada e, se você pagou, a plataforma recebe o aviso para devolver o dinheiro.</p>
@@ -403,14 +403,14 @@
 
   <h3>7.7 Liberar o retorno sem custo</h3>
   <ol class="passos">
-    <li>Na <span class="menu">Agenda</span>, na consulta em andamento ou já concluída, ache o campo <strong>Retorno sem custo em até __ dias</strong>.</li>
-    <li>Digite em quantos dias o paciente pode voltar (por exemplo, <strong>30</strong>) e toque em <span class="botao claro">Liberar retorno</span>.</li>
+    <li>Na <span class="menu">Agenda</span>, na consulta em andamento ou já concluída, ache o campo <strong>Retorno sem custo: prazo em dias</strong>.</li>
+    <li>Digite em quantos dias o paciente pode voltar (por exemplo, <strong>30</strong>), ou deixe vazio para usar o prazo padrão, e toque em <span class="botao claro">Liberar retorno</span>.</li>
     <li>O paciente recebe o aviso e marca o horário na sua agenda, sem pagar.</li>
   </ol>
-  <div class="caixa dica"><span class="titulo">O prazo é decisão sua</span>A Resolução CFM 1.958/2010 diz que o prazo do retorno é <strong>a critério do médico</strong>. A administração só define o prazo máximo. Dá para mudar o prazo enquanto o retorno não foi marcado. O retorno não tem retorno próprio e <strong>não entra nos seus ganhos</strong>, porque faz parte da consulta original, que já contou.</div>
+  <div class="caixa dica"><span class="titulo">O prazo é decisão sua</span>A Resolução CFM 1.958/2010 diz que o prazo do retorno é <strong>a critério do médico</strong>. Se você deixar o campo vazio, vale o prazo sugerido pela plataforma; você pode escrever outro, de 1 a 180 dias. Dá para mudar o prazo enquanto o retorno não foi marcado. O retorno não tem retorno próprio e <strong>não entra nos seus ganhos</strong>, porque faz parte da consulta original, que já contou.</div>
 
   <h3>7.8 Paciente que não veio</h3>
-  <p>Se o paciente não entrou depois de <strong>15 minutos</strong> do horário, toque em <span class="botao claro">Paciente faltou</span>, na Agenda. A consulta fica registrada como <strong>falta</strong> e entra nos indicadores da plataforma.</p>
+  <p>Se o paciente não entrou depois de <strong>15 minutos</strong> do horário, toque em <span class="botao claro">Paciente faltou</span>, na Agenda. A consulta fica registrada como <strong>falta</strong> e entra nos indicadores da plataforma. Se o paciente chegou a entrar na sala de vídeo, a plataforma não deixa registrar falta: ele veio.</p>
 </section>
 
 <!-- ============================ 8. RECEPCAO ============================ -->
@@ -519,7 +519,7 @@
   <p>Em <span class="menu">Auditoria</span> você vê <strong>quem fez o quê e quando</strong>: aprovações, mudanças de preço e de porcentagem, repasses, reembolsos, prontuários abertos, exportação de dados. Filtre por assunto. Ninguém consegue apagar nem alterar esses registros.</p>
 
   <h3>9.9 Configurações</h3>
-  <p>Nome que os pacientes veem, razão social, responsável técnico, fuso horário, porcentagem padrão do médico e <strong>prazo máximo do retorno sem custo</strong> (de 0 a 90 dias; 0 desliga o retorno pelo sistema). Toda mudança fica na auditoria. O CNPJ e a conta de recebimento (serviço de pagamento) são configurados pelo suporte técnico.</p>
+  <p>Nome que os pacientes veem, razão social, responsável técnico, fuso horário, porcentagem padrão do médico e <strong>prazo sugerido do retorno sem custo</strong> (de 1 a 90 dias). É só uma sugestão: quem decide o prazo de cada retorno é o médico. Toda mudança fica na auditoria. O CNPJ e a conta de recebimento (serviço de pagamento) são configurados pelo suporte técnico.</p>
 
   <h3>9.10 Pacientes</h3>
   <p>Em <span class="menu">Pacientes</span> você busca por nome ou CPF e vê, de cada paciente: CPF escondido em parte (***.456.789-**), telefone, desde quando tem conta, quantas consultas fez, <strong>quantas vezes faltou</strong> e se tem <strong>pagamento pendente</strong>.</p>
@@ -552,7 +552,7 @@
     <tr><th>Pode</th><th>Não pode (e por quê)</th></tr>
     <tr><td>Mudar a porcentagem de cada médico e a padrão</td><td>Ler ou mudar prontuário, receita, atestado, laudo: só o médico que atende (sigilo médico e LGPD)</td></tr>
     <tr><td>Aprovar ou recusar médicos, suspender e reativar acessos</td><td>Ver a queixa do paciente ou o motivo da consulta</td></tr>
-    <tr><td>Definir valores, prazo do retorno, fuso e responsável técnico</td><td>Decidir o prazo de um retorno específico: é decisão do médico (CFM 1.958/2010)</td></tr>
+    <tr><td>Definir valores, o prazo sugerido do retorno, fuso e responsável técnico</td><td>Limitar ou desligar o retorno: o prazo é decisão do médico (CFM 1.958/2010)</td></tr>
     <tr><td>Reembolsar, registrar e cancelar repasses, baixar planilhas</td><td>Apagar auditoria, repasse, avaliação ou restrição: só cancelar ou encerrar, com motivo</td></tr>
     <tr><td>Impedir paciente de marcar, com motivo</td><td>Tirar do paciente o acesso aos próprios documentos</td></tr>
     <tr><td>Cancelar consultas e registrar faltas</td><td>Trocar o CNPJ pelo painel (pede o suporte técnico)</td></tr>
@@ -723,7 +723,8 @@ pnpm test:banco         # testes contra um Postgres DESCARTÁVEL (DATABASE_URL_T
     <tr><td>☐</td><td>Como médico, numa consulta concluída, libere o retorno em 30 dias.</td><td>“Retorno liberado”; o paciente recebe o aviso.</td></tr>
     <tr><td>☐</td><td>Como paciente, toque em Marcar retorno sem custo e escolha um horário.</td><td>Marcado direto, sem Pix nem cartão, com a etiqueta “Retorno sem custo”.</td></tr>
     <tr><td>☐</td><td>Tente marcar o mesmo retorno de novo.</td><td>Recusado: “Este retorno já foi marcado”.</td></tr>
-    <tr><td>☐</td><td>Em Configurações, ponha o prazo máximo em 0 e tente liberar um retorno.</td><td>Recusado: a plataforma não oferece retorno pelo sistema.</td></tr>
+    <tr><td>☐</td><td>Em Configurações, ponha o prazo sugerido em 45 e libere um retorno com o campo vazio.</td><td>Retorno liberado por 45 dias. Digitando 120, vale 120.</td></tr>
+    <tr><td>☐</td><td>Com médico e paciente na sala de vídeo, tente registrar falta.</td><td>Recusado: quem entrou na sala não faltou.</td></tr>
     <tr><td>☐</td><td>16 minutos depois do horário de uma consulta sem o paciente, toque em Paciente faltou.</td><td>A consulta vira falta; aparece em Qualidade e faltas e na ficha do paciente em Pacientes.</td></tr>
     <tr><td>☐</td><td>Como paciente, avalie uma consulta com nota 9 e um comentário.</td><td>“Sua nota: 9”; em Qualidade e faltas, NPS 100 e o comentário.</td></tr>
     <tr><td>☐</td><td>Em Pacientes, impeça um paciente de marcar e entre como ele.</td><td>Ele vê as consultas e documentos, mas não consegue marcar nem entrar na fila.</td></tr>
