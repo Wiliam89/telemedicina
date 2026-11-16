@@ -50,6 +50,11 @@ para a contabilidade.
   (so consulta concluida e cobrada). O Pix ja pago fica com a plataforma; a
   administracao devolve, se quiser, em Financeiro > Reembolsar.
   **Regra de negocio a confirmar pelo Wiliam.**
+- **Decisao do Wiliam (2026-11-15):** consulta com cartao ao final NAO se
+  conclui (nem pelo botao Concluir, nem ao encerrar a sala) se o paciente nunca
+  entrou na sala: a API responde 409 PACIENTE_NAO_ENTROU e orienta a registrar
+  a falta. Assim ninguem e cobrado por um atendimento que nao recebeu
+  (`apps/api/src/presenca.ts`).
 
 ### Satisfacao (NPS)
 - Depois da consulta concluida, por 30 dias, o paciente da uma nota de 0 a 10

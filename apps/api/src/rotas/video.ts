@@ -32,6 +32,7 @@ import { consentimentosPendentes } from "@tele/shared/lgpd";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { consentimentos, consultas, filaAtendimento, perfis, salasDeVideo, type Banco } from "@tele/db";
+import { exigirPacienteParaConcluir } from "../presenca.js";
 import type { EntradaNaSala, Resposta } from "@tele/shared";
 import { decidirEntrada, janelaDaSala } from "@tele/shared/video";
 import { registrarAuditoria } from "../auditoria.js";
@@ -340,6 +341,8 @@ export async function rotasVideo(
       if (!sala && consulta.status === "agendada") {
         throw new ErroHttp(409, "SALA_NAO_ABERTA", "A sala desta consulta ainda não foi aberta.");
       }
+      // Encerrar conclui a consulta: com cartao ao final, so se o paciente esteve na sala.
+      if (consulta.status === "agendada" || consulta.status === "em_andamento") await exigirPacienteParaConcluir(banco, consultaId);
 
       if (sala && !sala.encerradaEm) {
         try {

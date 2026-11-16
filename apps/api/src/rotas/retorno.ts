@@ -13,7 +13,7 @@
 import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { auditoria, avaliacoesConsulta, clinicas, consultas, filaAtendimento, pagamentos, perfis, type Banco } from "@tele/db";
+import { avaliacoesConsulta, clinicas, consultas, filaAtendimento, pagamentos, perfis, type Banco } from "@tele/db";
 import type { Resposta } from "@tele/shared";
 import { PRAZO_DE_RETORNO_TETO_DIAS, PRAZO_SUGERIDO_SEM_CONFIGURACAO, podeRegistrarFalta, prazoDeRetornoValido, retornoAte, TOLERANCIA_DE_FALTA_MINUTOS } from "@tele/shared/retorno";
 import { registrarAuditoria } from "../auditoria.js";
@@ -22,6 +22,7 @@ import { criarExigirClinica, exigirPapel } from "../contexto.js";
 import { ErroHttp } from "../erros.js";
 import { fusoDaClinica, notificar } from "../notificacoes/index.js";
 import { registrarPendenciaDeEstorno } from "../reservas.js";
+import { entrouNaSala } from "../presenca.js";
 
 /** Ate quantos dias depois da consulta o medico ainda pode liberar o retorno (exames demoram). */
 const DIAS_PARA_LIBERAR_RETORNO = 90;
@@ -146,12 +147,7 @@ export async function rotasRetorno(app: FastifyInstance, opcoes: { banco: Banco;
       if (!agora || !permitidos.includes(agora.status)) throw new ErroHttp(409, "ESTADO_MUDOU", "Esta consulta acabou de mudar (o atendimento pode ter começado). Recarregue a página.");
       // Quem e acusado de faltar mas entrou na sala, nao faltou.
       const acusado = quem === "paciente" ? c.pacienteId : c.medicoId;
-      const [entrou] = await tx
-        .select({ id: auditoria.id })
-        .from(auditoria)
-        .where(and(eq(auditoria.tabela, "salas_de_video"), eq(auditoria.registroId, id), eq(auditoria.acao, "video.entrou"), eq(auditoria.quem, acusado)))
-        .limit(1);
-      if (entrou) {
+      if (await entrouNaSala(tx, id, acusado)) {
         throw new ErroHttp(409, "ENTROU_NA_SALA", quem === "paciente" ? "O paciente entrou na sala desta consulta: não é falta." : "O médico entrou na sala desta consulta: não é falta.");
       }
       const feitas = await tx

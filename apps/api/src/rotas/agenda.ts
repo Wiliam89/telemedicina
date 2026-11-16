@@ -40,6 +40,7 @@ import { ErroHttp } from "../erros.js";
 import { cartaoAtivo, exigirSemPendencia, precoPara } from "../cobranca.js";
 import { percentualDoMedico } from "../repasse.js";
 import { exigirSemRestricao } from "../restricoes.js";
+import { exigirPacienteParaConcluir } from "../presenca.js";
 import type { ResolvedorDePagamento } from "../pagamento/index.js";
 import { liberarReservasVencidas, registrarPendenciaDeEstorno } from "../reservas.js";
 import { MINUTOS_DE_RESERVA } from "./pagamentos.js";
@@ -633,6 +634,7 @@ export async function rotasAgenda(
     if (!permitido[consulta.status]?.includes(status)) {
       throw new ErroHttp(409, "TRANSICAO_INVALIDA", `Não dá para ir de "${consulta.status}" para "${status}".`);
     }
+    if (status === "concluida") await exigirPacienteParaConcluir(banco, id);
 
     await banco.transaction(async (tx) => {
       // So muda se ninguem mudou antes (cancelamento ou falta no mesmo instante).

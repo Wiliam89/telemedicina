@@ -446,6 +446,9 @@ describe.skipIf(!temBanco)("cartao cadastrado e Pix (ADR-0023)", () => {
     const aceite = await chamar(medico, "POST", `/fila/${r.json().dados.id as string}/aceitar`);
     expect(aceite.statusCode).toBe(200);
     const consultaId = aceite.json().dados.consultaId as string;
+    // ADR-0027: sem o paciente na sala, cartao ao final nao se conclui (nao cobra quem nao veio).
+    expect((await chamar(medico, "POST", `/consultas/${consultaId}/status`, { status: "concluida" })).json().erro.codigo).toBe("PACIENTE_NAO_ENTROU");
+    await banco.$client`insert into auditoria (quem, clinica_id, acao, tabela, registro_id) values (${paciente}, ${clinicaId}, 'video.entrou', 'salas_de_video', ${consultaId})`;
     expect((await chamar(medico, "POST", `/consultas/${consultaId}/status`, { status: "concluida" })).statusCode).toBe(200);
     await sairDaFila(paciente);
     return consultaId;
@@ -566,6 +569,7 @@ describe.skipIf(!temBanco)("correcoes do supervisor", () => {
     expect(r.statusCode).toBe(201);
     const aceite = await chamar(medico, "POST", `/fila/${r.json().dados.id as string}/aceitar`);
     const consultaId = aceite.json().dados.consultaId as string;
+    await banco.$client`insert into auditoria (quem, clinica_id, acao, tabela, registro_id) values (${paciente}, ${clinicaId}, 'video.entrou', 'salas_de_video', ${consultaId})`;
     expect((await chamar(medico, "POST", `/consultas/${consultaId}/status`, { status: "concluida" })).statusCode).toBe(200);
     await sairDaFila(paciente);
     return consultaId;

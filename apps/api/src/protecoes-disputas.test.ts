@@ -346,7 +346,8 @@ describe.skipIf(!temBanco)("pagamento e estorno", () => {
 
 describe.skipIf(!temBanco)("agenda", () => {
   it("13. marcar num horario com reserva vencida funciona", async () => {
-    const inicio = new Date(Math.ceil(Date.now() / 1800000) * 1800000 + 72 * 3600 * 1000);
+    // Horario fixo (10h em Sao Paulo): "o proximo horario redondo" caia fora da grade depois das 23h.
+    const inicio = new Date(`${new Date(Date.now() + 72 * 3600 * 1000).toISOString().slice(0, 10)}T13:00:00Z`);
     const fim = new Date(inicio.getTime() + 30 * 60000);
     await banco.$client`insert into consultas (clinica_id, paciente_id, medico_id, inicio, fim, status, marcado_por, expira_reserva_em)
       values (${clinicaId}, ${pacientes[4]!}, ${medico2}, ${inicio.toISOString()}::timestamptz, ${fim.toISOString()}::timestamptz, 'aguardando_pagamento', ${pacientes[4]!}, now() - interval '1 minute')`;
@@ -426,7 +427,7 @@ describe.skipIf(!temBanco)("em producao", () => {
   });
 
   it("20. sem conta de recebimento, a consulta e agendada direto", async () => {
-    const inicio = new Date(Math.ceil(Date.now() / 1800000) * 1800000 + 96 * 3600 * 1000);
+    const inicio = new Date(`${new Date(Date.now() + 96 * 3600 * 1000).toISOString().slice(0, 10)}T14:00:00Z`);
     const r = await naProducao(pacientes[6]!, "POST", "/consultas", { medicoId: medico2, inicio: inicio.toISOString() });
     expect(r.statusCode).toBe(201);
     expect(r.json().dados.status).toBe("agendada");
