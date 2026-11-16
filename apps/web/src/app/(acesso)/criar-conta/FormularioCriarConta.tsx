@@ -24,7 +24,11 @@ function destinoDoLink(): string {
 
 function explicarErro(mensagem: string): string {
   if (/already registered|already exists/i.test(mensagem)) return 'Este e-mail já tem conta. Use "Entrar".';
-  if (/rate limit|too many|security purposes/i.test(mensagem)) return "Muitos pedidos em pouco tempo. Aguarde um minuto e tente de novo.";
+  // O limite e do ENVIO DE E-MAILS do projeto inteiro (nao desta pessoa): com o envio
+  // padrao do Supabase sao poucos por hora. Ver docs/publicar.md, "SMTP proprio".
+  if (/security purposes/i.test(mensagem)) return "Aguarde um minuto antes de pedir outro e-mail.";
+  if (/rate limit|too many/i.test(mensagem)) return "Muitos cadastros em pouco tempo: o envio de e-mails está no limite. Tente de novo em alguns minutos.";
+  if (/not authorized/i.test(mensagem)) return "Não conseguimos enviar o e-mail de confirmação agora. Tente de novo mais tarde.";
   if (/invalid.*email|email.*invalid/i.test(mensagem)) return "Este e-mail não parece válido. Confira e tente de novo.";
   if (/sending|smtp|confirmation email/i.test(mensagem)) return "Não conseguimos enviar o e-mail de confirmação agora. Tente de novo em alguns minutos.";
   if (/password/i.test(mensagem)) return "Esta senha não foi aceita. Use ao menos 8 caracteres, com letras e números.";

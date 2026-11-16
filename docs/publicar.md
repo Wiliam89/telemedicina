@@ -181,7 +181,15 @@ restante é configuração no **painel do Supabase**, e precisa ser feito uma ve
    - *Redirect URLs*: inclua `https://SEU-SITE/auth/confirmar` e
      `https://SEU-SITE/**` (e, para testar na máquina, `http://localhost:3000/**`).
      Endereço fora da lista é trocado pelo Site URL.
-2. **Authentication > SMTP Settings: configure um SMTP próprio.** O SMTP
+2. **Authentication > SMTP Settings: configure um SMTP próprio.** Sem isso, o
+   Supabase manda no máximo ~2 e-mails de confirmação por hora para o projeto
+   inteiro, e quando o envio falha ele desfaz o cadastro (sintoma: "o primeiro
+   cadastro chegou no spam, os seguintes não chegaram"). Opção grátis sem
+   domínio: **Gmail** com senha de app (`smtp.gmail.com`, porta 465, usuário =
+   o endereço Gmail, senha = a senha de app de 16 letras; até ~500 e-mails/dia).
+   Depois, em **Authentication > Rate Limits**, suba "emails per hour" (ex.: 30).
+   Passo a passo simples em `docs/o-que-voce-precisa-fazer.md`.
+    O SMTP
    embutido do Supabase só entrega para os e-mails da equipe do projeto e tem
    limite de poucos envios por hora: é a causa de "às vezes não chega". Opção
    sem custo para começar: **Resend** (3.000 e-mails/mês grátis, exige domínio

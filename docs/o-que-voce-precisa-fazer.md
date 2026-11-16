@@ -161,3 +161,67 @@ Se algo der errado, tire um print da tela e me mande.
 | Mercado Pago (conta de recebimento) | Receber Pix e cartão de verdade | ~0,99% no Pix e ~4% a 5% no cartão, por venda | As consultas ficam sem cobrança pela plataforma |
 | Nota fiscal automática (NFS-e) | Emitir a nota de cada consulta | ~R$ 0,10 a R$ 0,50 por nota | O contador emite por fora, usando a planilha |
 | Repasse automático ao médico (split) | O dinheiro do médico ir direto para ele | taxa por transação do provedor | O repasse é feito por Pix e registrado no Financeiro |
+
+---
+
+## Extra: o e-mail de cadastro não chega (carteiro próprio, grátis)
+
+**Por que acontece:** quem manda o e-mail de confirmação é o Supabase. O
+"carteiro" que vem de graça com ele serve só para teste: manda uns **2 e-mails
+por hora** para o site inteiro e sai de um endereço que cai no **spam**. Quando
+ele não consegue mandar, o cadastro é desfeito. Por isso o primeiro cadastro
+chegou (no spam) e os seguintes não.
+
+**A solução:** dar ao Supabase um carteiro próprio, uma conta do **Gmail**.
+É grátis e manda até uns 500 e-mails por dia.
+
+### Parte A: criar a "senha de app" no Gmail (10 minutos)
+
+> Recomendado: crie um Gmail **só para a plataforma** (ex.:
+> `telesaude.avisos@gmail.com`). Os pacientes vão ver esse endereço como
+> remetente. Se preferir, pode usar um Gmail que você já tem.
+
+1. Entre no Gmail que vai mandar os e-mails.
+2. Abra **myaccount.google.com/security**.
+3. Procure **Verificação em duas etapas**. Se estiver **desativada**, clique e
+   ative (o Google pede o seu celular). Sem isso, o passo seguinte não aparece.
+4. Abra **myaccount.google.com/apppasswords**.
+5. Em "Nome do app", escreva **Supabase** e clique em **Criar**.
+6. Aparece uma senha de **16 letras** num quadro amarelo (ex.: `abcd efgh ijkl mnop`).
+   **Copie e guarde por 10 minutos.** Ela só aparece uma vez.
+   **Não mande essa senha no chat.**
+
+### Parte B: colocar o Gmail no Supabase (5 minutos)
+
+1. Abra **supabase.com/dashboard**, entre e abra o projeto da telemedicina.
+2. Menu da esquerda: **Authentication**. Depois **Emails** e depois a aba
+   **SMTP Settings**. Em versões antigas do painel, o caminho é
+   **Project Settings** e depois **Authentication**.
+3. Ligue a chave **Enable custom SMTP**.
+4. Preencha assim:
+
+| Campo | O que escrever |
+| --- | --- |
+| Sender email | o endereço do Gmail (ex.: `telesaude.avisos@gmail.com`) |
+| Sender name | `TeleSaúde` |
+| Host | `smtp.gmail.com` |
+| Port number | `465` |
+| Minimum interval between emails | `30` |
+| Username | o mesmo endereço do Gmail |
+| Password | a senha de 16 letras, **sem os espaços** |
+
+5. Clique em **Save**.
+6. Ainda em **Authentication**, abra **Rate Limits**. Em **Rate limit for
+   sending emails**, troque para **30** (por hora) e clique em **Save**.
+
+### Parte C: testar
+
+1. Abra o site numa **janela anônima** (Ctrl+Shift+N).
+2. Crie uma conta com um e-mail seu que **ainda não tenha conta** no site.
+3. O e-mail deve chegar em até 1 minuto, com o nome **TeleSaúde**. Se cair no
+   spam, marque **"Não é spam"**: isso ensina o Gmail do paciente.
+4. Crie uma segunda conta com outro e-mail: deve chegar também.
+
+> Para nunca cair no spam, o ideal é um **domínio próprio** (ex.:
+> `telesaude.com.br`, cerca de R$ 40 por ano) com o serviço Resend (grátis até
+> 3.000 e-mails por mês). **Isso é gasto: só faço se você autorizar.**
