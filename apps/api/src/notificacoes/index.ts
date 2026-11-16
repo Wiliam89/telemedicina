@@ -164,13 +164,16 @@ export async function rodarAgendador(
     }
   }
 
-  // 2) E-mails pendentes. Reservar com SKIP LOCKED: duas instancias nunca
-  //    pegam a mesma linha. A tentativa conta antes do envio - se a
-  //    instancia cair no meio, o aviso volta na proxima rodada.
+  // 2) E-mails pendentes. Reservar com SKIP LOCKED e JA marcar como enviado
+  //    na reserva: a trava do SKIP LOCKED acaba quando a reserva grava, e
+  //    antes do envio terminar outra instancia pegaria a mesma linha (e-mail
+  //    duplicado). Se o envio falhar, a marca e desfeita e tenta de novo. Se
+  //    a instancia cair no meio do envio, aquele e-mail se perde - o aviso
+  //    continua no sino da plataforma. Melhor nao enviar do que enviar duas.
   let enviados = 0;
   let falhas = 0;
   const lote = await sqlc<{ id: string; titulo: string; corpo: string; link: string | null; email: string | null }[]>`
-    update notificacoes n set email_tentativas = n.email_tentativas + 1
+    update notificacoes n set email_tentativas = n.email_tentativas + 1, email_enviado_em = now()
     from (
       select id from notificacoes
       where email_enviado_em is null and email_tentativas < ${MAX_TENTATIVAS} and criado_em > now() - interval '2 days'
@@ -185,10 +188,10 @@ export async function rodarAgendador(
     try {
       if (!n.email) throw new Error("pessoa sem e-mail");
       await enviador.enviar({ para: n.email, assunto: n.titulo, texto: `${n.corpo}\n\n${n.link ? opcoes.urlDoSite + n.link : opcoes.urlDoSite}`, html: html(n.titulo, n.corpo, n.link, opcoes.urlDoSite, opcoes.plataforma) });
-      await banco.update(notificacoes).set({ emailEnviadoEm: new Date(), emailErro: null }).where(eq(notificacoes.id, n.id));
+      await banco.update(notificacoes).set({ emailErro: null }).where(eq(notificacoes.id, n.id));
       enviados++;
     } catch (e) {
-      await banco.update(notificacoes).set({ emailErro: String((e as Error).message).slice(0, 300) }).where(eq(notificacoes.id, n.id));
+      await banco.update(notificacoes).set({ emailEnviadoEm: null, emailErro: String((e as Error).message).slice(0, 300) }).where(eq(notificacoes.id, n.id));
       falhas++;
     }
   }
